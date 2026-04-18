@@ -1,6 +1,6 @@
 {
   "function": "FCTA",
-  "diagnosis_count": 8,
+  "diagnosis_count": 10,
   "known_issues": [
     {
       "id": "FCTA001",
@@ -16,14 +16,25 @@
         "FCTA001_20260416_174320"
       ],
       "date": "2026-04-12 ~ 2026-04-16",
-      "analysis": "目标分类过滤逻辑差异或 ROI 阈值对车辆类型敏感。需检查 objAttribCal 及 FCTA ROI 阈值配置，确认 GVT 车是否被误分类或过滤。8 次会话均指向同一问题，置信度高。",
+      "analysis": "目标分类过滤逻辑差异或 ROI 阈值对车辆类型敏感。需检查 objAttribCal 及 FCTA ROI 阈值配置，确认 GVT 车是否被误分类或过滤。",
       "confidence": 0.95,
       "status": "Consolidated from 8 duplicate entries"
+    },
+    {
+      "id": "FCTA002",
+      "problem": "FCTA 功能未启动，功能使能信号未置位",
+      "sessions": [
+        "FCTA001_20260416_174320"
+      ],
+      "date": "2026-04-16",
+      "analysis": "功能使能信号未置位导致报警输出被门控：PERInputUpdate.adasEnable.bFCTAEnable(实际值 FALSE) → FCTA_Warn 生成条件不满足。",
+      "confidence": 0.9,
+      "status": "Newly Added from recent session"
     }
   ],
-  "_updated": "2026-04-17T15:16:48.267334",
+  "_updated": "2026-04-18T17:37:14.421870",
   "description": "前方交叉交通警报，低速向前行驶时检测前方横向穿越目标。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / FctaUpdateSystemStatus",
-  "status": "Doc integrated & Patterns Merged"
+  "status": "Doc integrated & Patterns Merged & New Issue Added"
 }

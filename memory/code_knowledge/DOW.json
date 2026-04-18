@@ -1,0 +1,240 @@
+{
+  "_meta": {
+    "function": "DOW",
+    "last_updated": "2026-04-18T17:33:09.623733",
+    "learned_focuses": [
+      "alarm_logic"
+    ],
+    "source_hashes": {
+      "alarm_logic": "5b8b9159e79e3dee"
+    }
+  },
+  "alarm_logic": {
+    "trigger_conditions": [
+      {
+        "id": "trig-1",
+        "description": "系统状态必须处于 Standby(2) 或 Active(3) 才能允许报警标志生效，否则强制复位为 Normal。",
+        "c_expression": "(3U == adasWarning->dowSystemState || 2U == adasWarning->dowSystemState)",
+        "variables": [
+          "adasWarning->dowSystemState"
+        ],
+        "thresholds": {
+          "state_active": "3U",
+          "state_standby": "2U"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1214,
+          "function": "UpdateObjAdasWarningFlg (inferred)"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "id": "trig-2",
+        "description": "功能开关 adasEnable->bDOWEnable 必须使能，否则报警被抑制。",
+        "c_expression": "adasEnable->bDOWEnable == true",
+        "variables": [
+          "adasEnable->bDOWEnable"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1263,
+          "function": "UpdateObjAdasWarningFlg (inferred)"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "id": "trig-3",
+        "description": "目标物体需满足警告速度、横摆角及 TTC 阈值（逻辑隐含于参数定义中）。",
+        "c_expression": "objTTC <= fDowObjWarningTTC && objYaw >= fDowObjWarningYawAngle",
+        "variables": [
+          "fDowObjWarningTTC",
+          "fDowObjWarningYawAngle",
+          "fDowObjWarningSpd"
+        ],
+        "thresholds": {
+          "TTC_Threshold": "3.5 s",
+          "Yaw_Threshold": "45.0 deg",
+          "Obj_Spd_Min": "5.0 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 236,
+          "function": "Parameter Declaration"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      }
+    ],
+    "cancel_conditions": [
+      {
+        "id": "cancel-1",
+        "description": "当系统状态非 Active/Standby 时，取消报警。",
+        "c_expression": "3U != adasWarning->dowSystemState && 2U != adasWarning->dowSystemState",
+        "variables": [
+          "adasWarning->dowSystemState"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1214,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "id": "cancel-2",
+        "description": "当用户禁用 DOW 功能时，立即取消报警。",
+        "c_expression": "!adasEnable->bDOWEnable",
+        "variables": [
+          "adasEnable->bDOWEnable"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1263,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "id": "cancel-3",
+        "description": "调用 CloseDowFunc 主动清空所有报警标记和缓冲区。",
+        "c_expression": "CloseDowFunc(leftRoi, rightRoi, adasWarning)",
+        "variables": [
+          "bDowLeftWarningFlg",
+          "bDowRightWarningFlg",
+          "dowLeftFrmCount"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2138,
+          "function": "CloseDowFunc"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      }
+    ],
+    "exit_conditions": [
+      {
+        "id": "exit-1",
+        "description": "目标脱离 ROI 区域或 TTC 大于退出阈值（迟滞）。",
+        "c_expression": "objTTC > fDowObjDeWarningTTC",
+        "variables": [
+          "fDowObjDeWarningTTC"
+        ],
+        "thresholds": {
+          "De_TTC_Threshold": "4.0 s"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 239,
+          "function": "Parameter Declaration"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "id": "exit-2",
+        "description": "车辆自身速度低于退出速度阈值。",
+        "c_expression": "selfSpd < fDowDeactiveSpd",
+        "variables": [
+          "fDowDeactiveSpd"
+        ],
+        "thresholds": {
+          "Deactive_Speed": "1.0 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 191,
+          "function": "Parameter Declaration"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      }
+    ],
+    "hysteresis": [
+      {
+        "name": "TTC 迟滞",
+        "enter": "3.5 s (fDowObjWarningTTC)",
+        "exit": "4.0 s (fDowObjDeWarningTTC)",
+        "purpose": "防止在临界点因噪声导致报警频繁闪烁",
+        "id": "ttc-a52c6f38",
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "name": "横摆角迟滞",
+        "enter": "45.0 deg (fDowObjWarningYawAngle)",
+        "exit": "50.0 deg (fDowObjDeWarningYawAngle)",
+        "purpose": "防止目标角度微小变化导致进出报警区跳变",
+        "id": "item-41ce7e23",
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "name": "系统激活/退出速度迟滞",
+        "enter": "0.7 km/h (fDowActiveSpd)",
+        "exit": "1.0 km/h (fDowDeactiveSpd)",
+        "purpose": "保证低速蠕行状态下系统稳定性",
+        "id": "item-55ecb4c9",
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      }
+    ],
+    "timers": [
+      {
+        "name": "KEEPWARNINGFRM",
+        "duration": "3 Frames",
+        "purpose": "报警保持帧数，防止单帧丢失导致误消警",
+        "id": "keepwarningfrm-56755d95",
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "name": "dowKeepWarningCount",
+        "duration": "Variable (depends on KEEPWARNINGFRM)",
+        "purpose": "内部计数器，用于维持报警状态直到连续多帧无威胁",
+        "id": "dowkeepwarningcount-32e2e6ab",
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      }
+    ],
+    "suppression": [
+      {
+        "suppressor": "adasEnable->bDOWEnable",
+        "how": "全局功能开关，为 false 时直接清零所有 DOW 报警标志",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1263,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-420c7145",
+        "_learned_at": "2026-04-18T17:33:09.623733"
+      },
+      {
+        "suppressor": "dowSystemState",
+        "how": "若系统处于 Non-Active (非 2 或 3)，强制将对象报警标志置为 Normal",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1214,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-cb35249e",
+        "_learned_at": "2026-04-18T17:33:09.624735"
+      },
+      {
+        "suppressor": "bDowCurbDewarningEnable",
+        "how": "路沿消除报警开关，影响特定场景下的对象筛选",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 185,
+          "function": "Parameter Definition"
+        },
+        "id": "item-7c055ae6",
+        "_learned_at": "2026-04-18T17:33:09.624735"
+      }
+    ]
+  }
+}

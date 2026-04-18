@@ -66,3 +66,27 @@ source_domains:
     - "adas\\symmetry\\perception\\src\\postProcess.c"
   output:
     - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
+
+# ── Auto-Dream 代码学习增强 ─────────────────────────────────────────────
+# 每次 dream 时自动读取上述源码，按“功能 × 焦点”网格增量学习并固化为知识。
+# 首次全量学习需 N = len(priority_functions) × len(rotation_focuses) 轮；
+# 源码未变动时跳过；源码变动后仅重新学习受影响的 (func, focus) 对。
+auto_dream:
+  code_learning:
+    enabled: true
+    # 一次 dream 中最多学习多少个 (function, focus) 组合（控制 token 预算）
+    # 首次 dream 会学 warmup_pairs 个，后续常规 dream 学 pairs_per_dream 个
+    warmup_pairs: 8            # 首次冷启动多学一些，快速填充知识库
+    pairs_per_dream: 2         # 常规做梦每次学 2 个焦点/功能组合
+    # 焦点轮转顺序（每个 focus 都会应用到每个 function 上）
+    rotation_focuses:
+      - alarm_logic           # 报警触发/取消/退出逻辑
+      - calculation_chain     # 关键变量计算流程（TTC/TTM/距离/速度派生）
+      - output_chain          # 外发链路（内部变量→RteComMapping→CAN 信号→下游）
+      - state_machine         # 状态机 (None/Init/Standby/Active/Off/Failure/Passive)
+    # 优先学习的功能（按此顺序轮转）
+    priority_functions: [FCTB, FCTA, RCTB, RCTA, BSD, LCA, DOW, RCW]
+    # 每次 AI 调用允许的源码片段最大字符数（避免超长 prompt）
+    max_snippet_chars: 40000
+    # 是否启用 thinking 模式（质量更高但慢 3-5 倍）
+    use_thinking: true

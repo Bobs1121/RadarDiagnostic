@@ -88,20 +88,35 @@ class AutoDream:
     the consolidation cycle if needed.
     """
 
-    def __init__(self, memory_system, router, project_root: Path):
+    def __init__(self, memory_system, router, project_root: Path, config: Optional[dict] = None):
         self.memory = memory_system
         self.router = router
         self.project_root = project_root
+        self.config = config or {}
         self.memory_dir = project_root / "memory"
         self.lock_path = self.memory_dir / LOCK_FILE
         self.log_path = self.memory_dir / DREAM_LOG_FILE
 
     # ── Public API ──────────────────────────────────────────────────────
 
-    def try_dream(self, on_status=None, force: bool = False) -> Optional[dict]:
+    def try_dream(
+        self,
+        on_status=None,
+        force: bool = False,
+    ) -> Optional[dict]:
         """
         Check gate conditions and run dream if appropriate.
+
+        Args:
+            on_status: callback (stage, msg) for progress
+            force: bypass gate conditions
+
         Returns dream result dict or None if skipped.
+
+        Note:
+            代码学习量由 ``CodeLearner`` 内部自适应判断：冷启动（首次做梦）
+            使用 ``warmup_pairs``，热启动使用 ``pairs_per_dream``。
+            调用方无需关心学习策略。
         """
         def status(msg):
             if on_status:
@@ -200,7 +215,7 @@ class AutoDream:
         """Refresh variable_chains.json from source code (struct alias tracing)."""
         try:
             from ai.signal_mapper import trace_variable_chains
-            source_code = self.config.get("paths", {}).get("source_code", "")
+            source_code = (self.config or {}).get("paths", {}).get("source_code", "")
             if source_code:
                 trace_variable_chains(
                     Path(source_code),
@@ -209,10 +224,67 @@ class AutoDream:
         except Exception:
             pass
 
+    def _run_code_learning(self, status) -> dict:
+        """Phase 0 — 委托 CodeLearner 做增量代码学习 + MD 概览同步。
+
+        两个子步骤：
+          (a) ``learn()``                — 增量学习结构化 JSON（memory/code_knowledge/）
+          (b) ``ensure_overview_docs()`` — 源码 hash 驱动刷新 MD 概览（source_docs/）
+
+        学习量由 CodeLearner 内部自适应：
+          - 冷启动（warmup_done=False）：使用 config.warmup_pairs
+          - 热启动：使用 config.pairs_per_dream
+        调用方无需关心策略细节。
+        """
+        try:
+            from ai.code_learner import CodeLearner
+        except Exception as e:  # noqa: BLE001
+            status(f"CodeLearner import failed: {e}")
+            return {"skipped": True, "reason": f"import_error: {e}"}
+
+        if not self.config:
+            status("No config provided, skipping code learning")
+            return {"skipped": True, "reason": "no_config"}
+
+        try:
+            learner = CodeLearner(self.router, self.config, self.project_root)
+        except Exception as e:  # noqa: BLE001
+            status(f"CodeLearner init failed: {e}")
+            return {"skipped": True, "reason": f"init_error: {e}"}
+
+        learn_result = learner.learn(status_cb=lambda _s, d: status(d))
+
+        # (b) MD 概览保鲜：hash 驱动，源码未变则 0 次 AI 调用
+        try:
+            overview_result = learner.ensure_overview_docs(
+                status_cb=lambda _s, d: status(d),
+            )
+            learn_result["overview"] = {
+                "generated": overview_result.get("generated", []),
+                "skipped_count": len(overview_result.get("skipped", [])),
+                "failed": overview_result.get("failed", []),
+            }
+        except Exception as e:  # noqa: BLE001
+            status(f"Overview refresh failed: {e}")
+            learn_result["overview"] = {"error": str(e)[:200]}
+
+        return learn_result
+
     # ── Dream Cycle ─────────────────────────────────────────────────────
 
     def _run_dream_cycle(self, status) -> dict:
-        """Execute the 4-phase consolidation with AI."""
+        """Execute the 5-phase consolidation with AI.
+
+        Phases:
+          0. Study       — 增量学习源码（CodeLearner）
+          1. Orient      — 审视各层记忆
+          2. Gather      — 收集近期会话
+          3. Consolidate — AI 合并、去重、解决冲突
+          4. Prune       — 应用变更
+        """
+        status("Phase 0/4: Study — incremental code learning...")
+        code_delta = self._run_code_learning(status)
+
         status("Phase 1/4: Orient — surveying memories...")
         self._refresh_variable_chains()
         context = self._gather_all_memory_context()
@@ -221,7 +293,7 @@ class AutoDream:
         recent = self._gather_recent_sessions()
 
         status("Phase 3/4: Consolidate — AI merging & resolving conflicts...")
-        prompt = self._build_prompt(context, recent)
+        prompt = self._build_prompt(context, recent, code_delta)
         result = self.router.complex(prompt, system=CONSOLIDATION_PROMPT)
         content = result.get("content", "{}")
 
@@ -229,12 +301,16 @@ class AutoDream:
         try:
             start = content.index("{")
             end = content.rindex("}") + 1
-            return json.loads(content[start:end])
+            parsed = json.loads(content[start:end])
         except (ValueError, json.JSONDecodeError):
-            return {
+            parsed = {
                 "summary": "Dream completed but output parsing failed",
                 "raw_output": content[:2000],
             }
+
+        # 附带代码学习结果（供 _record_dream 与调用方使用）
+        parsed["_code_learning"] = code_delta
+        return parsed
 
     def _gather_all_memory_context(self) -> str:
         """Gather current state of all memory layers."""
@@ -317,6 +393,49 @@ class AutoDream:
             if case_mems:
                 parts.append(f"## L5 近期案例记忆 ({len(case_mems)} 个)\n" + "\n".join(case_mems))
 
+        # L6: Code knowledge summary (built by CodeLearner during auto-dream)
+        code_dir = self.memory_dir / "code_knowledge"
+        if code_dir.exists():
+            code_funcs = sorted([p.stem for p in code_dir.glob("*.json")
+                                 if p.stem != "learning_state" and p.stem == p.stem.upper()])
+            if code_funcs:
+                lines = [f"## L6 代码知识 ({len(code_funcs)} 个功能已学)"]
+                for func in code_funcs:
+                    try:
+                        data = json.loads(
+                            (code_dir / f"{func}.json").read_text(encoding="utf-8")
+                        )
+                    except (json.JSONDecodeError, OSError):
+                        continue
+                    meta = data.get("_meta", {}) or {}
+                    learned = meta.get("learned_focuses", [])
+                    # 统计每个 focus 下的条目数
+                    counts = []
+                    for focus in ["alarm_logic", "calculation_chain", "output_chain", "state_machine"]:
+                        sec = data.get(focus, {}) or {}
+                        total = 0
+                        for v in sec.values():
+                            if isinstance(v, list):
+                                total += len(v)
+                            elif isinstance(v, dict):
+                                total += len(v)
+                        if total:
+                            counts.append(f"{focus}={total}")
+                    lines.append(f"- **{func}** focuses={learned}  items: {', '.join(counts) or '(empty)'}")
+                parts.append("\n".join(lines))
+
+            state_path = code_dir / "learning_state.json"
+            if state_path.exists():
+                try:
+                    ls = json.loads(state_path.read_text(encoding="utf-8"))
+                    parts.append(
+                        "## L6 代码学习状态\n"
+                        f"- warmup_done={ls.get('warmup_done')}  cursor={ls.get('cursor')}  "
+                        f"total_pairs={ls.get('total_learned_pairs', 0)}"
+                    )
+                except (json.JSONDecodeError, OSError):
+                    pass
+
         return "\n\n".join(parts)
 
     def _gather_recent_sessions(self) -> str:
@@ -345,8 +464,23 @@ class AutoDream:
 
         return "\n".join(parts)
 
-    def _build_prompt(self, context: str, recent: str) -> str:
+    def _build_prompt(self, context: str, recent: str, code_delta: Optional[dict] = None) -> str:
         """Build the consolidation prompt for AI."""
+        code_section = ""
+        if code_delta and not code_delta.get("skipped"):
+            learned = code_delta.get("learned", [])
+            skipped = code_delta.get("skipped", [])
+            if learned or skipped:
+                code_section = (
+                    "\n---\n\n## 本次代码学习 Delta\n"
+                    f"新学: {len(learned)} 对；跳过: {len(skipped)} 对\n"
+                )
+                for it in learned[:20]:
+                    code_section += (
+                        f"- {it.get('func')}/{it.get('focus')}: "
+                        f"+{it.get('items_added', 0)} 条 / ~{it.get('items_updated', 0)} 条\n"
+                    )
+
         return f"""请整理以下角雷达分析系统的多层记忆。
 
 {context}
@@ -354,6 +488,7 @@ class AutoDream:
 ---
 
 {recent}
+{code_section}
 
 ---
 
@@ -361,8 +496,9 @@ class AutoDream:
 1. 合并重复的模式条目
 2. 解决前后矛盾的记忆（新的覆盖旧的，数据结论优先于推测）
 3. 将散落的知识整合到功能知识文件中
-4. 更新项目记忆中的固定信息
+4. 更新项目记忆中的固定信息（含“代码知识库学习进度”）
 5. 提取用户的使用偏好和分析习惯
+6. 如果 L6 代码知识的某些条目能与 L2 功能知识或 L3 模式库相互佐证，在 project.md 中说明
 
 输出上述指定的JSON格式。"""
 
@@ -413,13 +549,19 @@ class AutoDream:
     def _record_dream(self, result: dict):
         """Record this dream in the log."""
         log = self._read_dream_log()
-        log.append({
+        code_delta = result.get("_code_learning", {}) or {}
+        entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "summary": result.get("summary", "completed"),
             "conflicts": len(result.get("conflicts_found", [])),
             "patterns_added": len(result.get("patterns_to_add", [])),
             "patterns_removed": len(result.get("patterns_to_remove", [])),
-        })
+        }
+        if code_delta and not code_delta.get("skipped"):
+            entry["code_pairs_learned"] = code_delta.get("learned_count", 0)
+            entry["code_pairs_skipped"] = code_delta.get("skipped_count", 0)
+            entry["code_warmup_done"] = code_delta.get("warmup_done", False)
+        log.append(entry)
         if len(log) > 100:
             log = log[-100:]
         self.log_path.write_text(json.dumps(log, ensure_ascii=False, indent=2), encoding="utf-8")

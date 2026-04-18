@@ -86,7 +86,7 @@ def main():
 Examples:
   python cli.py cases/FCTA001 -p "FCTA没有触发" -e "应该触发"
   python cli.py cases/FCTA001 -q "FCTB触发时AEBIB是否激活"
-  python cli.py --dream
+  python cli.py --dream                  # memory consolidation (冷启动会自动深度学习源代码)
         """,
     )
     parser.add_argument("case_dir", nargs="?", help="Case folder containing .bag/.blf files")
@@ -190,10 +190,13 @@ def _run_dream(force: bool = False):
     from memory.auto_dream import AutoDream
 
     memory = MemorySystem(PROJECT_ROOT)
-    dreamer = AutoDream(memory, get_router(), PROJECT_ROOT)
+    dreamer = AutoDream(memory, get_router(), PROJECT_ROOT, config=load_config())
 
     if force:
-        console.print(Panel("[bold]Forced Dream Cycle[/bold]", border_style="magenta"))
+        console.print(Panel(
+            "[bold]Forced Dream Cycle[/bold]",
+            border_style="magenta",
+        ))
 
     result = dreamer.try_dream(
         on_status=lambda s, d: console.print(f"  [dim magenta][dream] {d}[/dim magenta]"),
@@ -203,6 +206,21 @@ def _run_dream(force: bool = False):
         summary = result.get("summary", "done")
         conflicts = result.get("conflicts_found", [])
         console.print(f"  [magenta]Memory consolidated: {summary}[/magenta]")
+        code_delta = result.get("_code_learning") or {}
+        if code_delta and not code_delta.get("skipped"):
+            learned = code_delta.get("learned_count", 0)
+            skipped = code_delta.get("skipped_count", 0)
+            warmup = "✓" if code_delta.get("warmup_done") else "…"
+            console.print(
+                f"  [magenta]Code learning: +{learned} pairs  "
+                f"(skipped {skipped})  warmup={warmup}[/magenta]"
+            )
+        overview = (code_delta or {}).get("overview") or {}
+        if overview.get("generated"):
+            console.print(
+                f"  [magenta]MD overview refreshed: "
+                f"{', '.join(overview['generated'])}[/magenta]"
+            )
         if conflicts:
             console.print(f"  [yellow]Conflicts resolved: {len(conflicts)}[/yellow]")
 

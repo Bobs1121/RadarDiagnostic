@@ -1,0 +1,293 @@
+{
+  "_meta": {
+    "function": "RCTB",
+    "last_updated": "2026-04-18T17:24:48.888514",
+    "learned_focuses": [
+      "alarm_logic"
+    ],
+    "source_hashes": {
+      "alarm_logic": "5b8b9159e79e3dee"
+    }
+  },
+  "alarm_logic": {
+    "trigger_conditions": [
+      {
+        "id": "trig-1",
+        "description": "系统激活就绪条件：车速在范围内且档位为倒挡（6或7），功能开启且无故障/标定中",
+        "c_expression": "(g_egoCarAddInfo.actual_gear == 6U || g_egoCarAddInfo.actual_gear == 7U) && !g_DTCCode.bBrakeNotReadyFlg && (g_egoCarAddInfo.carSpd <= (fRctbActiveUpSpd * System_Kmh2ms)) && (g_egoCarAddInfo.carSpd >= (fRctbActiveLowSpd * System_Kmh2ms))",
+        "variables": [
+          "g_egoCarAddInfo.actual_gear",
+          "g_egoCarAddInfo.carSpd",
+          "fRctbActiveUpSpd",
+          "fRctbActiveLowSpd",
+          "g_DTCCode.bBrakeNotReadyFlg"
+        ],
+        "thresholds": {
+          "ActiveSpeed": "9.0 km/h",
+          "MinSpeed": "0.0 km/h",
+          "ValidGear": "6U or 7U"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1827,
+          "function": "RctaRctbUpdateStatus"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "id": "trig-2",
+        "description": "报警/制动风险阈值：基于 TTM（碰撞时间）和 DDCI（交叉距离）参数定义，TTM 小于设定值触发预警",
+        "c_expression": "// 逻辑隐含于 SelectRCTBObject，阈值由以下参数定义\nobj_TTM <= fRctbObjWarningTTM && obj_DDCI_offset <= fRctbObjWarningLowerDDCIOffSet",
+        "variables": [
+          "fRctbObjWarningTTM",
+          "fRctbObjWarningLowerDDCIOffSet",
+          "fRctbObjWarningLowerCDDCIOffSet"
+        ],
+        "thresholds": {
+          "WarningTTM": "1.6 s",
+          "DDCI_Offset": "-2.0 m",
+          "CDDCI_Offset": "-4.0 m"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 441,
+          "function": "Global_Parameters"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "id": "trig-3",
+        "description": "制动请求生成：基于刹车等级参数及保持标志位",
+        "c_expression": "bRctbKeepBrakeFlg && GetRCTBrakeValue(holdtime, keepBrakeFlg, fRctbBrakeReqVal)",
+        "variables": [
+          "bRctbKeepBrakeFlg",
+          "fRctbBrakeReqVal",
+          "fRctbBrakeValue"
+        ],
+        "thresholds": {
+          "BrakeValue": "-4.0 m/s^2",
+          "HoldValue": "-2.0 m/s^2"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 795,
+          "function": "Global_Variables"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ],
+    "cancel_conditions": [
+      {
+        "id": "cancel-1",
+        "description": "系统退出条件：车速超过上限或功能被禁用",
+        "c_expression": "(g_egoCarAddInfo.carSpd > (fRctbDeactiveUpSpd * System_Kmh2ms)) || (g_egoCarAddInfo.carSpd < (fRctbDeactiveLowSpd * System_Kmh2ms))",
+        "variables": [
+          "g_egoCarAddInfo.carSpd",
+          "fRctbDeactiveUpSpd",
+          "fRctbDeactiveLowSpd"
+        ],
+        "thresholds": {
+          "DeactiveUpper": "10.0 km/h",
+          "DeactiveLower": "0.0 km/h"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1839,
+          "function": "RctaRctbUpdateStatus"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "id": "cancel-2",
+        "description": "警告清除条件：系统状态非 Standby/Active 或未检测到危险目标",
+        "c_expression": "((3U != adasWarning->rctbSystemState && 2U != adasWarning->rctbSystemState) || (!bRctbDetectFlg))",
+        "variables": [
+          "adasWarning->rctbSystemState",
+          "bRctbDetectFlg"
+        ],
+        "thresholds": {
+          "ValidStates": "2U (Standby), 3U (Active)"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1232,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "id": "cancel-3",
+        "description": "全局抑制取消：上层配置关闭或检测标志失效",
+        "c_expression": "(!adasEnable->bRCTBEnable) || (!bRctbDetectFlg)",
+        "variables": [
+          "adasEnable->bRCTBEnable",
+          "bRctbDetectFlg"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1281,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ],
+    "exit_conditions": [
+      {
+        "id": "exit-1",
+        "description": "保压释放：达到最大保压时长后退出制动",
+        "c_expression": "hold_time >= fRctbHoldTimeThresh",
+        "variables": [
+          "fRctbHoldTimeThresh",
+          "fRctbHoldEventTime"
+        ],
+        "thresholds": {
+          "HoldDuration": "3.0 s"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 451,
+          "function": "Global_Parameters"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "id": "exit-2",
+        "description": "停车判定：车速低于停止阈值",
+        "c_expression": "carSpd < fRctbStopSpd",
+        "variables": [
+          "fRctbStopSpd",
+          "g_egoCarAddInfo.carSpd"
+        ],
+        "thresholds": {
+          "StopSpd": "1.0 km/h (converted to m/s)"
+        },
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 452,
+          "function": "Global_Parameters"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ],
+    "hysteresis": [
+      {
+        "name": "车速迟滞",
+        "enter": "9.0 km/h",
+        "exit": "10.0 km/h",
+        "purpose": "防止系统在临界速度频繁切换状态",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 414,
+          "variable": "fRctbActiveUpSpd / fRctbDeactiveUpSpd"
+        },
+        "id": "item-adfacf4a",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "name": "TTM 迟滞",
+        "enter": "1.6 s",
+        "exit": "2.0 s",
+        "purpose": "报警触发与解除的时间间隔，防止抖动",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 441,
+          "variable": "fRctbObjWarningTTM / fRctbObjDeWarningTTM"
+        },
+        "id": "ttm-60674d5d",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ],
+    "timers": [
+      {
+        "name": "fRctbHoldEventTime",
+        "duration": "3.0s",
+        "purpose": "制动保压计时器，用于控制 RCTB 制动保持持续时间",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 794,
+          "variable": "fRctbHoldEventTime"
+        },
+        "id": "frctbholdeventtime-5c337d09",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "name": "fRctbBrakeEventTime",
+        "duration": "N/A (Accumulated)",
+        "purpose": "制动事件开始计时点",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 793,
+          "variable": "fRctbBrakeEventTime"
+        },
+        "id": "frctbbrakeeventtime-c7acbf54",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ],
+    "suppression": [
+      {
+        "suppressor": "g_DTCCode.bBrakeNotReadyFlg",
+        "how": "若制动系统未就绪，系统状态进入 Passive(6)，不执行激活",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1828,
+          "context": "Activation Check"
+        },
+        "id": "item-d8cbabbe",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "suppressor": "g_DTCCode.failureFlg",
+        "how": "若 DTC 报错故障，系统状态直接置为 Failure(5)",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1821,
+          "context": "Failure Check"
+        },
+        "id": "item-2d52f6f8",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "suppressor": "g_DTCCode.calibratingFlg",
+        "how": "若雷达标定进行中，系统状态置为 Off(4)",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1819,
+          "context": "Calibration Check"
+        },
+        "id": "item-3b0439e3",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "suppressor": "adasEnable->bRCTBEnable",
+        "how": "配置开关关闭时，强制清除所有报警标志并复位状态",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1281,
+          "context": "Warning Reset"
+        },
+        "id": "item-7f22de5b",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      },
+      {
+        "suppressor": "AEB Interaction",
+        "how": "存在 fRctbAEBActiveThresh 变量 (1.0f)，暗示当制动需求或 AEB 介入强度超过此阈值时可能优先处理 AEB 逻辑",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 450,
+          "context": "Parameter Definition"
+        },
+        "id": "item-8f6d8117",
+        "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ]
+  }
+}

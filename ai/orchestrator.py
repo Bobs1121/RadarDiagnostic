@@ -11,7 +11,7 @@ import datetime
 import re as _re
 from pathlib import Path
 from .model_router import ModelRouter
-from .code_analyzer import CodeAnalyzer
+from .code_learner import CodeLearner
 from .frame_analyzer import FrameAnalyzer
 from .expert_panel import ExpertPanel
 from .test_window_detector import TestWindowDetector, format_windows
@@ -23,6 +23,7 @@ from .parameter_analyzer import (
 )
 from .visualizer import build_report as build_html_report
 from .utils import parse_json_from_llm, ALL_FUNCTIONS
+from .context_budget import ContextBudget
 
 
 def _signal_overlap_ok(hint: str, candidate: str, min_ratio: float = 0.45) -> bool:
@@ -393,41 +394,36 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 禁止仅凭直觉给方向；若提出新的阈值值，需指明该值在本次录制中的新穿越次数。
 """
 
-        combined_data = f"""## ★★★ 因果链分析方法论(最高优先级) ★★★
+        # ── Expert Panel prompt assembly with global budget ────────────────
+        # Assemble pieces into a ContextBudget so the total prompt stays
+        # bounded even when individual sections are all near their limits.
+        methodology_block = """## ★★★ 因果链分析方法论(最高优先级) ★★★
 分析时必须区分数据的因果层次:
 - **观测层**(雷达端radar_objects/radar_debug): 仅说明「发生了什么」，是ECU决策的**结果**
 - **代码逻辑层**(adasFunc.c/ASWIN_SystemState.c): 说明「为什么发生」
 - **信号输入层**(RteComMapping.c→CAN信号): 说明「什么触发了代码逻辑」
 根因 = 信号输入层或代码逻辑层的具体问题。**禁止将观测层的状态直接作为根因。**
-追溯方法: 看到异常状态 → 查代码中哪行赋值了此状态 → 该赋值依赖哪个变量/条件 → 该变量来自哪个CAN信号 → CAN信号实际值是什么
+追溯方法: 看到异常状态 → 查代码中哪行赋值了此状态 → 该赋值依赖哪个变量/条件 → 该变量来自哪个CAN信号 → CAN信号实际值是什么"""
 
-## ★ 测试窗口(必读) ★
-{windows_text}
-{tpe_section}
-{suppression_section}
-{output_section}
-{threshold_section}
-{params_section}
-## ★ 条件检查表(代码提取) ★
-{conditions_text}
+        budget = ContextBudget(total_chars=60_000)
+        # Priorities: higher = keep more of it when we need to trim.
+        budget.add("methodology",   methodology_block, priority=100, min_chars=400)
+        budget.add("key_facts",     f"## ★ 关键事实(必读) ★\n{key_facts}", priority=100, min_chars=2000)
+        budget.add("tpe",           tpe_section,       priority=95,  min_chars=2000)
+        budget.add("suppression",   suppression_section, priority=95, min_chars=1000)
+        budget.add("output",        output_section,    priority=90,  min_chars=1500)
+        budget.add("windows",       f"## ★ 测试窗口(必读) ★\n{windows_text}", priority=90, min_chars=400)
+        budget.add("transitions",   f"## 状态跳变\n{transitions_text}", priority=85, min_chars=600)
+        budget.add("conditions",    f"## ★ 条件检查表(代码提取) ★\n{conditions_text}", priority=80, min_chars=1500)
+        budget.add("threshold",     threshold_section, priority=75,  min_chars=1000)
+        budget.add("params",        params_section,    priority=70,  min_chars=1000)
+        budget.add("timeline",      f"## 窗口内数据时间线\n{timeline_text[:10000]}", priority=60, min_chars=2000)
+        budget.add("frame_anal",    f"## 帧分析\n{frame_analysis[:6000]}", priority=55, min_chars=1500)
+        budget.add("evidence",      f"## 数据取证\n{evidence_text}", priority=55, min_chars=3000)
+        budget.add("data_summary",  f"## 数据概览\n{data_summary[:5000]}", priority=40, min_chars=1000)
 
-## ★ 关键事实(必读) ★
-{key_facts}
-
-## 状态跳变
-{transitions_text}
-
-## 窗口内数据时间线
-{timeline_text[:10000]}
-
-## 帧分析
-{frame_analysis[:6000]}
-
-## 数据取证
-{evidence_text}
-
-## 数据概览
-{data_summary[:5000]}"""
+        combined_data = budget.concat()
+        status("panel_prompt", budget.format_report())
 
         panel = ExpertPanel(self.router, self.config, self.project_root)
         panel_result = panel.run_panel(
@@ -1197,18 +1193,15 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
     def _ensure_source_docs(self, status):
         docs_dir = self.project_root / "source_docs"
-        existing = set(p.stem for p in docs_dir.glob("*.md"))
-        missing = [f for f in ALL_FUNCTIONS if f not in existing]
-
-        if missing:
-            status("source_docs", f"Generating docs for: {', '.join(missing)}")
-            analyzer = CodeAnalyzer(self.router, self.config)
-            for func_name in missing:
-                status("source_docs", f"Analyzing {func_name}...")
-                try:
-                    analyzer.analyze_function(func_name)
-                except Exception as e:
-                    status("source_docs", f"[WARN] {func_name} failed: {e}")
+        learner = CodeLearner(self.router, self.config, self.project_root)
+        result = learner.ensure_overview_docs(
+            funcs=ALL_FUNCTIONS,
+            status_cb=lambda step, msg: status("source_docs", msg),
+        )
+        if result.get("generated"):
+            status("source_docs", f"Generated: {', '.join(result['generated'])}")
+        for failed in result.get("failed") or []:
+            status("source_docs", f"[WARN] {failed['func']} failed: {failed['error']}")
 
         sig_map_path = docs_dir / "signal_mapping.json"
         if not sig_map_path.exists():
@@ -1222,12 +1215,25 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
     def _understand_problem(self, problem: str, expected: str, case_dir: Path) -> dict:
         memory_context = self.memory.build_context_for_diagnosis("UNKNOWN", problem, case_dir)
 
+        # 关键字预筛选：只加载问题/预期里提到的功能 MD；
+        # 没匹配到则降级为 top-3 常见功能兜底，而不是全量 8 个。
+        query_text = f"{problem}\n{expected}".upper()
+        matched_funcs = [f for f in ALL_FUNCTIONS if f in query_text]
+        if not matched_funcs:
+            matched_funcs = ["FCTB", "FCTA", "RCTB"]
+            prefilter_note = "（问题中未识别到功能名，加载 top-3 常见功能兜底）"
+        else:
+            prefilter_note = f"（问题中识别到: {', '.join(matched_funcs)}）"
+
         source_summaries = ""
         docs_dir = self.project_root / "source_docs"
-        for md in docs_dir.glob("*.md"):
+        for fn in matched_funcs:
+            md = docs_dir / f"{fn}.md"
+            if not md.exists():
+                continue
             try:
                 content = md.read_text(encoding="utf-8")
-                source_summaries += f"\n### {md.stem}\n{content[:2000]}\n"
+                source_summaries += f"\n### {fn}\n{content[:2000]}\n"
             except Exception:
                 pass
 
@@ -1242,7 +1248,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 ## 历史记忆
 {memory_context}
 
-## 功能文档概要
+## 功能文档概要 {prefilter_note}
 {source_summaries if source_summaries else "(功能文档将自动生成)"}
 
 请输出JSON:

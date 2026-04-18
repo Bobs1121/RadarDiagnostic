@@ -107,6 +107,17 @@ class DataQueryEngine:
         self.config = config
         self.project_root = project_root
         self._sync = None
+        self._memory = None  # lazy-loaded MemorySystem for L6 code_knowledge
+
+    def _get_memory(self):
+        """Lazy-load MemorySystem to access L6 code_knowledge."""
+        if self._memory is None:
+            try:
+                from memory.memory_system import MemorySystem
+                self._memory = MemorySystem(self.project_root)
+            except Exception:
+                self._memory = False  # mark as unavailable
+        return self._memory if self._memory else None
 
     def run_query(
         self,
@@ -278,6 +289,18 @@ class DataQueryEngine:
                 try:
                     content = doc_path.read_text(encoding="utf-8")
                     parts.append(f"## {fn} 功能文档摘要\n{content[:1500]}")
+                except Exception:
+                    pass
+
+            # L6: auto-dream 固化的细粒度代码知识
+            memory = self._get_memory()
+            if memory is not None:
+                try:
+                    code_ctx = memory.render_code_knowledge_for_context(
+                        fn, max_chars=4000,
+                    )
+                    if code_ctx:
+                        parts.append(code_ctx)
                 except Exception:
                     pass
 

@@ -1,0 +1,252 @@
+{
+  "_meta": {
+    "function": "BSD",
+    "last_updated": "2026-04-18T17:29:16.314108",
+    "learned_focuses": [
+      "alarm_logic"
+    ],
+    "source_hashes": {
+      "alarm_logic": "5b8b9159e79e3dee"
+    }
+  },
+  "alarm_logic": {
+    "trigger_conditions": [
+      {
+        "id": "trig-1",
+        "description": "BSD 系统状态激活（允许报警的前提条件）：车速在范围内且曲率半径满足要求。代码片段未直接展示系统状态更新函数内部，但参数定义明确了阈值。",
+        "c_expression": "curV >= fBsdActiveSpd && curV <= fBsdActiveUpperSpd && radius >= fBsdActiveCurbRadius",
+        "variables": [
+          "fBsdActiveSpd",
+          "fBsdActiveUpperSpd",
+          "fBsdActiveCurbRadius",
+          "bsdSystemState"
+        ],
+        "thresholds": {
+          "fBsdActiveSpd": "12.0 km/h",
+          "fBsdActiveUpperSpd": "146.0 km/h",
+          "fBsdActiveCurbRadius": "125.0 m"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 52,
+          "function": "GlobalParamsDefinition"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "id": "trig-2",
+        "description": "目标对象触发报警阈值：相对速度与绝对速度满足警告条件。逻辑隐含在对象标志位设置流程中，参数定义了判断边界。",
+        "c_expression": "obj.relVx < fBsdObjWarningRelVx && obj.spd > fBsdObjWarningSpd",
+        "variables": [
+          "fBsdObjWarningRelVx",
+          "fBsdObjWarningSpd",
+          "objBsdWarningFlag"
+        ],
+        "thresholds": {
+          "fBsdObjWarningRelVx": "-15.0 km/h",
+          "fBsdObjWarningSpd": "7.2 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 70,
+          "function": "GlobalParamsDefinition"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "id": "trig-3",
+        "description": "报警标志位保持生效检查：系统必须处于 Active 或 Standby 状态，否则警告会被清除（反向推导触发维持条件）。",
+        "c_expression": "3U == adasWarning->bsdSystemState || 2U == adasWarning->bsdSystemState",
+        "variables": [
+          "adasWarning->bsdSystemState"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1202,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ],
+    "cancel_conditions": [
+      {
+        "id": "cancel-1",
+        "description": "系统非激活状态强制清除报警标志：当 BSD 系统状态不为 Active(3) 或 Standby(2) 时，已存在的警告标志被重置为 Normal。",
+        "c_expression": "3U != adasWarning->bsdSystemState && 2U != adasWarning->bsdSystemState && (int8_t)WarningFlag_Warning == sObj.objBsdWarningFlag",
+        "variables": [
+          "adasWarning->bsdSystemState",
+          "sObj.objBsdWarningFlag"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1202,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 1.0,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "id": "cancel-2",
+        "description": "对象退出的速度与相对速度迟滞条件：相对速度超过解除阈值或自车速度低于解除阈值。",
+        "c_expression": "obj.relVx > fBsdObjDeWarningRelVx || obj.spd < fBsdObjDeWarningSpd",
+        "variables": [
+          "fBsdObjDeWarningRelVx",
+          "fBsdObjDeWarningSpd"
+        ],
+        "thresholds": {
+          "fBsdObjDeWarningRelVx": "-20.0 km/h",
+          "fBsdObjDeWarningSpd": "3.6 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 73,
+          "function": "GlobalParamsDefinition"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "id": "cancel-3",
+        "description": "空间偏移退出条件：对象位置超出 BSD 区域一定偏移量后停止警告。",
+        "c_expression": "obj.x > fBsdObjDeWarningLeftTopOffSetX (左)/RightTopOffSetX (右)",
+        "variables": [
+          "fBsdObjDeWarningLeftTopOffSetX",
+          "fBsdObjDeWarningRightTopOffSetX"
+        ],
+        "thresholds": {
+          "fBsdObjDeWarningLeftTopOffSetX": "0.5 m",
+          "fBsdObjDeWarningRightTopOffSetX": "0.5 m"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 82,
+          "function": "GlobalParamsDefinition"
+        },
+        "confidence": 0.75,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ],
+    "exit_conditions": [
+      {
+        "id": "exit-1",
+        "description": "功能复位与缓冲区清零：调用 ResetAdasSystemStatusPara 或系统失败态时，清除所有保持标志和帧计数。",
+        "c_expression": "ResetAdasSystemStatusPara() -> memset(bBsdLeftBuffer, 0...) ; bBsdLeftKeepFlag = false;",
+        "variables": [
+          "bBsdLeftKeepFlag",
+          "bsdLeftFrmCount",
+          "bBsdLeftBuffer"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 990,
+          "function": "ResetAdasSystemStatusPara"
+        },
+        "confidence": 1.0,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "id": "exit-2",
+        "description": "报警延时计数未完成：若对象消失但保持帧计数未满，可能仍保持报警（需结合 KeepFlag 逻辑）。",
+        "c_expression": "bBsdLeftKeepFlag == true && bsdLeftFrmCount < KEEPWARNINGFRM",
+        "variables": [
+          "bBsdLeftKeepFlag",
+          "bsdLeftFrmCount",
+          "KEEPWARNINGFRM"
+        ],
+        "thresholds": {
+          "KEEPWARNINGFRM": "3 frames"
+        },
+        "code_ref": {
+          "file": "paraDefine.h",
+          "line": 135,
+          "function": "MacroDefinition"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ],
+    "hysteresis": [
+      {
+        "name": "系统激活车速迟滞",
+        "enter": ">= 12.0 km/h (fBsdActiveSpd)",
+        "exit": "<= 10.0 km/h (fBsdDeactiveSpd)",
+        "purpose": "防止车辆在临界低速区频繁启停报警",
+        "id": "item-fcf1a86f",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "name": "系统上限车速迟滞",
+        "enter": ">= 146.0 km/h (fBsdActiveUpperSpd)",
+        "exit": "> 151.0 km/h (fBsdDeactiveUpperSpd)",
+        "purpose": "高速工况下功能关闭的迟滞保护",
+        "id": "item-2821e8d9",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "name": "对象警告相对速度迟滞",
+        "enter": "< -15.0 km/h (fBsdObjWarningRelVx)",
+        "exit": "> -20.0 km/h (fBsdObjDeWarningRelVx)",
+        "purpose": "避免追车场景下车距波动导致报警闪烁",
+        "id": "item-167e6cf2",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ],
+    "timers": [
+      {
+        "name": "KEEPWARNINGFRM",
+        "duration": "3 Frames (约 0.1-0.15s @100Hz)",
+        "purpose": "报警信号抖动滤除与保持，确保报警稳定输出",
+        "id": "keepwarningfrm-b5b95446",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "name": "nBsdLeftWarnDelayFrm",
+        "duration": "由 fBsdWarnDelay (0.0s 默认) 计算得出",
+        "purpose": "报警发出前的额外延迟计时",
+        "id": "nbsdleftwarndelayfrm-c3e5dc55",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ],
+    "suppression": [
+      {
+        "suppressor": "System State (Inactive)",
+        "how": "通过 UpdateObjAdasWarningFlg 检测 adasWarning->bsdSystemState，若非 Active(3) 或 Standby(2)，强制将 objBsdWarningFlag 置为 Normal",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1202,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-3643c752",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "suppressor": "bBsdAlwaysNormalEnable",
+        "how": "全局开关，若使能则始终禁止报警（推测逻辑，基于变量命名规范）",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 40,
+          "function": "GlobalParamsDefinition"
+        },
+        "id": "item-e4ed36cd",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      },
+      {
+        "suppressor": "Turn Light (Implicit)",
+        "how": "UpdateBsdSide 函数接口包含 turnLight 参数，通常用于车道变更指示灯开启时抑制同侧 BSD 报警",
+        "code_ref": {
+          "file": "adasFunc.h",
+          "line": 753,
+          "function": "UpdateBsdSide Declaration"
+        },
+        "id": "item-80a8adc2",
+        "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ]
+  }
+}

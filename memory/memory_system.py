@@ -24,6 +24,11 @@ Inspired by Claude Code's tiered memory architecture:
   L5 - Case Memory (cases/<case_id>/memory.json)
        Per-case persistent context: what was found, which frames matter,
        final verdict. Lives alongside the case data files.
+
+  L6 - Code Knowledge (code_knowledge/<FUNC>.json)
+       Per-function deep code knowledge accumulated by CodeLearner
+       during auto-dream cycles: alarm logic, calculation chains,
+       output chains, state machines. Grows incrementally.
 """
 import json
 import hashlib
@@ -41,6 +46,15 @@ class MemorySystem:
         self.memory_dir.mkdir(exist_ok=True)
         (self.memory_dir / "functions").mkdir(exist_ok=True)
         (self.memory_dir / "sessions").mkdir(exist_ok=True)
+        (self.memory_dir / "code_knowledge").mkdir(exist_ok=True)
+
+        # Session-level context cache.
+        # Avoids rebuilding the diagnosis context multiple times per run
+        # (orchestrator calls build_context_for_diagnosis ~3 times per case).
+        # Cache is invalidated when this MemorySystem instance is discarded.
+        self._ctx_cache: dict[tuple, str] = {}
+        self._ctx_cache_hits: int = 0
+        self._ctx_cache_misses: int = 0
 
     # ── L1: Project Memory ──────────────────────────────────────────────
 
@@ -204,6 +218,99 @@ class MemorySystem:
             json.dumps(memory, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
+    # ── L6: Code Knowledge (auto-dream 学到的代码知识) ─────────────────
+
+    def read_code_knowledge(self, func_name: str) -> dict:
+        """读取某功能的深度代码知识（由 CodeLearner 填充）。"""
+        path = self.memory_dir / "code_knowledge" / f"{func_name.upper()}.json"
+        if path.exists():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {}
+
+    def list_code_knowledge_funcs(self) -> list[str]:
+        """列出已有代码知识的功能名。"""
+        d = self.memory_dir / "code_knowledge"
+        if not d.exists():
+            return []
+        return [p.stem for p in d.glob("*.json") if p.stem.upper() == p.stem]
+
+    def read_code_learning_state(self) -> dict:
+        """读取代码学习状态（游标、warmup 进度等）。"""
+        path = self.memory_dir / "code_knowledge" / "learning_state.json"
+        if path.exists():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {}
+
+    def render_code_knowledge_for_context(
+        self, func_name: str, max_chars: int = 6000,
+    ) -> str:
+        """把某功能的代码知识渲染成精炼 markdown，供诊断 context 使用。
+
+        只渲染已学过的 focus，条目按 id 去重，限制总字符数。
+        """
+        data = self.read_code_knowledge(func_name)
+        if not data:
+            return ""
+
+        meta = data.get("_meta", {}) or {}
+        learned = meta.get("learned_focuses", [])
+        if not learned:
+            return ""
+
+        lines: list[str] = [
+            f"## {func_name.upper()} 代码知识（auto-dream 固化）",
+            f"_已学焦点: {', '.join(learned)} | 最后更新: {meta.get('last_updated', '?')[:19]}_",
+            "",
+        ]
+
+        def _render_section(focus: str, section: dict) -> list[str]:
+            out: list[str] = [f"### {focus}"]
+            for key, val in section.items():
+                if key.startswith("_"):
+                    continue
+                if isinstance(val, list):
+                    out.append(f"**{key}** ({len(val)} 条):")
+                    for it in val[:8]:
+                        if not isinstance(it, dict):
+                            continue
+                        desc = it.get("description") or it.get("name") or it.get("c_expression") or it.get("condition") or ""
+                        ref = it.get("code_ref") or {}
+                        ref_str = ""
+                        if isinstance(ref, dict) and ref.get("file"):
+                            ref_str = f" [{ref.get('file')}:{ref.get('line', '?')}]"
+                        out.append(f"  - {desc}{ref_str}")
+                elif isinstance(val, dict):
+                    out.append(f"**{key}**:")
+                    for k, v in list(val.items())[:10]:
+                        if k.startswith("_"):
+                            continue
+                        if isinstance(v, dict):
+                            desc = v.get("description") or v.get("formula") or ""
+                            out.append(f"  - `{k}`: {desc}")
+                        else:
+                            out.append(f"  - `{k}`: {v}")
+            return out
+
+        for focus in ["state_machine", "alarm_logic", "calculation_chain", "output_chain"]:
+            if focus not in data:
+                continue
+            section = data.get(focus)
+            if not isinstance(section, dict) or not section:
+                continue
+            lines.extend(_render_section(focus, section))
+            lines.append("")
+
+        text = "\n".join(lines)
+        if len(text) > max_chars:
+            text = text[: max_chars - 30] + "\n... [code knowledge truncated] ..."
+        return text
+
     # ── Context Builder ─────────────────────────────────────────────────
 
     def build_context_for_diagnosis(
@@ -211,9 +318,26 @@ class MemorySystem:
     ) -> str:
         """
         Build a comprehensive memory context string for the AI orchestrator.
-        Combines relevant memories from all layers.
+        Combines relevant memories from all layers (L1-L6).
+
+        **Session-level cache**: repeated calls with identical
+        (func, problem, case) return the cached string without touching disk.
+        Orchestrator typically calls this 3 times per diagnosis (understand,
+        classify, expert_panel) — this deduplicates file IO to just once.
         """
-        parts = []
+        # problem 可能很长，截前 240 字作为缓存键（足够区分不同问题）
+        cache_key = (
+            (func_name or "UNKNOWN").upper(),
+            (problem or "")[:240],
+            str(case_dir) if case_dir else "",
+        )
+        cached = self._ctx_cache.get(cache_key)
+        if cached is not None:
+            self._ctx_cache_hits += 1
+            return cached
+
+        self._ctx_cache_misses += 1
+        parts: list[str] = []
 
         # L1
         project_mem = self.read_project_memory()
@@ -226,6 +350,11 @@ class MemorySystem:
             k = func_knowledge.copy()
             k.pop("_updated", None)
             parts.append(f"## {func_name} 功能知识\n```json\n{json.dumps(k, ensure_ascii=False, indent=1)[:3000]}\n```")
+
+        # L6 — 代码知识（auto-dream 固化）
+        code_ctx = self.render_code_knowledge_for_context(func_name, max_chars=6000)
+        if code_ctx:
+            parts.append(code_ctx)
 
         # L3
         keywords = [w for w in problem.replace("，", " ").replace(",", " ").split() if len(w) > 1]
@@ -241,4 +370,23 @@ class MemorySystem:
             if case_mem:
                 parts.append(f"## 本案例历史记忆\n{json.dumps(case_mem, ensure_ascii=False, indent=1)[:1500]}")
 
-        return "\n\n".join(parts) if parts else "(暂无历史记忆)"
+        result = "\n\n".join(parts) if parts else "(暂无历史记忆)"
+        self._ctx_cache[cache_key] = result
+        return result
+
+    def invalidate_context_cache(self) -> None:
+        """Clear cached diagnosis contexts.
+
+        Call this after writing new memories (L2/L3/L5) within the same
+        MemorySystem lifetime if you need the next call to see the updated
+        data on disk.
+        """
+        self._ctx_cache.clear()
+
+    def context_cache_stats(self) -> dict:
+        """Return hit/miss counters for diagnostics."""
+        return {
+            "hits": self._ctx_cache_hits,
+            "misses": self._ctx_cache_misses,
+            "size": len(self._ctx_cache),
+        }

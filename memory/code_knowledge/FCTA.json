@@ -1,0 +1,305 @@
+{
+  "_meta": {
+    "function": "FCTA",
+    "last_updated": "2026-04-18T17:22:09.796117",
+    "learned_focuses": [
+      "alarm_logic"
+    ],
+    "source_hashes": {
+      "alarm_logic": "5b8b9159e79e3dee"
+    }
+  },
+  "alarm_logic": {
+    "trigger_conditions": [
+      {
+        "id": "trig-1",
+        "description": "系统处于激活状态且检测到目标对象在预警区域内",
+        "c_expression": "adasWarning->fctaSystemState == 3U && bFctaDetectFlg == true && sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal",
+        "variables": [
+          "adasWarning->fctaSystemState",
+          "bFctaDetectFlg",
+          "sObj.objFctaWarningFlag"
+        ],
+        "thresholds": {
+          "System_State_Active": "3U",
+          "Warning_Flag": "> 0U"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1190,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "trig-2",
+        "description": "目标相对速度低于警告阈值 (参数定义约束)",
+        "c_expression": "obj.RelativeSpeed < fFctaObjWarningSpd",
+        "variables": [
+          "obj.RelativeSpeed",
+          "fFctaObjWarningSpd"
+        ],
+        "thresholds": {
+          "fFctaObjWarningSpd": "4.0 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 481,
+          "function": "Param_Definition"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "trig-3",
+        "description": "目标到达时间 TTM_X 小于基准阈值 (参数定义约束)",
+        "c_expression": "obj.TTMX < fFctaObjWarningBaseTTMX + fFctaObjWarningTTMXOffSet",
+        "variables": [
+          "obj.TTMX",
+          "fFctaObjWarningBaseTTMX",
+          "fFctaObjWarningTTMXOffSet"
+        ],
+        "thresholds": {
+          "fFctaObjWarningBaseTTMX": "2.0 s",
+          "fFctaObjWarningTTMXOffSet": "0.0 s"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 535,
+          "function": "Param_Definition"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "trig-4",
+        "description": "目标偏航角处于预警范围 (参数定义约束)",
+        "c_expression": "obj.YawAngle >= fFctaObjWarningLowYawAngle && obj.YawAngle <= fFctaObjWarningUpYawAngle",
+        "variables": [
+          "obj.YawAngle",
+          "fFctaObjWarningLowYawAngle",
+          "fFctaObjWarningUpYawAngle"
+        ],
+        "thresholds": {
+          "fFctaObjWarningLowYawAngle": "38.0 deg",
+          "fFctaObjWarningUpYawAngle": "127.0 deg"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 493,
+          "function": "Param_Definition"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "trig-5",
+        "description": "自车车速在功能激活区间内",
+        "c_expression": "EgoSpeed >= fFctaActiveLowSpd && EgoSpeed <= fFctaActiveUpSpd",
+        "variables": [
+          "EgoSpeed",
+          "fFctaActiveLowSpd",
+          "fFctaActiveUpSpd"
+        ],
+        "thresholds": {
+          "fFctaActiveLowSpd": "0.5 km/h",
+          "fFctaActiveUpSpd": "21.0 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 460,
+          "function": "Param_Definition"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ],
+    "cancel_conditions": [
+      {
+        "id": "cancel-1",
+        "description": "系统状态非激活或非待机时强制清除报警标志",
+        "c_expression": "(3U != adasWarning->fctaSystemState && 2U != adasWarning->fctaSystemState) && (sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal)",
+        "variables": [
+          "adasWarning->fctaSystemState",
+          "sObj.objFctaWarningFlag"
+        ],
+        "thresholds": {
+          "Valid_State": "2U (Standby) or 3U (Active)"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1190,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "cancel-2",
+        "description": "未检测到障碍物或检测标志为假时清除报警",
+        "c_expression": "!bFctaDetectFlg && (sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal)",
+        "variables": [
+          "bFctaDetectFlg",
+          "sObj.objFctaWarningFlag"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1190,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "cancel-3",
+        "description": "保帧计数超时或标志位翻转后清除保持状态",
+        "c_expression": "bFctaStartKeepWarningFlg == false && fctaKeepWarningCount > 0",
+        "variables": [
+          "bFctaStartKeepWarningFlg",
+          "fctaKeepWarningCount"
+        ],
+        "thresholds": {
+          "MAX_FRAMES": "KEEPWARNINGFRM (3U)"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 825,
+          "function": "Variable_Def"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ],
+    "exit_conditions": [
+      {
+        "id": "exit-1",
+        "description": "调用关闭函数重置所有 FCTA 状态和标志",
+        "c_expression": "CloseFctaFunc(leftRoi, rightRoi, adasWarning)",
+        "variables": [
+          "leftRoi",
+          "rightRoi",
+          "adasWarning"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2483,
+          "function": "CloseFctaFunc"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "id": "exit-2",
+        "description": "外部模式禁用时强制清除警告标志",
+        "c_expression": "(!adasEnable->bFCTAEnable || !bFctaDetectFlg) && (sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal)",
+        "variables": [
+          "adasEnable->bFCTAEnable",
+          "bFctaDetectFlg"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1239,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ],
+    "hysteresis": [
+      {
+        "name": "TTMX Warning/De-Warning",
+        "enter": "fFctaObjWarningBaseTTMX (2.0s)",
+        "exit": "fFctaObjWarningBaseTTMX + fFctaObjDeWarningTTMXOffSet (2.0 + 0.3s)",
+        "purpose": "防止 TTM 临界值波动导致频繁报警",
+        "id": "ttmx-warning-de-warning-7c54734b",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "Speed Warning/De-Warning",
+        "enter": "fFctaObjWarningUpSpd (70.0 km/h)",
+        "exit": "fFctaObjDeWarningUpSpd (73.6 km/h)",
+        "purpose": "防止高速边界切换抖动",
+        "id": "speed-warning-de-warning-449a4429",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "Yaw Angle Warning/De-Warning",
+        "enter": "[38.0, 127.0] deg",
+        "exit": "[33.0, 135.0] deg",
+        "purpose": "扩大退出的角度容差，增加稳定性",
+        "id": "yaw-angle-warning-de-war-5d43a5ac",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "System Active/Deactive",
+        "enter": "[0.5, 21.0] km/h",
+        "exit": "[0.0, 22.0] km/h",
+        "purpose": "防止车速在开关阈值附近反复跳变",
+        "id": "system-active-deactive-e047d21d",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ],
+    "timers": [
+      {
+        "name": "fctaKeepWarningCount",
+        "duration": "KEEPWARNINGFRM (3 Frames)",
+        "purpose": "报警保持帧数，用于滤波和稳定提示",
+        "id": "fctakeepwarningcount-442ec5d1",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "fctaKeepWarnFrm",
+        "duration": "Defined in paraDefine.h (KEEPWARNINGFRM=3U)",
+        "purpose": "低车速下可能使用 LOWSPEEDKEEPWARNINGFRM (6U)",
+        "id": "fctakeepwarnfrm-434403a1",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "TTM Timer",
+        "duration": "Dynamic based on distance/speed (max approx 2.0s)",
+        "purpose": "计算碰撞时间作为触发依据",
+        "id": "ttm-timer-0885f256",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ],
+    "suppression": [
+      {
+        "suppressor": "adasEnable->bFCTAEnable",
+        "how": "当配置开关为 False 时，即使检测到目标也强制置 Warning Flag 为 Normal",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1239,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-f3bb85a7",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "suppressor": "adasWarning->fctaSystemState",
+        "how": "当系统状态不是 Active (3) 或 Standby (2) 时，禁止输出警告",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1190,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-1908e536",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "suppressor": "bFctaDetectFlg",
+        "how": "当底层感知未标记有效探测区域时，抑制报警",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1190,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-c2fe60bd",
+        "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ]
+  }
+}

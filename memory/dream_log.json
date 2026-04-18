@@ -47,5 +47,22 @@
     "conflicts": 2,
     "patterns_added": 1,
     "patterns_removed": 3
+  },
+  {
+    "timestamp": "2026-04-18T16:42:05.232254",
+    "summary": "整合了 FCTB 最新诊断案例，新增'目标跟踪抖动导致触发即退出'根因模式，修正了退出延迟的归因逻辑，并清理了 3 条重复或过时的模式条目。",
+    "conflicts": 2,
+    "patterns_added": 1,
+    "patterns_removed": 3
+  },
+  {
+    "timestamp": "2026-04-18T17:37:14.505469",
+    "summary": "完成 8 大功能代码知识库整合，新增 FCTB 触发即退出根因模式，移除 2 条过时/重复模式，统一 FCTB 故障描述标准，更新项目记忆至 v6。",
+    "conflicts": 2,
+    "patterns_added": 1,
+    "patterns_removed": 2,
+    "code_pairs_learned": 8,
+    "code_pairs_skipped": 0,
+    "code_warmup_done": true
   }
 ]

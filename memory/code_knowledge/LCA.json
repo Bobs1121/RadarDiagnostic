@@ -1,0 +1,274 @@
+{
+  "_meta": {
+    "function": "LCA",
+    "last_updated": "2026-04-18T17:31:09.134850",
+    "learned_focuses": [
+      "alarm_logic"
+    ],
+    "source_hashes": {
+      "alarm_logic": "5b8b9159e79e3dee"
+    }
+  },
+  "alarm_logic": {
+    "trigger_conditions": [
+      {
+        "id": "trig-1",
+        "description": "系统状态必须处于激活（Active）或待机（Standby）状态，且对象位于 LCA ROI 区域内。",
+        "c_expression": "adasWarning->lcaSystemState == 2U || adasWarning->lcaSystemState == 3U /* Inverse of clear logic at Line 1208 */",
+        "variables": [
+          "adasWarning->lcaSystemState"
+        ],
+        "thresholds": {
+          "system_state_standby": "2U",
+          "system_state_active": "3U"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1208,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "id": "trig-2",
+        "description": "自车速度需在 LCA 激活速度范围内（迟滞逻辑由参数定义）。",
+        "c_expression": "curVehSpd >= fLcaActiveSpd && curVehSpd <= fLcaActiveUpperSpd /* Inferred from param defs */",
+        "variables": [
+          "curVehSpd",
+          "fLcaActiveSpd",
+          "fLcaActiveUpperSpd"
+        ],
+        "thresholds": {
+          "fLcaActiveSpd": "12.0 km/h",
+          "fLcaActiveUpperSpd": "146.0 km/h"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 109,
+          "function": "Global Parameters"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "id": "trig-3",
+        "description": "目标对象 TTC 小于预警阈值。",
+        "c_expression": "objTTC <= fLcaObjWarningTTC",
+        "variables": [
+          "objTTC",
+          "fLcaObjWarningTTC"
+        ],
+        "thresholds": {
+          "fLcaObjWarningTTC": "4.0 s"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 157,
+          "function": "Global Parameters"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "id": "trig-4",
+        "description": "目标物体位于 LCA 检测区域（ROI）内。",
+        "c_expression": "objDistX >= LineLCAC && objDistX <= LineLCAA /* ROI Vertical Bounds */",
+        "variables": [
+          "objDistX",
+          "LineLCAC",
+          "LineLCAA"
+        ],
+        "thresholds": {
+          "LineLCAC": "-4.0m + RearDist",
+          "LineLCAA": "-80.0m + RearDist"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 18,
+          "function": "Global Parameters"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      }
+    ],
+    "cancel_conditions": [
+      {
+        "id": "cancel-1",
+        "description": "LCA 系统状态不在 Standby 或 Active 时，强制清除警告标志。",
+        "c_expression": "3U != adasWarning->lcaSystemState && 2U != adasWarning->lcaSystemState && (int8_t)WarningFlag_Warning == sObj.objLcaWarningFlag",
+        "variables": [
+          "adasWarning->lcaSystemState",
+          "sObj.objLcaWarningFlag"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1208,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 1.0,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "id": "cancel-2",
+        "description": "功能被禁用（LCAEnable 为 false）时清除警告。",
+        "c_expression": "!adasEnable->bLCAEnable && !adasEnable->bELKEnable",
+        "variables": [
+          "adasEnable->bLCAEnable",
+          "adasEnable->bELKEnable"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1257,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "confidence": 1.0,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "id": "cancel-3",
+        "description": "初始化或复位时清除所有 LCA 保持标志和缓冲。",
+        "c_expression": "bLcaLeftWarningFlg = false; bLcaRightWarningFlg = false;",
+        "variables": [
+          "bLcaLeftWarningFlg",
+          "bLcaRightWarningFlg"
+        ],
+        "thresholds": {},
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1052,
+          "function": "ResetLcaFlags"
+        },
+        "confidence": 1.0,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      }
+    ],
+    "exit_conditions": [
+      {
+        "id": "exit-1",
+        "description": "TTC 超过退预警阈值（迟滞退出）。",
+        "c_expression": "objTTC > fLcaObjDeWarningTTC",
+        "variables": [
+          "objTTC",
+          "fLcaObjDeWarningTTC"
+        ],
+        "thresholds": {
+          "fLcaObjDeWarningTTC": "4.7 s"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 160,
+          "function": "Global Parameters"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "id": "exit-2",
+        "description": "车辆曲率半径超出激活范围导致系统关闭。",
+        "c_expression": "curvRadius < fLcaDeactiveCurbRadius /* System State Deactivate */",
+        "variables": [
+          "curvRadius",
+          "fLcaDeactiveCurbRadius"
+        ],
+        "thresholds": {
+          "fLcaDeactiveCurbRadius": "75.0 m"
+        },
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 124,
+          "function": "Global Parameters"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      }
+    ],
+    "hysteresis": [
+      {
+        "name": "TTC 触发与退出迟滞",
+        "enter": "fLcaObjWarningTTC (4.0s)",
+        "exit": "fLcaObjDeWarningTTC (4.7s)",
+        "purpose": "防止在阈值临界点报警频繁闪烁，退出阈值比进入阈值大 0.7s。",
+        "id": "ttc-653c24a0",
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "name": "系统激活速度迟滞",
+        "enter": "fLcaActiveSpd (12.0 km/h)",
+        "exit": "fLcaDeactiveSpd (10.0 km/h)",
+        "purpose": "低速启停时避免系统反复开关机。",
+        "id": "item-12f6207b",
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "name": "系统高速限制迟滞",
+        "enter": "fLcaActiveUpperSpd (146.0 km/h)",
+        "exit": "fLcaDeactiveUpperSpd (151.0 km/h)",
+        "purpose": "高速行驶时维持功能，减速后不立即恢复，需降得更低。",
+        "id": "item-9dbc78a5",
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "name": "曲率半径迟滞",
+        "enter": "fLcaActiveCurbRadius (125.0 m)",
+        "exit": "fLcaDeactiveCurbRadius (75.0 m)",
+        "purpose": "弯道较大时功能开启，弯变直后保留一定容差再关闭。",
+        "id": "item-8a004683",
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      }
+    ],
+    "timers": [
+      {
+        "name": "KEEPWARNINGFRM",
+        "duration": "3 Frames (Defined in paraDefine.h)",
+        "purpose": "报警保持帧数，防止单帧误报导致信号抖动，配合 lcaKeepWarnFrm 使用。",
+        "id": "keepwarningfrm-703d40c6",
+        "_learned_at": "2026-04-18T17:31:09.134850"
+      },
+      {
+        "name": "Buffer Keep Flag Timer",
+        "duration": "Depends on lcaLeftFrmCount / lcaRightFrmCount",
+        "purpose": "通过帧计数缓冲实现报警状态的稳定保持，变量定义为 lcaLeftFrmCount。",
+        "id": "buffer-keep-flag-timer-bc74abaa",
+        "_learned_at": "2026-04-18T17:31:09.135850"
+      }
+    ],
+    "suppression": [
+      {
+        "suppressor": "ADAS Enable Switch (LCA/ELK)",
+        "how": "当 !adasEnable->bLCAEnable 且 !adasEnable->bELKEnable 时，强制将 objLcaWarningFlag 设为 Normal。",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1257,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-39d8ae26",
+        "_learned_at": "2026-04-18T17:31:09.135850"
+      },
+      {
+        "suppressor": "System State Machine",
+        "how": "当 lcaSystemState 不为 2 (Standby) 或 3 (Active) 时，自动清除警告标记。",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1208,
+          "function": "UpdateObjAdasWarningFlg"
+        },
+        "id": "item-1e902086",
+        "_learned_at": "2026-04-18T17:31:09.135850"
+      },
+      {
+        "suppressor": "Initialization / Reset",
+        "how": "系统复位时清空左侧和右侧的所有保持标志及缓冲区数据。",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 1039,
+          "function": "ResetLcaFlags"
+        },
+        "id": "item-e2ef52ea",
+        "_learned_at": "2026-04-18T17:31:09.135850"
+      }
+    ]
+  }
+}

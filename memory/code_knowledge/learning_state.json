@@ -1,0 +1,26 @@
+{
+  "cursor": 8,
+  "warmup_done": true,
+  "pair_hashes": {
+    "FCTB/alarm_logic": "5b8b9159e79e3dee",
+    "FCTA/alarm_logic": "5b8b9159e79e3dee",
+    "RCTB/alarm_logic": "5b8b9159e79e3dee",
+    "RCTA/alarm_logic": "5b8b9159e79e3dee",
+    "BSD/alarm_logic": "5b8b9159e79e3dee",
+    "LCA/alarm_logic": "5b8b9159e79e3dee",
+    "DOW/alarm_logic": "5b8b9159e79e3dee",
+    "RCW/alarm_logic": "5b8b9159e79e3dee"
+  },
+  "learned_pairs": [
+    "FCTB/alarm_logic",
+    "FCTA/alarm_logic",
+    "RCTB/alarm_logic",
+    "RCTA/alarm_logic",
+    "BSD/alarm_logic",
+    "LCA/alarm_logic",
+    "DOW/alarm_logic",
+    "RCW/alarm_logic"
+  ],
+  "total_learned_pairs": 8,
+  "last_learn_at": "2026-04-18T17:35:21.194453"
+}
