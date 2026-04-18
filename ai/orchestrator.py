@@ -24,6 +24,8 @@ from .parameter_analyzer import (
 from .visualizer import build_report as build_html_report
 from .utils import parse_json_from_llm, ALL_FUNCTIONS
 from .context_budget import ContextBudget
+from .data_probe import DataProbe
+from .variable_query_planner import VariableQueryPlanner, render_probe_results_for_prompt
 
 
 def _signal_overlap_ok(hint: str, candidate: str, min_ratio: float = 0.45) -> bool:
@@ -92,6 +94,7 @@ class Orchestrator:
           Phase 3   — Extract evidence (window-aware)
           Phase 3.5 — Extract conditions from source code
           Phase 3.55 — Temporal Pattern Engine (TPE) causal alignment  [NEW]
+          Phase 3.57 — Variable Query Probe (LLM plans, DataProbe executes)
           Phase 3.6 — External suppression signal check
           Phase 3.7 — Output signal analysis
           Phase 4   — Expert panel diagnosis
@@ -214,6 +217,55 @@ class Orchestrator:
                 "missing_can_signals": tpe_report.get("missing_can_count", 0),
                 "has_triggers": tpe_report.get("triggered_count", 0) > 0,
             })
+
+        # ── Phase 3.57: Variable Query Probe (dynamic evidence gathering) ──
+        # Let the LLM decide which variables/expressions to probe for *this*
+        # specific problem, then run those queries over the SQLite store. This
+        # breaks the "we only see what we hard-coded" trap: e.g. when a case
+        # is actually caused by `objectRightCutIn = dist_y + 0.25 * width`
+        # exceeding an ROI threshold, the planner can ask for that exact
+        # derived statistic without anyone wiring it in.
+        probe_section = ""
+        probe_plans: list = []
+        probe_results: list = []
+        probe_cfg = (self.config.get("ai", {}) or {}).get("variable_probe", {}) or {}
+        probe_enabled = probe_cfg.get("enabled", True)
+        if probe_enabled and store is not None:
+            try:
+                status("probe", "Planning variable queries based on problem + L6 knowledge...")
+                planner = VariableQueryPlanner(self.router, self.memory, self.project_root)
+                probe_plans = planner.plan(
+                    problem=problem,
+                    expected=expected,
+                    func_name=func_name,
+                    fail_type=func_info.get("fail_type", "OTHER"),
+                    focus_params=list(classification.focus_parameters or []),
+                    store=store,
+                    max_queries=int(probe_cfg.get("max_queries", 6)),
+                    use_thinking=bool(probe_cfg.get("use_thinking", False)),
+                )
+                if probe_plans:
+                    status("probe", f"Executing {len(probe_plans)} probe queries...")
+                    probe = DataProbe(store, windows=windows or [])
+                    for qp in probe_plans:
+                        try:
+                            probe_results.append(probe.query(**qp.to_query_args()))
+                        except Exception as e:
+                            probe_results.append({
+                                "field": qp.field, "table": qp.table,
+                                "row_count": 0, "error": f"probe exec error: {e}",
+                            })
+                    probe_section = render_probe_results_for_prompt(
+                        probe_plans, probe_results,
+                        max_chars=int(probe_cfg.get("max_chars", 6000)),
+                    )
+                    self.memory.log_step(session_id, "variable_probe", {
+                        "plan_count": len(probe_plans),
+                        "plans": [p.to_dict() for p in probe_plans],
+                        "result_preview": probe_section[:500],
+                    })
+            except Exception as e:
+                status("probe", f"Variable probe skipped: {e}")
 
         # ── Phase 3.6: External suppression signal check ─────────────────
         suppression_text = ""
@@ -410,7 +462,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         budget.add("methodology",   methodology_block, priority=100, min_chars=400)
         budget.add("key_facts",     f"## ★ 关键事实(必读) ★\n{key_facts}", priority=100, min_chars=2000)
         budget.add("tpe",           tpe_section,       priority=95,  min_chars=2000)
-        budget.add("suppression",   suppression_section, priority=95, min_chars=1000)
+        budget.add("probe",         probe_section,     priority=93,  min_chars=1500)
+        budget.add("suppression",   suppression_section, priority=92, min_chars=1000)
         budget.add("output",        output_section,    priority=90,  min_chars=1500)
         budget.add("windows",       f"## ★ 测试窗口(必读) ★\n{windows_text}", priority=90, min_chars=400)
         budget.add("transitions",   f"## 状态跳变\n{transitions_text}", priority=85, min_chars=600)

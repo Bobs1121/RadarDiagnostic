@@ -3,5 +3,13 @@
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / LcaUpdateSystemStatus",
   "status": "Doc integrated",
-  "_updated": "2026-04-12T15:26:03.663070"
+  "_updated": "2026-04-18T18:29:50.955753",
+  "diagnosis_count": 1,
+  "known_issues": [
+    {
+      "problem": "BSD和LCA报警晚或中断，LCA在目标车辆侧后方接近时没有报警，一直等到目标进入BSD盲区才开始报警",
+      "session": "BSDLCA001_20260418_181748",
+      "date": "2026-04-18"
+    }
+  ]
 }

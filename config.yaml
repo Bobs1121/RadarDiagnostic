@@ -15,6 +15,16 @@ ai:
   # "full"   : 所有 complex 调用开启（最慢，token 消耗 3-5x，深度分析用）
   thinking: "full"
 
+  # ── Variable Query Probe（Phase 3.57）───────────────────────────────────
+  # 诊断时让 AI 根据「问题 + L6 代码知识」规划要查哪些变量/表达式，
+  # 再由 DataProbe 在 SQLite 上执行统计查询，把结果注入 Expert Panel prompt。
+  # 这是"按需证据采集"机制，避免把单点调查经验硬编码进分析流水线。
+  variable_probe:
+    enabled: true
+    max_queries: 6        # planner 最多产出几条查询
+    max_chars: 6000       # 渲染进 prompt 的最大字符数
+    use_thinking: false   # planner 是轻量任务，默认不开 thinking
+
 paths:
   source_code: "D:\\cr60_light"
   dbc_files:

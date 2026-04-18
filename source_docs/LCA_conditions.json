@@ -1,0 +1,292 @@
+{
+  "function": "LCA",
+  "system_state": {
+    "state_values": {
+      "0": "None",
+      "1": "Init",
+      "2": "Standby",
+      "3": "Active",
+      "4": "Off",
+      "5": "Failure",
+      "6": "Passive"
+    },
+    "transitions": [
+      {
+        "from": "0",
+        "to": "1",
+        "conditions": [
+          {
+            "condition": "自检完成",
+            "variable": "g_DTCCode.selfInspFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:1538"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "4",
+        "conditions": [
+          {
+            "condition": "功能未启用或处于拖车模式",
+            "variable": "adasEnable->bLCAEnable || g_DTCCode.bTrailerModelFlg",
+            "threshold": "FALSE (Enable=0 OR Trailer=1)",
+            "source": "adasFunc.c:1545"
+          },
+          {
+            "condition": "标定进行中",
+            "variable": "g_DTCCode.calibratingFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:1547"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "5",
+        "conditions": [
+          {
+            "condition": "功能故障",
+            "variable": "g_DTCCode.failureFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:1549"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "2",
+        "conditions": [
+          {
+            "condition": "档位为 4, 5, 或 6",
+            "variable": "g_egoCarAddInfo.actual_gear",
+            "threshold": "4, 5, or 6",
+            "source": "adasFunc.c:1555"
+          },
+          {
+            "condition": "车速大于等于激活阈值",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "12.0 km/h (fLcaActiveSpd)",
+            "source": "adasFunc.c:1557"
+          },
+          {
+            "condition": "车速小于等于激活上限",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "146.0 km/h (fLcaActiveUpperSpd)",
+            "source": "adasFunc.c:1557"
+          },
+          {
+            "condition": "曲率半径大于等于激活阈值",
+            "variable": "curvRadius",
+            "threshold": "125.0 m (fLcaActiveCurbRadius)",
+            "source": "adasFunc.c:1558"
+          }
+        ]
+      },
+      {
+        "from": "2 or 3",
+        "to": "6",
+        "conditions": [
+          {
+            "condition": "车速小于去激活阈值",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "10.0 km/h (fLcaDeactiveSpd)",
+            "source": "adasFunc.c:1566"
+          },
+          {
+            "condition": "车速大于去激活上限",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "151.0 km/h (fLcaDeactiveUpperSpd)",
+            "source": "adasFunc.c:1566"
+          },
+          {
+            "condition": "曲率半径小于去激活阈值",
+            "variable": "curvRadius",
+            "threshold": "75.0 m (fLcaDeactiveCurbRadius)",
+            "source": "adasFunc.c:1567"
+          }
+        ]
+      },
+      {
+        "from": "2 or 3",
+        "to": "2",
+        "conditions": [
+          {
+            "condition": "不满足去激活条件且当前为 Standby/Active",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": ">= 10.0 && <= 151.0 km/h",
+            "source": "adasFunc.c:1573"
+          }
+        ]
+      },
+      {
+        "from": "2",
+        "to": "3",
+        "conditions": [
+          {
+            "condition": "检测到左侧或右侧 LCA 警告",
+            "variable": "PEROutput.adasWarning.bLeftLcaWarning || PEROutput.adasWarning.bRightLcaWarning",
+            "threshold": "!= 0",
+            "source": "ASWIN_SystemState.c:694"
+          }
+        ]
+      }
+    ]
+  },
+  "target_filter": {
+    "skip_function": "None",
+    "conditions": [
+      {
+        "condition": "目标必须是动态目标",
+        "variable": "sObj.dynFlg",
+        "threshold": "1, 2, or 3",
+        "note": "进入检测逻辑"
+      },
+      {
+        "condition": "目标绝对纵向速度大于报警阈值",
+        "variable": "fabsf(sObj.velAbsX)",
+        "threshold": "> 7.2 km/h (fLcaObjWarningSpd)",
+        "note": "进入报警"
+      },
+      {
+        "condition": "目标绝对纵向速度大于去报警阈值",
+        "variable": "fabsf(sObj.velAbsX)",
+        "threshold": "> 3.6 km/h (fLcaObjDeWarningSpd)",
+        "note": "维持报警"
+      }
+    ]
+  },
+  "detect_enable": {
+    "flag": "adasEnable->bLCAEnable",
+    "conditions": [
+      {
+        "condition": "LCA 功能使能位",
+        "variable": "PERInputUpdate.adasEnable.bLCAEnable",
+        "threshold": "1"
+      },
+      {
+        "condition": "系统电源模式为 ON",
+        "variable": "AdasStM.SysPowerMod",
+        "threshold": "SYS_POWER_ON (0x2)"
+      },
+      {
+        "condition": "车型配置位 TAR",
+        "variable": "g_GWMSpecificVariant.bits.TAR",
+        "threshold": "0x01"
+      }
+    ]
+  },
+  "ego_speed_ranges": {
+    "active": {
+      "low": "fLcaActiveSpd=12.0",
+      "high": "fLcaActiveUpperSpd=146.0",
+      "unit": "km/h"
+    },
+    "deactive": {
+      "low": "fLcaDeactiveSpd=10.0",
+      "high": "fLcaDeactiveUpperSpd=151.0",
+      "unit": "km/h"
+    },
+    "detect": {
+      "low": "fLcaObjWarningSpd=7.2",
+      "high": "fLcaObjDeWarningSpd=3.6",
+      "unit": "km/h"
+    }
+  },
+  "target_speed_ranges": {
+    "warning_enter": {
+      "low": "fLcaObjWarningSpd=7.2",
+      "high": "None",
+      "unit": "km/h"
+    },
+    "warning_exit": {
+      "low": "fLcaObjDeWarningSpd=3.6",
+      "high": "None",
+      "unit": "km/h"
+    }
+  },
+  "external_suppression": [
+    {
+      "source_system": "整车配置/变型位",
+      "condition": "拖车模式激活",
+      "variable": "AdasStM.TrailerSts",
+      "can_signal": "Unknown (Internal State)",
+      "suppression_trigger": "== 1",
+      "normal_value": "== 0",
+      "effect": "禁用功能 (State=4)",
+      "source": "ASWIN_SystemState.c:1097"
+    },
+    {
+      "source_system": "ESP 诊断",
+      "condition": "ESP 诊断激活",
+      "variable": "AdasStM.ESPDiagActv",
+      "can_signal": "Unknown (Internal State)",
+      "suppression_trigger": "== 1",
+      "normal_value": "== 0",
+      "effect": "禁用功能 (State=4)",
+      "source": "ASWIN_SystemState.c:1097"
+    },
+    {
+      "source_system": "DTC 故障管理",
+      "condition": "LCA 功能故障标志",
+      "variable": "g_DTCCode.failureFlg",
+      "can_signal": "Unknown (Internal State)",
+      "suppression_trigger": "== TRUE",
+      "normal_value": "== FALSE",
+      "effect": "功能故障 (State=5)",
+      "source": "adasFunc.c:1549"
+    },
+    {
+      "source_system": "DTC 故障管理",
+      "condition": "标定进行中",
+      "variable": "g_DTCCode.calibratingFlg",
+      "can_signal": "Unknown (Internal State)",
+      "suppression_trigger": "== TRUE",
+      "normal_value": "== FALSE",
+      "effect": "功能关闭 (State=4)",
+      "source": "adasFunc.c:1547"
+    },
+    {
+      "source_system": "驾驶员操作/档位",
+      "condition": "档位非 4,5,6 (如 R, N, 1, 2, 3)",
+      "variable": "g_egoCarAddInfo.actual_gear",
+      "can_signal": "Unknown (Internal State)",
+      "suppression_trigger": "!= 4 && != 5 && != 6",
+      "normal_value": "== 4 || == 5 || == 6",
+      "effect": "功能被动/关闭 (State=6 or 4)",
+      "source": "adasFunc.c:1555"
+    }
+  ],
+  "other_conditions": [
+    {
+      "category": "ROI Geometry",
+      "condition": "目标多边形与 LCA ROI 相交",
+      "variable": "IsRectangleIntersect",
+      "threshold": "TRUE"
+    },
+    {
+      "category": "TTC Threshold",
+      "condition": "碰撞时间小于报警阈值",
+      "variable": "fTTE",
+      "threshold": "<= 4.0 s (fLcaObjWarningTTC)"
+    },
+    {
+      "category": "TTC Threshold",
+      "condition": "碰撞时间小于去报警阈值 (维持报警)",
+      "variable": "fTTE",
+      "threshold": "<= 4.7 s (fLcaObjDeWarningTTC)"
+    },
+    {
+      "category": "Curb Check",
+      "condition": "路缘石检测去报警 (IOU > 0.05 且路缘高于目标)",
+      "variable": "bLcaCurbDeWarningEnable",
+      "threshold": "TRUE"
+    },
+    {
+      "category": "Turn Signal",
+      "condition": "转向灯状态影响报警等级",
+      "variable": "g_egoCarAddInfo.turn_light_left/right",
+      "threshold": "1 (Level 2 Warning)"
+    }
+  ]
+}
