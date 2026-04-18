@@ -1,0 +1,68 @@
+ai:
+  # 本地 Ollama 模型（简单任务）— 可选: qwen3:14b, gemma4:26b, gemma4:latest
+  local:
+    base_url: "${LOCAL_BASE_URL:-http://localhost:11434/v1}"
+    api_key: "${LOCAL_API_KEY:-ollama}"
+    model: "qwen3:14b"
+  # 远端服务器模型（复杂任务）
+  remote:
+    base_url: "${REMOTE_BASE_URL}"
+    api_key: "${REMOTE_API_KEY}"
+    model: "Qwen3.5-27B-FP16"
+  # 思考模式 — Qwen3.5 专属能力
+  # "off"    : 全部关闭（最快，日常诊断推荐）
+  # "synth"  : 仅 Round 3 综合收敛开启（平衡：质量↑ 耗时略增）
+  # "full"   : 所有 complex 调用开启（最慢，token 消耗 3-5x，深度分析用）
+  thinking: "full"
+
+paths:
+  source_code: "D:\\cr60_light"
+  dbc_files:
+    - "CR_DBC_V3.2_20260331.dbc"
+    - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+    - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+  cases_dir: "./cases"
+  key_source_files:
+    # 算法层 - 报警判断
+    - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
+    - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h"
+    # 平台状态机 - 第二套状态机
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
+    # 信号链路 - CAN映射
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c"
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.h"
+    # 输出协调 - 左右雷达合并
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
+    # 调度入口
+    - "coem\\GWM_B26\\components\\AswIfSchedule\\AswIfSchedule.c"
+    # 感知层
+    - "adas\\symmetry\\perception\\src\\objAttribCal.c"
+    - "adas\\symmetry\\perception\\src\\track.c"
+    - "adas\\symmetry\\perception\\src\\postProcess.c"
+    # 定义文件
+    - "adas\\symmetry\\perception\\include\\perception_public_def.h"
+    - "adas\\symmetry\\perception\\include\\structDefine.h"
+    - "adas\\symmetry\\perception\\include\\paraDefine.h"
+    - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
+
+functions:
+  rear:  [BSD, LCA, DOW, RCW, RCTA, RCTB]
+  front: [FCTA, FCTB]
+
+source_domains:
+  system_state:
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
+  algorithm:
+    - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
+    - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h"
+    - "adas\\symmetry\\perception\\include\\paraDefine.h"
+  signal_chain:
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c"
+  perception:
+    - "adas\\symmetry\\perception\\src\\objAttribCal.c"
+    - "adas\\symmetry\\perception\\src\\track.c"
+    - "adas\\symmetry\\perception\\src\\postProcess.c"
+  output:
+    - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"

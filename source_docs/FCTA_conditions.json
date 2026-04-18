@@ -1,0 +1,342 @@
+{
+  "function": "FCTA",
+  "system_state": {
+    "state_values": {
+      "0": "None",
+      "1": "Init",
+      "2": "Standby",
+      "3": "Active",
+      "4": "Off",
+      "5": "Failure",
+      "6": "Passive"
+    },
+    "transitions": [
+      {
+        "from": "0",
+        "to": "1",
+        "conditions": [
+          {
+            "condition": "自检完成",
+            "variable": "GWM_Adas_SelfInspFinish",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1552"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "5",
+        "conditions": [
+          {
+            "condition": "功能使能",
+            "variable": "GWM_FCTA_AdasEnableCond",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1564"
+          },
+          {
+            "condition": "无标定",
+            "variable": "GWM_Adas_CalFlagEna",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1566"
+          },
+          {
+            "condition": "存在故障",
+            "variable": "GWM_FCTA_FaultEna",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1568"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "4",
+        "conditions": [
+          {
+            "condition": "功能使能",
+            "variable": "GWM_FCTA_AdasEnableCond",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1564"
+          },
+          {
+            "condition": "正在标定",
+            "variable": "GWM_Adas_CalFlagEna",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1605"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "6",
+        "conditions": [
+          {
+            "condition": "功能使能",
+            "variable": "GWM_FCTA_AdasEnableCond",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1564"
+          },
+          {
+            "condition": "无标定",
+            "variable": "GWM_Adas_CalFlagEna",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1566"
+          },
+          {
+            "condition": "无故障",
+            "variable": "GWM_FCTA_FaultEna",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1572"
+          },
+          {
+            "condition": "不满足待机转激活条件",
+            "variable": "FCTA_Standby2Active",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1599"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "2",
+        "conditions": [
+          {
+            "condition": "功能使能",
+            "variable": "GWM_FCTA_AdasEnableCond",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1564"
+          },
+          {
+            "condition": "无标定",
+            "variable": "GWM_Adas_CalFlagEna",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1566"
+          },
+          {
+            "condition": "无故障",
+            "variable": "GWM_FCTA_FaultEna",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1572"
+          },
+          {
+            "condition": "满足待机转激活条件",
+            "variable": "FCTA_Standby2Active",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1574"
+          },
+          {
+            "condition": "车速在激活范围内",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "0.5~21.0 km/h",
+            "source": "ASWIN_SystemState.c:1576"
+          }
+        ]
+      },
+      {
+        "from": "2",
+        "to": "3",
+        "conditions": [
+          {
+            "condition": "当前状态为待机",
+            "variable": "fctaSystemState",
+            "threshold": "2",
+            "source": "ASWIN_SystemState.c:728"
+          },
+          {
+            "condition": "左侧或右侧警告标志非零",
+            "variable": "PEROutput.adasWarning.bLeftFctaWarning || PEROutput.adasWarning.bRightFctaWarning",
+            "threshold": "!=0",
+            "source": "ASWIN_SystemState.c:728"
+          }
+        ]
+      },
+      {
+        "from": "2",
+        "to": "6",
+        "conditions": [
+          {
+            "condition": "当前状态为待机或激活",
+            "variable": "fctaSystemState",
+            "threshold": "2 or 3",
+            "source": "ASWIN_SystemState.c:1582"
+          },
+          {
+            "condition": "车速超出范围",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": ">22.0 km/h or <0.0 km/h",
+            "source": "ASWIN_SystemState.c:1584"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "4",
+        "conditions": [
+          {
+            "condition": "功能未使能",
+            "variable": "GWM_FCTA_AdasEnableCond",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1610"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "0",
+        "conditions": [
+          {
+            "condition": "自检未完成",
+            "variable": "GWM_Adas_SelfInspFinish",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1667"
+          }
+        ]
+      }
+    ]
+  },
+  "target_filter": {
+    "skip_function": "FctaSkipFlg",
+    "conditions": [
+      {
+        "condition": "动态标志不在范围内",
+        "variable": "sObj->dynFlg",
+        "threshold": "<1 or >3",
+        "note": "跳过非动态目标"
+      },
+      {
+        "condition": "目标速度绝对值小于阈值",
+        "variable": "sObj->velAbsY",
+        "threshold": "<0.5 m/s (推测)",
+        "note": "跳过静止目标"
+      }
+    ]
+  },
+  "detect_enable": {
+    "flag": "bFctaDetectFlg",
+    "conditions": [
+      {
+        "condition": "系统状态为待机或激活",
+        "variable": "adasWarning->fctaSystemState",
+        "threshold": "2 or 3",
+        "note": "进入检测逻辑"
+      },
+      {
+        "condition": "未关闭功能",
+        "variable": "CloseFctaFunc",
+        "threshold": "未调用",
+        "note": "重置标志"
+      }
+    ]
+  },
+  "ego_speed_ranges": {
+    "active": {
+      "low": "fFctaActiveLowSpd=0.5",
+      "high": "fFctaActiveUpSpd=21.0",
+      "unit": "km/h"
+    },
+    "deactive": {
+      "low": "fFctaDeactiveLowSpd=0.0",
+      "high": "fFctaDeactiveUpSpd=22.0",
+      "unit": "km/h"
+    },
+    "detect": {
+      "low": "fFctaDetectLowSpd=0.5",
+      "high": "fFctaDetectUpSpd=22.0",
+      "unit": "km/h"
+    }
+  },
+  "target_speed_ranges": {
+    "warning_enter": {
+      "low": "fFctaObjWarningSpd=4.0",
+      "high": "fFctaObjWarningUpSpd=70.0",
+      "unit": "km/h"
+    },
+    "warning_exit": {
+      "low": "fFctaObjDeWarningSpd=2.2",
+      "high": "fFctaObjDeWarningUpSpd=73.6",
+      "unit": "km/h"
+    }
+  },
+  "external_suppression": [
+    {
+      "source_system": "驾驶员操作",
+      "condition": "加速踏板位置过高",
+      "variable": "AdasStM.AccPedPosDiag",
+      "can_signal": "VCU_ActAccrPedlRat",
+      "suppression_trigger": ">= 80",
+      "normal_value": "< 80",
+      "effect": "禁止从待机进入激活状态",
+      "source": "ASWIN_SystemState.c:1500",
+      "_can_resolved": true
+    },
+    {
+      "source_system": "ESP",
+      "condition": "ESP 诊断激活",
+      "variable": "AdasStM.ESPDiagActv",
+      "can_signal": "ESP_DiagActv_0x137",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "禁止从待机进入激活状态",
+      "source": "ASWIN_SystemState.c:1502",
+      "_can_resolved": true
+    },
+    {
+      "source_system": "车辆配置",
+      "condition": "挂接拖车",
+      "variable": "AdasStM.TrailerSts",
+      "can_signal": "TrailerSts",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "禁止从待机进入激活状态",
+      "source": "ASWIN_SystemState.c:1501",
+      "_can_resolved": true
+    },
+    {
+      "source_system": "驾驶员操作",
+      "condition": "方向盘转角速度过高",
+      "variable": "AdasStM.SteerWheelSpd",
+      "can_signal": "SteerWheelSpd",
+      "suppression_trigger": "> 150",
+      "normal_value": "<= 150",
+      "effect": "禁止从待机进入激活状态",
+      "source": "ASWIN_SystemState.c:1499",
+      "_can_resolved": true
+    },
+    {
+      "source_system": "档位",
+      "condition": "档位为 R 或 N (假设 7/8)",
+      "variable": "g_egoCarAddInfo.actual_gear",
+      "can_signal": "Unknown",
+      "suppression_trigger": "== 7 or == 8",
+      "normal_value": "!= 7 and != 8",
+      "effect": "禁止从待机进入激活状态",
+      "source": "ASWIN_SystemState.c:1498",
+      "_can_resolved": false
+    }
+  ],
+  "other_conditions": [
+    {
+      "category": "功能使能",
+      "condition": "系统电源开启",
+      "variable": "AdasStM.SysPowerMod",
+      "threshold": "SYS_POWER_ON"
+    },
+    {
+      "category": "功能使能",
+      "condition": "FCTA 功能开关开启",
+      "variable": "PERInputUpdate.adasEnable.bFCTAEnable",
+      "threshold": "1"
+    },
+    {
+      "category": "故障检测",
+      "condition": "存在 FCTA 相关 DTC",
+      "variable": "ADAS_GetFCTAFaultErrorStatus",
+      "threshold": "TRUE"
+    },
+    {
+      "category": "标定",
+      "condition": "标定标志未激活",
+      "variable": "GWM_Adas_CalFlagEna",
+      "threshold": "FALSE"
+    }
+  ]
+}

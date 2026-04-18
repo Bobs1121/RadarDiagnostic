@@ -1,0 +1,29 @@
+{
+  "function": "FCTA",
+  "diagnosis_count": 8,
+  "known_issues": [
+    {
+      "id": "FCTA001",
+      "problem": "FCTA 功能未启动/无报警，行人目标触发但 GVT 车未触发",
+      "sessions": [
+        "FCTA001_20260412_151630",
+        "FCTA001_20260412_155409",
+        "FCTA001_20260412_164434",
+        "FCTA001_20260412_194136",
+        "FCTA001_20260412_213343",
+        "FCTA001_20260413_171306",
+        "FCTA001_20260416_165708",
+        "FCTA001_20260416_174320"
+      ],
+      "date": "2026-04-12 ~ 2026-04-16",
+      "analysis": "目标分类过滤逻辑差异或 ROI 阈值对车辆类型敏感。需检查 objAttribCal 及 FCTA ROI 阈值配置，确认 GVT 车是否被误分类或过滤。8 次会话均指向同一问题，置信度高。",
+      "confidence": 0.95,
+      "status": "Consolidated from 8 duplicate entries"
+    }
+  ],
+  "_updated": "2026-04-17T15:16:48.267334",
+  "description": "前方交叉交通警报，低速向前行驶时检测前方横向穿越目标。",
+  "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
+  "logic_ref": "adasFunc.c / FctaUpdateSystemStatus",
+  "status": "Doc integrated & Patterns Merged"
+}

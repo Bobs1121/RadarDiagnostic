@@ -1,0 +1,109 @@
+{
+  "session_id": "FCTA001_20260412_194136",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车辆都可以触发FCTA功能",
+  "created_at": "2026-04-12T19:41:36.856360",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-12T19:42:50.495111",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "用户明确报告 FCTA 功能未启动且无报警，且存在行人触发但 GVT 车辆不触发的差异现象。结合历史记忆 (FCTB001) 中 FCTB 状态机震荡导致 Enable 标志位切换的问题，FCTA 与 FCTB 逻辑高度耦合，需重点排查状态机稳定性及目标分类阈值差异。",
+        "fail_type": "漏报 FN",
+        "key_variables": [
+          "fctaSystemState",
+          "fctbSystemState",
+          "adasEnable.bFCTAEnable",
+          "adasEnable.bFCTBEnable",
+          "warning_bytes[0]",
+          "targetClassification",
+          "targetSpeed",
+          "TTC"
+        ],
+        "analysis_plan": [
+          "1. 状态机稳定性检查：确认 fctaSystemState 是否稳定在 Active(3)，排查是否存在 3->4 震荡（参考历史 FCTB 问题）。",
+          "2. 使能标志位验证：检查 adasEnable.bFCTAEnable 是否持续为真，排除因 FCTB 震荡连带关闭 FCTA 的情况。",
+          "3. 目标数据对比：提取行人和 GVT 车辆的原始目标数据（速度、距离、角度、分类），对比是否满足 FCTA 触发阈值。",
+          "4. 阈值逻辑分析：检查 FCTA 针对 Vehicle 和 Pedestrian 的 ROI 及 TTC 阈值配置是否存在差异。",
+          "5. 输出链路确认：检查 ASWOUT_OutCalc.c 中左右雷达合并逻辑及 warning_bytes 输出是否被抑制。"
+        ],
+        "related_functions": [
+          "FCTB",
+          "BSD"
+        ],
+        "subtasks": [
+          {
+            "task": "查询 fctaSystemState 和 fctbSystemState 的历史波形，确认状态转换序列",
+            "complexity": "complex"
+          },
+          {
+            "task": "读取 adasEnable.bFCTAEnable 和 adasEnable.bFCTBEnable 的实时值及变化频率",
+            "complexity": "simple"
+          },
+          {
+            "task": "对比行人目标与 GVT 车辆目标的 track 属性（Speed, Dist, Angle, Class）",
+            "complexity": "complex"
+          },
+          {
+            "task": "检索 FCTA 功能配置参数中 Vehicle 与 Pedestrian 的报警阈值差异",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析 ASWOUT_OutCalc.c 中 FCTA 报警输出逻辑及左右雷达合并策略",
+            "complexity": "complex"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-12T19:43:31.242595",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-12T19:44:18.181273",
+      "detail": {
+        "keys": [
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "can_summary"
+        ],
+        "frame_analysis_len": 435
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-12T20:07:17.926330",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "问题描述称'没有报警'，但同时称'行人目标有功能触发'。若系统状态剧烈抖动（3→4→1→2），行人触发是指感知层检测到目标，还是指系统层成功输出报警？专家 4 假设行人触发隐含满足条件，与'没有报警'的现象存在逻辑冲突。",
+          "专家 1/3 认为状态抖动源于配置/使能信号（Variant/Enable），专家 2/4 认为源于目标阈值（速度/角度）。两者对同一现象（状态振荡）的归因互斥，需数据验证是输入越界导致复位，还是配置错误导致无法保持。",
+          "专家 5 指出输出门控被状态阻断，但专家 2 指出 GVT 未触发可能因目标参数越界。若状态从未稳定，GVT 参数是否越界无法验证，存在因果倒置风险。"
+        ],
+        "verdict_preview": "\n\n### 根因\n`warning_bytes[0]` 高频振荡 (3→4→1→2, 9465 次/9466 帧) → 系统无法维持 Active(3) 状态。\n状态机在 Init/Off/Standby 间反复重置 → 输出门控 (==3) 大部分时间关闭。\n导致 FCTA 功能无法持续激活，最终表现为无报警输出。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？|\n| 状态稳定性 | 稳定 3 | 3→4→1→2 循环 | 否 |\n| 功能使能 | 1 | 未知 (推断抖动) | 否 |\n| 目标属性 | 速度/角度 | 缺失 | 未知 |\n\n### 数据链路\n`FCTASwtReq` (CAN 信号) → `bFctaEnable` (内部变量) → `warning_bytes[0]` (状态机)。\n状态机输出 → `ASWOUT_OutCalc` (门控) → 报警灯/声音。\n链路中状态变量抖动阻断后续输出。\n\n### 行人 vs GVT 差异原因\n行人目标在 State=3 短暂窗口内被感知并触发逻辑。\nGVT 目标因状态复位过快未进入验证，或高度/RCS"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-12T20:07:55.350744",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

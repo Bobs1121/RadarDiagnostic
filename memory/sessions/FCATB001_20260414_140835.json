@@ -1,0 +1,119 @@
+{
+  "session_id": "FCATB001_20260414_140835",
+  "case_id": "FCATB001",
+  "problem": "FCTA已经触发了warning，但同场景下FCTB没有触发制动（FCTB触发中断）",
+  "expected": "FCTA触发时FCTB也应该正常触发制动",
+  "created_at": "2026-04-14T14:08:35.192121",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-14T14:08:54.696888",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 0.95,
+        "reasoning": "问题核心在于 FCTA 已触发警告但 FCTB 未触发制动。FCTA 和 FCTB 通常共享底层感知逻辑（目标检测、TTC 计算），但 FCTB 的制动输出涉及更严格的阈值判断、状态机激活条件（Active vs Standby）以及输出层的制动请求合并逻辑。FCTA 正常说明感知层和基础逻辑正常，问题极可能出在 FCTB 特有的状态机转换条件（如未进入 Active 状态）、制动阈值参数、或 ASWOUT 层的输出抑制逻辑。",
+        "fail_type": "漏报FN",
+        "key_variables": [
+          "fctaSystemState",
+          "fctbSystemState",
+          "fctbTTC",
+          "fctbBrakeReq",
+          "adasWarning",
+          "PEROutput.adasWarning",
+          "ASWOUT_OutCalc",
+          "bFCTBEnable",
+          "g_DTCCode.selfInspFlg"
+        ],
+        "analysis_plan": [
+          "1. 确认 FCTA 和 FCTB 在 adasFunc.c 中的状态机当前值（fctaSystemState vs fctbSystemState），检查 FCTB 是否卡在 Standby 或 Off 状态。",
+          "2. 检查 FCTB 的激活条件（AdasEnable, 速度阈值, 档位, 开关信号）是否满足，对比 FCTA 的激活条件。",
+          "3. 分析感知层输出的 TTC 值和目标属性，确认是否达到 FCTB 的制动触发阈值（通常比 FCTA 警告阈值更严苛）。",
+          "4. 追踪 ASWOUT_OutCalc.c 中的逻辑，检查 FCTB 制动请求是否被生成，以及是否被左右雷达合并逻辑或输出抑制逻辑（如 AEB 优先级）覆盖。",
+          "5. 检查双状态机架构下的调度时序，确认 ASWIN_SystemState.c 是否因车身信号或自检标志错误地重置了 FCTB 状态。"
+        ],
+        "related_functions": [
+          "FCTA",
+          "AEB"
+        ],
+        "subtasks": [
+          {
+            "task": "查询当前时刻 fctaSystemState 和 fctbSystemState 的数值及历史变化曲线",
+            "complexity": "simple"
+          },
+          {
+            "task": "提取当前场景下的 TTC 值、相对速度及 FCTB 阈值参数，进行逻辑比对",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析 adasFunc.c 中 FCTB 状态机从 Standby 到 Active 的转换条件是否满足",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查 ASWOUT_OutCalc.c 中制动请求生成及合并逻辑，确认是否被抑制",
+            "complexity": "complex"
+          },
+          {
+            "task": "验证 ASWIN_SystemState.c 与 adasFunc.c 对全局状态变量的写入时序及冲突",
+            "complexity": "complex"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-14T14:09:19.027690",
+      "detail": {
+        "bag_frames": 0,
+        "can_frames": 950226
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-14T14:09:19.064684",
+      "detail": {
+        "count": 0,
+        "windows": []
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-14T14:09:49.791176",
+      "detail": {
+        "keys": [
+          "timeline",
+          "state_transitions",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[全段数据] (未检测到窗口，使用均匀抽样)\n\n[状态跳变] 无",
+        "window_count": 0,
+        "transition_count": 0
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-14T14:11:00.853243",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTB 激活条件\n\n**自车速度范围:**\n  active: [fFctbActiveLowSpd=0.5, fFctbActiveUpSpd=21.0] km/h\n  deactive: [fFctbDeactiveLowSpd=0.0, fFctbDeactiveUpSpd=22.0] km/h\n  detect: [fFctbDetectLowSpd=0.5, fFctbDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (N/A, N/A) km/h\n  warning_exit: (N/A, N/A) km/h\n\n**"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-14T14:18:32.126920",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "触发阈值逻辑矛盾：算法专家认为是 TTM 阈值差异（FCTA 2.0s > FCTB 1.0s），系统状态专家认为是警告等级差异（FCTBFuncGap 需等级 2，检查表仅写!=0），两者对核心阻断条件的定义不一致。",
+          "使能条件假设矛盾：信号链路专家认为 FCTB 独立开关可能未开启（FCTABrkSwtReq），其他三位专家基于 FCTA 正常工作直接推测使能为 TRUE，未验证独立开关状态。",
+          "数据依据有效性矛盾：所有专家均在日志缺失关键时间窗口的情况下，对 TTM、加速度等连续变量进行了具体数值推测，违反了“无数据支撑禁止假设”原则。"
+        ],
+        "verdict_preview": "\n\n### 根因\n因日志缺失无法确证数值，但逻辑显示 FCTB 激活阈值（TTM≤1.0s/等级=2）高于 FCTA（TTM≤2.0s/等级≠0）。\n若目标风险处于 1.0s<TTM≤2.0s 或警告等级为 1，则满足 FCTA 但不满足 FCTB 状态机 2→3 转移条件。\n根本原因为参数分级设计导致在特定风险区间 FCTB 无法进入 Active 状态。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？| 来源 |\n|---|---|---|---|---|\n| 速度范围 | 0.5-21km/h | 未知 (推测 OK) | ? | 检查表 |\n| FCTB 激活阈值 | TTM≤1.0s / Lvl=2 | 未知 (疑似不满足) | N(?) | 算法/系统专家 |\n| 功能使能 | GWM_FCTB_AdasEnableCond | 未知 (依赖 FCTA 开关) | ? | 链路专家 |\n| 左右合并 | 取最大值 | 默认取最小值 (Min) | 架构缺陷 | 架构专家 |\n\n### 数据链路\nCAN(FCTABrkSwtReq) → RteComMap"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-14T14:19:09.461981",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCATB001\\report.md"
+}

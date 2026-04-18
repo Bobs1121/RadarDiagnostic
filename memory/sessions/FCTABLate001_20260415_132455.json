@@ -1,0 +1,163 @@
+{
+  "session_id": "FCTABLate001_20260415_132455",
+  "case_id": "FCTABLate001",
+  "problem": "客户觉得FCTB退出比较晚",
+  "expected": "核查制动以及保压的数据,看FCTB制动和保压花了多少时间,此时目标TTC是否已经变成了inf",
+  "created_at": "2026-04-15T13:24:55.860711",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-15T13:25:12.439358",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 0.98,
+        "reasoning": "用户明确报告'FCTB退出比较晚'，且历史记忆显示上一轮分析已定位到感知数据溢出导致TTC计算失效（TTC=0.00s），使得退出条件（TTC > 1.6s）无法满足。本次任务需进一步核查制动/保压时序与TTC变为inf的因果关系，属于同一故障链的深入验证。",
+        "fail_type": "延迟DELAY",
+        "key_variables": [
+          "fctbSystemState",
+          "TTC",
+          "trc_N_dist_x",
+          "brakeRequest",
+          "holdPressureFlag",
+          "PEROutput.objEDRInfo.egoBrakePedalPos",
+          "bAEBBAActiveFlg",
+          "fctaSystemState"
+        ],
+        "analysis_plan": [
+          "1. 提取FCTB触发制动到完全退出期间的原始数据，定位制动请求（brakeRequest）置位与复位的时间点。",
+          "2. 同步分析保压标志（holdPressureFlag）的持续时间，计算实际制动/保压总时长。",
+          "3. 回溯目标跟踪数据（trc_N_dist_x）与TTC计算结果，确认TTC何时从0.00s跳变为inf（或有效大值）。",
+          "4. 对比TTC变为inf的时刻与FCTB状态机退出（Active->Off/Standby）的时刻，验证是否存在逻辑延迟。",
+          "5. 检查AEB抑制标志（bAEBBAActiveFlg）是否影响了FCTB的退出逻辑或制动释放。",
+          "6. 结合双状态机架构，检查adasFunc.c与ASWIN_SystemState.c在退出时刻的调度顺序及全局变量*SystemState的写入冲突。"
+        ],
+        "related_functions": [
+          "FCTA",
+          "AEB"
+        ],
+        "subtasks": [
+          {
+            "task": "查询FCTB制动请求与保压标志的时序数据，计算持续时间",
+            "complexity": "simple"
+          },
+          {
+            "task": "追踪TTC变量从0.00s到inf的变化时刻，关联目标距离trc_N_dist_x数据",
+            "complexity": "complex"
+          },
+          {
+            "task": "分析adasFunc.c与ASWIN_SystemState.c在退出阶段的调度顺序及状态变量竞争",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查AEBBAActiveFlg对FCTB退出逻辑的抑制影响",
+            "complexity": "simple"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-15T13:25:40.255117",
+      "detail": {
+        "bag_frames": 159572,
+        "can_frames": 906779
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-15T13:25:40.516002",
+      "detail": {
+        "count": 1,
+        "windows": [
+          {
+            "t_start": 1775982126.7585,
+            "t_end": 1775982583.6936476,
+            "reason": "状态跳变 + 目标出现"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-15T13:26:10.753608",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_1_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_1_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[窗口1] 1775982126.76s ~ 1775982583.69s (456.9s) — 状态跳变 + 目标出现\n\n[状态跳变] (4147次)\n  t=1775982128.921s front_left fctb_system_state: 16→71\n  t=1775982129.137s front_left fctb_system_state: 71→39\n  t=1775982129.348s front_left fctb_system_state: 39→30\n  t=1775982129.567s front_left fctb_system_state: 30→76\n  t=1775982129.78s front_left fctb_system_state: 76→75\n  t=1775982130.004s front_left fctb_system_state: 75→74\n  t=1775982130.228s front_left fctb_system_state: 74→77\n  t=1775982130.44s front_left fc",
+        "window_count": 1,
+        "transition_count": 4147
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-15T13:26:10.810533",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTB 激活条件\n\n**自车速度范围:**\n  active: [fFctbActiveLowSpd=0.5, fFctbActiveUpSpd=21.0] km/h\n  deactive: [fFctbDeactiveLowSpd=0.0, fFctbDeactiveUpSpd=22.0] km/h\n  detect: [fFctbDetectLowSpd=0.5, fFctbDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=0.5, fFctaObjWarningUpSpd=22.0)"
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-15T13:26:30.613807",
+      "detail": {
+        "signal_count": 19,
+        "result_preview": "### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release → Release Brake Hold\n  变量: g_DTCCode.bAEBBAActiveFlg, 阈值: == FALSE\n  **ESP_FD2.AEBBAActv_0x137**: ⚠️ **抑制条件满足**\n    判定: 阈值=== FALSE: 100.0%帧为零 (22873/22873)\n    原始统计: min=0.0000, max=0.0000, mean=0.0000, 非零帧=0.0%\n    帧数: 22873, 变化: 0次\n    ⚠ 极性交叉检查: 反向阈值'== TRUE'→阈值=== TRUE: 0.0%帧非零 (0/22873)\n      原始判定为抑制满足，请专家结合代码逻辑确认极性\n\n### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT a"
+      }
+    },
+    {
+      "step": "output_signal_analysis",
+      "timestamp": "2026-04-15T13:26:53.195012",
+      "detail": {
+        "result_preview": "### CR_BrkgReq (CR_FD1)\n  源表达式: `l_temp_u8_FCTB`\n  统计: min=0, max=1, mean=0.0180, 非零帧=412/22873 (1.8%)\n  **激活段 (3个)**:\n    1776011070.41s ~ 1776011073.25s (持续 2840ms)\n    1776011294.225s ~ 1776011296.925s (持续 2700ms)\n    1776011331.064s ~ 1776011333.764s (持续 2700ms)\n  跳变 (6次, 前6条):\n    t=1776011070.41s: 0→1\n    t=1776011073.25s: 1→0\n    t=1776011294.225s: 0→1\n    t=1776011296.925s: 1→0\n    t=1776011331.064s: 0→1\n    t=1776011333.764s: 1→0\n\n### CR_BrkgReqVal (CR_FD1)\n  源表达式: `GetFctbBrakeValue()`"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-15T13:39:05.154828",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          {
+            "expert_pair": "信号链路专家 vs 数据实测",
+            "issue": "转向角速度阈值判定错误。数据显示最大值为 347.6，阈值 250。专家判定为未超过阈值（'Edge but not exceeded'），事实是已严重超标。此条件应触发抑制，但专家认为未触发。",
+            "data_ref": "CSA2.SteerWheelSpd: max=347.6, Threshold: > 250"
+          },
+          {
+            "expert_pair": "信号链路专家 vs 算法/感知专家",
+            "issue": "自车速度数值不一致。算法/感知专家报告 0.64 km/h (0.179 m/s)，满足激活下限(0.5km/h)。信号链路专家报告 0.26 km/h (0.071 m/s)，认为不满足。需确认单位换算或数据源选取差异。",
+            "data_ref": "ADASStM.egoCarAddInfo.carAccXR / 原始车速信号"
+          },
+          {
+            "expert_pair": "系统状态专家 vs 外部抑制表",
+            "issue": "油门释放阈值来源不明。外部抑制表明确标注油门抑制阈值为 > 80%，但系统状态专家引用 30% 作为保压中断/退出条件。需确认 30% 是否来自内部策略而非标准抑制表。",
+            "data_ref": "AdasStM.AccPedPosDiag: max=30.3149"
+          },
+          {
+            "expert_pair": "全体专家 vs 时间窗口",
+            "issue": "测试窗口时间戳不匹配。提供的测试窗口起始于 1775982126s，但制动输出信号发生在 1776011070s，相差约 8 小时。专家分析似乎混合了两个不同时间段的数据。",
+            "data_ref": "Window 1 Start vs CR_BrkgReq Activation Time"
+          }
+        ],
+        "verdict_preview": "\n\n### 根因\n感知距离溢出（NaN，[来源：条件检查表/感知专家]）致 TTC 恒为 0.00s（[来源：输出信号实测]），阻断正常风险退出路径；系统降级为保压计时（阈值 3.0s），实际 2.8s 时由油门输入（30.31%，[来源：抑制信号实测]）强制中断，导致退出延迟。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？| 数据来源 |\n|---|---|---|---|---|\n| 目标距离有效性 | 非 NaN | NaN/0.0m | N | 条件检查表/感知专家 |\n| 目标 TTC 有效性 | >1.6s | 0.00s | N | 输出信号实测 |\n| 保压时长 | >=3.0s | 2.7~2.8s | N | 输出信号实测 |\n| 油门介入退出 | >30% | 30.31% | Y | 抑制信号实测 |\n\n### 数据链路\nFL 雷达 `trc_N_dist_x`(NaN) → `TTC`(0.00s) → 风险解除判断 (False) → 维持制动请求。\n`VCU_ActAccrPedlRat`(30.31%) → 触发 >30% 阈值 →"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-15T13:39:39.853099",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTABLate001\\report.md"
+}

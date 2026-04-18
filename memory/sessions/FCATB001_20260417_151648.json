@@ -1,0 +1,212 @@
+{
+  "session_id": "FCATB001_20260417_151648",
+  "case_id": "FCATB001",
+  "problem": "FCTB 触发后激活时间很短，刚进入激活就退出了，没有持续制动",
+  "expected": "FCTB 应维持激活直到刹停完成或风险消除，不应刚触发就立刻退出",
+  "created_at": "2026-04-17T15:16:48.515452",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-17T15:16:57.288659",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 0.95,
+        "reasoning": "用户明确描述问题现象为'FCTB 触发后激活时间很短，刚进入激活就退出了'，直接指向 FCTB (Front Cross Traffic Braking) 功能。问题核心在于制动请求的保持逻辑失效或状态机过早退出 Active 状态，属于典型的状态异常或逻辑时序问题。",
+        "fail_type": "状态异常STATE",
+        "key_variables": [
+          "fctbSystemState",
+          "bFctbDetectFlg",
+          "bFctbKeepBrakeFlg",
+          "fFctbAEBActiveThresh",
+          "fFctbHoldTimeThresh",
+          "TTMX",
+          "TTMY",
+          "adasEnable->bFCTBEnable",
+          "PERInputUpdate.adasEnable",
+          "fFctbDeactiveUpSpd",
+          "fFctbDeactiveLowSpd"
+        ],
+        "related_functions": [
+          "FCTA",
+          "ASWIN_SystemState"
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-17T15:19:49.614250",
+      "detail": {
+        "bag_frames": 58351,
+        "can_frames": 950226
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-17T15:19:49.946924",
+      "detail": {
+        "count": 10,
+        "windows": [
+          {
+            "t_start": 1775970397.0288978,
+            "t_end": 1775970426.7170315,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970438.4023862,
+            "t_end": 1775970442.4414203,
+            "reason": "速度变化"
+          },
+          {
+            "t_start": 1775970445.1954596,
+            "t_end": 1775970449.2114995,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970452.9143715,
+            "t_end": 1775970461.0778887,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970461.693545,
+            "t_end": 1775970465.6949859,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970466.7230349,
+            "t_end": 1775970477.8200402,
+            "reason": "报警变化 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970477.9300969,
+            "t_end": 1775970481.9447415,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970495.1879573,
+            "t_end": 1775970499.5848823,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775970506.4525447,
+            "t_end": 1775970510.6497433,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775970522.651415,
+            "t_end": 1775970551.0999174,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-17T15:24:58.861543",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_1_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "radar_objects_warned",
+          "radar_objects_summary",
+          "adas_enable_states",
+          "bld_summary",
+          "warning_events",
+          "can_summary",
+          "KEY_FACTS",
+          "tpe_report",
+          "tpe_block"
+        ],
+        "key_facts": "[窗口1] 1775970397.03s ~ 1775970426.72s (29.7s) — 报警变化 + 状态跳变 + 目标出现 + 速度变化\n[窗口2] 1775970438.4s ~ 1775970442.44s (4.0s) — 速度变化\n[窗口3] 1775970445.2s ~ 1775970449.21s (4.0s) — 报警变化\n[窗口4] 1775970452.91s ~ 1775970461.08s (8.2s) — 报警变化\n[窗口5] 1775970461.69s ~ 1775970465.69s (4.0s) — 报警变化\n[窗口6] 1775970466.72s ~ 1775970477.82s (11.1s) — 报警变化 + 目标出现 + 速度变化\n[窗口7] 1775970477.93s ~ 1775970481.94s (4.0s) — 报警变化\n[窗口8] 1775970495.19s ~ 1775970499.58s (4.4s) — 目标出现\n[窗口9] 1775970506.45s ~ 1775970510.65s (4.2s) — 目标",
+        "window_count": 10,
+        "transition_count": 18
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-17T15:24:58.917576",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTB 激活条件\n\n**自车速度范围:**\n  active: [fFctbActiveLowSpd=0.5, fFctbActiveUpSpd=21.0] km/h\n  deactive: [fFctbDeactiveLowSpd=0.0, fFctbDeactiveUpSpd=22.0] km/h\n  detect: [fFctbDetectLowSpd=0.5, fFctbDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=0.5, fFctaObjWarningUpSpd=22.0)"
+      }
+    },
+    {
+      "step": "tpe",
+      "timestamp": "2026-04-17T15:25:00.685529",
+      "detail": {
+        "pattern_count": 6,
+        "triggered_count": 0,
+        "unresolved_variables": 11,
+        "missing_can_signals": 2,
+        "has_triggers": false
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-17T15:25:09.475953",
+      "detail": {
+        "signal_count": 19,
+        "result_preview": "### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release → Release Brake Hold\n  变量: g_DTCCode.bAEBBAActiveFlg, 阈值: == FALSE\n  **ESP_FD2.AEBBAActv_0x137**: ⚠️ **抑制条件满足**\n    判定: 阈值=== FALSE: 99.9%帧为零 (7932/7938)\n    原始统计: min=0.0000, max=1.0000, mean=0.0008, 非零帧=0.1%\n    帧数: 7938, 变化: 2次\n    ⚠ 极性交叉检查: 反向阈值'== TRUE'→阈值=== TRUE: 0.1%帧非零 (6/7938)\n      原始判定为抑制满足，请专家结合代码逻辑确认极性\n      t=1775999223.556s: 0 → 1\n      t=1775999223.676s: 1 → 0\n\n### [AEB] "
+      }
+    },
+    {
+      "step": "output_signal_analysis",
+      "timestamp": "2026-04-17T15:25:16.649757",
+      "detail": {
+        "result_preview": "### CR_BrkgReq (CR_FD1)\n  源表达式: `l_temp_u8_FCTB`\n  统计: min=0, max=1, mean=0.0117, 非零帧=93/7938 (1.2%)\n  **激活段 (2个)**:\n    1775999223.328s ~ 1775999224.288s (持续 960ms)\n    1775999347.347s ~ 1775999348.247s (持续 900ms)\n  跳变 (4次, 前4条):\n    t=1775999223.328s: 0→1\n    t=1775999224.288s: 1→0\n    t=1775999347.347s: 0→1\n    t=1775999348.247s: 1→0\n\n### CR_BrkgReqVal (CR_FD1)\n  源表达式: `GetFctbBrakeValue()`\n  统计: min=-4.0000800000000005, max=-0.00043199999999998795, mean=-0.0473, 非零帧=7938/7938 (100.0%)\n  **激活"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-17T15:36:50.881435",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          {
+            "experts": [
+              "系统状态专家",
+              "信号链路专家"
+            ],
+            "description": "根因主次矛盾：系统状态专家认为'AEB 制动反馈缺失'(L1 信号为 0) 是导致释放制动保持的直接原因；信号链路专家则认为'雷达目标跟踪抖动'(L3 警告标志毫秒级翻转) 是状态降级的主导因素。两者在因果链上的权重分配不一致，未明确哪个逻辑分支优先级更高。",
+            "layer": "L2 (ECU 逻辑优先级)"
+          },
+          {
+            "experts": [
+              "系统状态专家",
+              "算法逻辑专家",
+              "信号链路专家"
+            ],
+            "description": "AEB 信号极性定义争议：前两位专家认为 AEBBAActv=0 是明确的抑制条件（满足 Release 逻辑）；信号链路专家认为该信号极性存疑（“通常应为非抑制”），质疑是否误判了代码意图。",
+            "layer": "L1 (CAN 信号定义) / L2 (映射逻辑)"
+          },
+          {
+            "experts": [
+              "架构专家",
+              "感知与目标专家"
+            ],
+            "description": "目标丢失原因推断差异：架构专家推测是左右雷达合并电平不匹配导致仲裁失败；感知专家归因为单雷达目标 TTM 临界波动导致闪烁。缺乏 FL 雷达原始数据支撑架构专家的假设。",
+            "layer": "L3 (雷达观测融合)"
+          }
+        ],
+        "verdict_preview": "\n\n### 根因\n**双因素叠加导致制动无法维持**：1) **外部反馈缺失**：`ESP_FD2.AEBBAActv_0x137` 信号在 99.9% 帧为 0，触发 `ASWIN_SystemState.c` 中的 \"Release Brake Hold\" 逻辑（抑制条件满足），强制中断制动保持；2) **检测边缘抖动**：自车速度在 `0.5 km/h` 激活阈值边缘反复震荡（如 0.16↔0.82），导致 `FCTBWarning` 标志毫秒级翻转，状态机无法稳定进入 Active(3)。\n\n### 时序耦合(TPE 触发清单)\n| 模式 | 源文件：行 | 首触发 t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|--------|\n| 无 | N/A | N/A | N/A | N/A | 测试数据中未标记明确 TPE 触发模式，但日志显示 `warning_edge_on/off` 同秒内翻转，疑似防抖失效 |\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 数据来"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-17T15:42:06.553515",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCATB001\\report.md"
+}

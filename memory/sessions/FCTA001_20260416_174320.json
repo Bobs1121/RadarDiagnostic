@@ -1,0 +1,151 @@
+{
+  "session_id": "FCTA001_20260416_174320",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车都能触发报警",
+  "created_at": "2026-04-16T17:43:20.300888",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-16T17:43:39.908065",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "用户明确报告'FCTA功能没有启动，没有报警'，且现象描述为'行人目标有功能触发，GVT车没有功能触发'。这表明FCTA功能逻辑已部分运行（能检测到行人并触发），但针对GVT车（可能为特定类型车辆或速度/角度不符合GVT特定阈值）未触发报警。结合历史记忆，该案例已初步诊断为工况（车速、DDCI）未满足阈值，属于FCTA功能内部的逻辑判断问题。",
+        "fail_type": "漏报FN",
+        "key_variables": [
+          "fctaSystemState",
+          "bFCTAEnable",
+          "fFctaObjWarningSpd",
+          "fFctaObjWarningUpSpd",
+          "fFctaObjWarningLowYawAngle",
+          "fFctaObjWarningUpYawAngle",
+          "DDCI",
+          "TTM",
+          "bLeftFctaWarning",
+          "bRightFctaWarning",
+          "VehSpd"
+        ],
+        "related_functions": [
+          "FCTB"
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-16T17:43:48.349580",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-16T17:43:48.395185",
+      "detail": {
+        "count": 5,
+        "windows": [
+          {
+            "t_start": 1775962915.7897701,
+            "t_end": 1775962919.8792446,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775962927.7364738,
+            "t_end": 1775962931.7443535,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775962936.5151904,
+            "t_end": 1775962940.528037,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775962948.9221113,
+            "t_end": 1775962959.21138,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775962959.413437,
+            "t_end": 1775962963.428164,
+            "reason": "报警变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-16T17:44:47.171350",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_1_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "radar_objects_warned",
+          "radar_objects_summary",
+          "adas_enable_states",
+          "bld_summary",
+          "warning_events",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[窗口1] 1775962915.79s ~ 1775962919.88s (4.1s) — 目标出现\n[窗口2] 1775962927.74s ~ 1775962931.74s (4.0s) — 报警变化\n[窗口3] 1775962936.52s ~ 1775962940.53s (4.0s) — 报警变化\n[窗口4] 1775962948.92s ~ 1775962959.21s (10.3s) — 报警变化 + 状态跳变 + 目标出现 + 速度变化\n[窗口5] 1775962959.41s ~ 1775962963.43s (4.0s) — 报警变化\n\n[状态跳变] (2次)\n  t=1775962950.972s front_left fcta_system_state: 6→2\n  t=1775962950.922s front_right fcta_system_state: 6→2\n\n[front_left] (120帧)\n  car_spd: min=0.000, max=3.077, avg=0.159\n  fcta_system_state: {6: 59, 2: ",
+        "window_count": 5,
+        "transition_count": 2
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-16T17:44:47.293385",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTA 激活条件\n\n**自车速度范围:**\n  active: [fFctaActiveLowSpd=0.5, fFctaActiveUpSpd=21.0] km/h\n  deactive: [fFctaDeactiveLowSpd=0.0, fFctaDeactiveUpSpd=22.0] km/h\n  detect: [fFctaDetectLowSpd=0.5, fFctaDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=4.0, fFctaObjWarningUpSpd=70.0)"
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-16T17:44:47.593010",
+      "detail": {
+        "signal_count": 5,
+        "result_preview": "### [驾驶员操作] 加速踏板位置过高 → 禁止从待机进入激活状态\n  变量: AdasStM.AccPedPosDiag, 阈值: >= 80\n  **VCU_FD1.VCU_ActAccrPedlRat**: ✅ 抑制条件不满足\n    判定: 阈值>=80.0: 0.0%帧满足 (0/4063), max=74.0156\n    原始统计: min=28.3464, max=74.0156, mean=38.5914, 非零帧=100.0%\n    帧数: 4063, 变化: 562次\n      t=1775991720.65s: 28.3464 → 28.740099999999998\n      t=1775991720.66s: 28.740099999999998 → 28.3464\n      t=1775991720.68s: 28.3464 → 28.740099999999998\n      t=1775991720.689s: 28.740099999999998 → 28.3464\n      t=1775991720.86s: 28.3464 → 28."
+      }
+    },
+    {
+      "step": "output_signal_analysis",
+      "timestamp": "2026-04-16T17:44:47.953123",
+      "detail": {
+        "result_preview": "### FCTA_Warn (CR_FD1)\n  源表达式: `GetFctaWarningSignal()`\n  统计: min=0, max=0, mean=0.0000, 非零帧=0/2032 (0.0%)\n  跳变: 无 (恒定值=0)\n\n### FCTA_B_FuncSts (CR_FD1)\n  源表达式: `(FCTABErrorSts == TRUE) ? 1u : 0U`\n  统计: min=0, max=0, mean=0.0000, 非零帧=0/2032 (0.0%)\n  跳变: 无 (恒定值=0)\n\n### CR_FCTA_Resp (CR_FD1)\n  源表达式: `(PERInputUpdate.adasEnable.bFCTAEnable == TRUE) ? 1 : 0`\n  统计: min=0, max=0, mean=0.0000, 非零帧=0/2032 (0.0%)\n  跳变: 无 (恒定值=0)\n\n### CR_ErrSts (CR_FD1)\n  源表达式: `(FCTABErrorSts == TRUE) ? 1u : 0U`\n  统计: min"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-16T18:04:02.967051",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "数据层矛盾：L3 观测层显示存在 `warning_edge_on` 事件（窗口 2,3,5 中 obj_flag 置位），表明内部警告逻辑曾短暂触发；但 L4 输出层 `FCTA_Warn` CAN 信号全程为 0，表明最终对外未生效。",
+          "状态机行为矛盾：窗口 4 中系统状态从 6(Passive) 跳变为 2(Standby)，符合报警允许条件（文档规定 Standby/Active 可报警），但最终输出仍为 0，提示中间存在阻断逻辑。",
+          "信号映射矛盾：抑制信号统计中 `actual_gear` 标注为'未在 BLF 中找到'（无法确认），但状态机却成功完成了 6→2 的状态跳变（通常挂挡是激活前置条件），需确认状态机是否依赖此信号或日志缺失。"
+        ],
+        "verdict_preview": "\n\n### 根因\n功能使能信号未置位导致报警输出被门控：`PERInputUpdate.adasEnable.bFCTAEnable`(实际值 FALSE, 来源\"输出信号实测\") → `FCTA_Warn`生成条件不满足(需 Enable=TRUE) → L4 报警信号恒为 0\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 数据来源 |\n| :--- | :--- | :--- | :--- | :--- |\n| 车速范围 | 0.5~22.0 km/h | 0.12~0.73 km/h | ✅ 满足 | \"测试窗口\"(t=1775962950.92s) |\n| 功能使能位 | TRUE | FALSE | ❌ 不满足 | \"输出信号实测\"(`CR_FCTA_Resp`=0) |\n| 油门抑制 | >= 80% | Max 74.0% | ✅ 不抑制 | \"抑制信号实测\" |\n| ESP 诊断 | != 0 | 0 | ✅ 不抑制 | \"抑制信号实测\" |\n| 目标类型保持 | 置信度稳定帧>=20 | 有效帧<1 | ❌ 不满足 | \"感知与目标专家\"分析"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-16T18:04:27.720603",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

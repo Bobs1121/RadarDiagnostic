@@ -1,0 +1,392 @@
+{
+  "function": "FCTB",
+  "system_state": {
+    "state_values": {
+      "0": "None",
+      "1": "Init",
+      "2": "Standby",
+      "3": "Active",
+      "4": "Off",
+      "5": "Failure",
+      "6": "Passive"
+    },
+    "transitions": [
+      {
+        "from": "0",
+        "to": "1",
+        "conditions": [
+          {
+            "condition": "System self-inspection finished",
+            "variable": "g_DTCCode.selfInspFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:2547"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "5",
+        "conditions": [
+          {
+            "condition": "FCTB Fault detected",
+            "variable": "g_DTCCode.failureFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:2616"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "4",
+        "conditions": [
+          {
+            "condition": "Calibration in progress",
+            "variable": "g_DTCCode.calibratingFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:2614"
+          }
+        ]
+      },
+      {
+        "from": "1",
+        "to": "2",
+        "conditions": [
+          {
+            "condition": "Gear is D or R (4 or 5)",
+            "variable": "g_egoCarAddInfo.actual_gear",
+            "threshold": "== 4 || == 5",
+            "source": "adasFunc.c:2622"
+          },
+          {
+            "condition": "Brake ready",
+            "variable": "g_DTCCode.bBrakeNotReadyFlg",
+            "threshold": "FALSE",
+            "source": "adasFunc.c:2623"
+          },
+          {
+            "condition": "Speed within active range",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": ">= 0.5 && <= 21.0 km/h",
+            "source": "adasFunc.c:2625"
+          },
+          {
+            "condition": "Standby to Active conditions met",
+            "variable": "FCTB_Standby2Active",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:1626"
+          }
+        ]
+      },
+      {
+        "from": "2",
+        "to": "3",
+        "conditions": [
+          {
+            "condition": "Warning output active",
+            "variable": "PEROutput.adasWarning.bLeftFctbWarning || PEROutput.adasWarning.bRightFctbWarning",
+            "threshold": "!= 0",
+            "source": "ASWIN_SystemState.c:733"
+          },
+          {
+            "condition": "Function gap check passed",
+            "variable": "FCTBFuncGap",
+            "threshold": "TRUE",
+            "source": "ASWIN_SystemState.c:733"
+          }
+        ]
+      },
+      {
+        "from": "2,3",
+        "to": "6",
+        "conditions": [
+          {
+            "condition": "Speed out of active range",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": ">= 22.0 || < 0.0 km/h",
+            "source": "adasFunc.c:2634"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "4",
+        "conditions": [
+          {
+            "condition": "FCTB Enable condition failed",
+            "variable": "GWM_FCTB_AdasEnableCond",
+            "threshold": "FALSE",
+            "source": "ASWIN_SystemState.c:1615"
+          }
+        ]
+      }
+    ]
+  },
+  "target_filter": {
+    "skip_function": "FctaSkipFlg",
+    "conditions": [
+      {
+        "condition": "Target speed out of warning range",
+        "variable": "objAbsV",
+        "threshold": "< 0.5 km/h || > 22.0 km/h",
+        "note": "Enter/Exit logic in FctaSkipFlg"
+      }
+    ]
+  },
+  "detect_enable": {
+    "flag": "bFctbDetectFlg",
+    "conditions": [
+      {
+        "condition": "Ego speed within detection range",
+        "variable": "g_egoCarAddInfo.carSpd",
+        "threshold": ">= 0.5 && <= 22.0 km/h"
+      }
+    ]
+  },
+  "ego_speed_ranges": {
+    "active": {
+      "low": "fFctbActiveLowSpd=0.5",
+      "high": "fFctbActiveUpSpd=21.0",
+      "unit": "km/h"
+    },
+    "deactive": {
+      "low": "fFctbDeactiveLowSpd=0.0",
+      "high": "fFctbDeactiveUpSpd=22.0",
+      "unit": "km/h"
+    },
+    "detect": {
+      "low": "fFctbDetectLowSpd=0.5",
+      "high": "fFctbDetectUpSpd=22.0",
+      "unit": "km/h"
+    }
+  },
+  "target_speed_ranges": {
+    "warning_enter": {
+      "low": "fFctaObjWarningSpd=0.5",
+      "high": "fFctaObjWarningUpSpd=22.0",
+      "unit": "km/h"
+    },
+    "warning_exit": {
+      "low": "fFctaObjDeWarningSpd=0.5",
+      "high": "fFctaObjDeWarningUpSpd=22.0",
+      "unit": "km/h"
+    }
+  },
+  "external_suppression": [
+    {
+      "source_system": "AEB",
+      "condition": "AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release",
+      "variable": "g_DTCCode.bAEBBAActiveFlg",
+      "can_signal": "Unknown",
+      "suppression_trigger": "== FALSE",
+      "normal_value": "== TRUE",
+      "effect": "Release Brake Hold",
+      "source": "adasFunc.c:3378"
+    },
+    {
+      "source_system": "AEB",
+      "condition": "AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release",
+      "variable": "g_DTCCode.bAEBIBActiveFlg",
+      "can_signal": "Unknown",
+      "suppression_trigger": "== FALSE",
+      "normal_value": "== TRUE",
+      "effect": "Release Brake Hold",
+      "source": "adasFunc.c:3378"
+    },
+    {
+      "source_system": "Driver",
+      "condition": "Accelerator pedal position too high",
+      "variable": "AdasStM.AccPedPosDiag",
+      "can_signal": "Unknown",
+      "suppression_trigger": "> 80",
+      "normal_value": "<= 80",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1529"
+    },
+    {
+      "source_system": "Driver",
+      "condition": "Steering wheel angle too large",
+      "variable": "VehcleInfoUpdate.steer_angle",
+      "can_signal": "Unknown",
+      "suppression_trigger": "> 350",
+      "normal_value": "<= 350",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1529"
+    },
+    {
+      "source_system": "Driver",
+      "condition": "Steering wheel speed too high",
+      "variable": "AdasStM.SteerWheelSpd",
+      "can_signal": "Unknown",
+      "suppression_trigger": "> 250",
+      "normal_value": "<= 250",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1529"
+    },
+    {
+      "source_system": "ESP",
+      "condition": "ESP function is OFF",
+      "variable": "AdasStM.ESPFUN",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1530"
+    },
+    {
+      "source_system": "MSR",
+      "condition": "MSR Active",
+      "variable": "AdasStM.MSRActv",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1530"
+    },
+    {
+      "source_system": "VDC",
+      "condition": "VDC Active",
+      "variable": "AdasStM.VDCActv",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1530"
+    },
+    {
+      "source_system": "PTC",
+      "condition": "PTC Active",
+      "variable": "AdasStM.PTCActv",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1530"
+    },
+    {
+      "source_system": "BTC",
+      "condition": "BTC Active",
+      "variable": "AdasStM.BTCActv",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1530"
+    },
+    {
+      "source_system": "Trailer",
+      "condition": "Trailer status active",
+      "variable": "AdasStM.TrailerSts",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1532"
+    },
+    {
+      "source_system": "ESP",
+      "condition": "ESP Diagnostic Active",
+      "variable": "AdasStM.ESPDiagActv",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1532"
+    },
+    {
+      "source_system": "Door",
+      "condition": "Door is not closed",
+      "variable": "AdasStM.DrvDoorSts",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:323"
+    },
+    {
+      "source_system": "Door",
+      "condition": "Door is not closed",
+      "variable": "AdasStM.LRDoorSts",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:323"
+    },
+    {
+      "source_system": "Door",
+      "condition": "Door is not closed",
+      "variable": "AdasStM.PassengerDoorSts",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:323"
+    },
+    {
+      "source_system": "Door",
+      "condition": "Door is not closed",
+      "variable": "AdasStM.RRDoorSts",
+      "can_signal": "Unknown",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:323"
+    },
+    {
+      "source_system": "FCTA",
+      "condition": "FCTA Fault detected",
+      "variable": "ADAS_GetFCTAFaultErrorStatus",
+      "can_signal": "Unknown",
+      "suppression_trigger": "TRUE",
+      "normal_value": "FALSE",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1533"
+    },
+    {
+      "source_system": "Vehicle Dynamics",
+      "condition": "Low speed brake suppression (High acceleration)",
+      "variable": "g_egoCarAddInfo.carAccXR",
+      "can_signal": "Unknown",
+      "suppression_trigger": ">= 0.8 (if 10-20km/h) OR >= 1.75 (if 0-10km/h)",
+      "normal_value": "< 0.8 OR < 1.75",
+      "effect": "Suppress Brake Request",
+      "source": "ASWIN_SystemState.c:1437"
+    },
+    {
+      "source_system": "Gearbox",
+      "condition": "Gear is N or P (7 or 8)",
+      "variable": "g_egoCarAddInfo.actual_gear",
+      "can_signal": "Unknown",
+      "suppression_trigger": "== 7 || == 8",
+      "normal_value": "!= 7 && != 8",
+      "effect": "Prevent Standby to Active",
+      "source": "ASWIN_SystemState.c:1625"
+    }
+  ],
+  "other_conditions": [
+    {
+      "category": "Brake Hold Logic",
+      "condition": "Hold time threshold reached",
+      "variable": "fFctbHoldEventTime",
+      "threshold": ">= 3.0s"
+    },
+    {
+      "category": "Brake Hold Logic",
+      "condition": "Brake event time threshold reached",
+      "variable": "fFctbBrakeEventTime",
+      "threshold": ">= 1.0s"
+    },
+    {
+      "category": "Brake Hold Logic",
+      "condition": "Vehicle stopped",
+      "variable": "g_egoCarAddInfo.carSpd",
+      "threshold": "< 1.0 km/h"
+    },
+    {
+      "category": "Warning Gap",
+      "condition": "Minimum time between warnings",
+      "variable": "FCTB_FUNC_GAP",
+      "threshold": "10000ms"
+    }
+  ]
+}

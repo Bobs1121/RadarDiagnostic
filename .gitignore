@@ -1,0 +1,30 @@
+# Secrets
+.env
+
+# Embedded repos (use git submodule if needed)
+cr60_light_arbe/
+cr60_light_convert_radar_dataset/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Cases data (large binary files)
+cases/**/*.bag
+cases/**/*.blf
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Memory cache
+memory/store/

@@ -1,0 +1,111 @@
+{
+  "session_id": "FCTA001_20260412_155409",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车辆都可以触发FCTA功能",
+  "created_at": "2026-04-12T15:54:09.270770",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-12T15:54:39.312116",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "问题明确指向FCTA功能未启动且无报警，行人有触发迹象但GVT车无触发，属于典型的功能漏报+状态异常问题。涉及双状态机架构、目标分类、报警阈值等多维度分析。",
+        "fail_type": "漏报FN",
+        "key_variables": [
+          "fctaSystemState",
+          "*SystemState",
+          "adasEnable",
+          "bFCTAEnable",
+          "g_DTCCode.selfInspFlg",
+          "PERInputUpdate.adasEnable",
+          "PEROutput.adasWarning",
+          "objAttribCal.targetType",
+          "track.targetType",
+          "fctaWarningLevel",
+          "fctaTTC",
+          "rbMPR_GetPoweronMR()"
+        ],
+        "analysis_plan": [
+          "1. 检查FCTA状态机当前状态(fctaSystemState)及历史状态变化",
+          "2. 验证功能使能条件(bFCTAEnable, adasEnable, selfInspFlg)",
+          "3. 分析双状态机(adasFunc.c vs ASWIN_SystemState.c)的同步与覆盖关系",
+          "4. 检查行人目标与GVT车辆的目标分类数据(targetType)",
+          "5. 验证报警阈值参数(TTC, 速度, ROI区域)",
+          "6. 检查左右雷达数据合并逻辑(FL→FR私CAN传输)",
+          "7. 验证ASWOUT_OutCalc报警输出协调逻辑",
+          "8. 检查GWM变型配置(g_GWMSpecificVariant.bits)"
+        ],
+        "related_functions": [
+          "FCTB",
+          "ASWIN_SystemState"
+        ],
+        "subtasks": [
+          {
+            "task": "解析bag文件获取FCTA状态机变量(fctaSystemState, *SystemState)时序数据",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析adasFunc.c中FCTA状态机转换条件与当前输入变量匹配情况",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查ASWIN_SystemState.c中AdasEnable()和AdasStateActive()逻辑对FCTA的影响",
+            "complexity": "complex"
+          },
+          {
+            "task": "解析目标列表数据，验证行人和GVT车辆的targetType、速度、TTC值",
+            "complexity": "simple"
+          },
+          {
+            "task": "检查FL雷达到FR雷达的私CAN数据传输(0x339)是否正常",
+            "complexity": "simple"
+          },
+          {
+            "task": "验证FCTA报警阈值参数配置(速度阈值、TTC阈值、ROI区域)",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查ASWOUT_OutCalc中左右雷达报警合并逻辑(max取大)",
+            "complexity": "complex"
+          },
+          {
+            "task": "验证GWM变型配置中FCTA相关bit位(g_GWMSpecificVariant)",
+            "complexity": "simple"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-12T15:55:21.437178",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "frame_analysis",
+      "timestamp": "2026-04-12T15:56:07.265275",
+      "detail": "根据您提供的 FCTA 报警状态变化数据和关注变量列表，我总结了以下关键发现。\n\n---\n\n## 📊 关键发现总结\n\n### 1. 报警状态的整体模式：高度不稳定和周期性循环（Chattering/Flapping）\n\n**核心发现：** 报警状态并未处于稳定状态，而是表现出极高频率、极规律的周期性变化。\n\n*   **变化频率极高：** 总帧数（9466）与变化次数（9465）几乎相等，这意味着在整个监测周期内，报警状态几乎在**每一帧**都在发生变化。\n*   **周期性循环（Chattering）：** 从提供的样本数据（`warning_bytes` 和 `warning_hex`）可以看出，状态变化遵循一个非常清晰、重复的循环模式（例如：$3 \\to 4 \\to 1 \\to 2 \\to 3 \\to 4 \\to 1 \\to 2 \\dots$）。\n*   **状态缺乏持续性：** 正常系统状态通常会在一个或几个状态持续一段时间，以确认故障或警告的发生。本数据中的状态变化缺乏持续性，表明系统处于一种持续的、快速的“抖动”（Chattering）状态。\n\n### 2. 关键变化时刻："
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-12T16:30:24.238637",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "状态机抖动根因矛盾：算法专家认为是自车速度阈值迟滞过小（21.0-22.0km/h）导致，而系统状态和信号链路专家认为是平台使能信号（adasEnable/FCTASwtReq）或自检状态抖动导致。速度阈值通常导致 Standby/Active 切换，而日志显示 Init(1)/Off(4) 循环，更符合使能信号或故障复位特征。",
+          "GVT 不触发原因矛盾：感知专家认为 GVT 被误分类为低目标（RCS/高度过滤），信号链路和架构专家认为是私 CAN 通信（0x339）不稳定导致左侧目标丢失，算法专家认为是目标属性（速度/角度）未满足阈值。三者分别指向感知层、通信层和功能层，需通过目标位置（左/右）和属性数据来裁决。",
+          "状态机控制权矛盾：算法专家暗示感知侧（adasFunc.c）根据目标驱动状态，而系统状态专家指出平台侧（ASWIN_SystemState.c）会无条件覆盖感知侧状态。若平台侧覆盖，感知侧的目标检测努力将被抹除，这与‘行人有触发’现象存在逻辑张力（需确认行人触发时平台侧是否未覆盖）。"
+        ],
+        "verdict_preview": "\n\n# FCTA 功能失效与状态机抖动最终诊断报告\n\n## 1. 问题理解\n**故障现象**: FCTA 功能无法稳定启动，无持续报警。\n**具体表现**:\n1.  **状态机周期性复位**: 报警状态 `warning_status_raw` 在 `03(Active)` → `02(Standby)` → `01(Init)` → `04(Off)` 之间以约 **3.15 秒** 为周期循环。\n2.  **目标触发差异**: 行人目标可间歇触发功能（状态可达 3），但 GVT 车辆目标完全无法触发。\n**故障类型**: 系统级状态机复位 + 跨雷达融合失效。\n**核心矛盾**: 功能链路基本通畅（行人可触发），但系统稳定性极差（周期性复位），且特定目标（GVT）失效。\n\n## 2. 完整数据链路分析\n基于专家综合分析，FCTA 功能触发的完整数据链路如下：\n\n1.  **输入层 (CAN 信号)**:\n    *   **使能信号**: 公 CAN `FCTASwtReq` (或变型配置 `0x82`) → `RteComMapping_RxRunnable_FuncSignal"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-12T16:30:43.576286",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

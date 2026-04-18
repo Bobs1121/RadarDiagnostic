@@ -1,0 +1,134 @@
+{
+  "session_id": "FCTB003_20260416_174319",
+  "case_id": "FCTB003",
+  "problem": "测试FCTB都能成功的刹车避障，但是保压时间不够，当目标车辆穿过自车后，FCTB就被释放不触发了",
+  "expected": "能够保压到车辆停稳。重点关注一下保压逻辑也状态机逻辑，当状态机不等于3的时候，如果此时目标车已经穿过自车，TTC变成inf，此时保压是不是会有bug",
+  "created_at": "2026-04-16T17:43:19.791373",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-16T17:43:38.809891",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 0.98,
+        "reasoning": "用户明确描述测试FCTB功能时出现保压时间不足的问题，且目标穿过自车后FCTB释放。历史记忆已确认根因涉及AEBBAActiveFlg抑制信号及TTC=inf导致状态机无法维持在Active态。问题核心在于FCTB的制动保持逻辑与状态机转换条件。",
+        "fail_type": "状态异常STATE",
+        "key_variables": [
+          "fctb_system_state",
+          "bAEBBAActiveFlg",
+          "fFctbHoldTimeThresh",
+          "fFctbBrakeEventTime",
+          "fFctbObjWarningTTMX",
+          "TTC",
+          "bFctbKeepBrakeFlg",
+          "AEBBAActv_0x137"
+        ],
+        "related_functions": [
+          "FCTA",
+          "AEB"
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-16T17:43:46.574435",
+      "detail": {
+        "bag_frames": 12478,
+        "can_frames": 224236
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-16T17:43:46.620271",
+      "detail": {
+        "count": 2,
+        "windows": [
+          {
+            "t_start": 1776063428.0633576,
+            "t_end": 1776063436.216746,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1776063439.379478,
+            "t_end": 1776063461.633646,
+            "reason": "报警变化 + 状态跳变 + 速度变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-16T17:44:24.623678",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_1_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "radar_objects_warned",
+          "radar_objects_summary",
+          "adas_enable_states",
+          "bld_summary",
+          "warning_events",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[窗口1] 1776063428.06s ~ 1776063436.22s (8.2s) — 报警变化 + 状态跳变 + 目标出现 + 速度变化\n[窗口2] 1776063439.38s ~ 1776063461.63s (22.3s) — 报警变化 + 状态跳变 + 速度变化\n\n[状态跳变] (8次)\n  t=1776063433.605s front_left fctb_system_state: 6→2\n  t=1776063434.01s front_left fctb_system_state: 2→6\n  t=1776063434.217s front_left fctb_system_state: 6→2\n  t=1776063433.458s front_right fctb_system_state: 6→2\n  t=1776063434.014s front_right fctb_system_state: 2→6\n  t=1776063434.201s front_right fctb_system_state: 6→2\n  t=1776063453.794s f",
+        "window_count": 2,
+        "transition_count": 8
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-16T17:44:24.677694",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTB 激活条件\n\n**自车速度范围:**\n  active: [fFctbActiveLowSpd=0.5, fFctbActiveUpSpd=21.0] km/h\n  deactive: [fFctbDeactiveLowSpd=0.0, fFctbDeactiveUpSpd=22.0] km/h\n  detect: [fFctbDetectLowSpd=0.5, fFctbDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=0.5, fFctaObjWarningUpSpd=22.0)"
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-16T17:44:25.176435",
+      "detail": {
+        "signal_count": 19,
+        "result_preview": "### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release → Release Brake Hold\n  变量: g_DTCCode.bAEBBAActiveFlg, 阈值: == FALSE\n  **ESP_FD2.AEBBAActv_0x137**: ⚠️ **抑制条件满足**\n    判定: 阈值=== FALSE: 100.0%帧为零 (1882/1882)\n    原始统计: min=0.0000, max=0.0000, mean=0.0000, 非零帧=0.0%\n    帧数: 1882, 变化: 0次\n    ⚠ 极性交叉检查: 反向阈值'== TRUE'→阈值=== TRUE: 0.0%帧非零 (0/1882)\n      原始判定为抑制满足，请专家结合代码逻辑确认极性\n\n### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT activ"
+      }
+    },
+    {
+      "step": "output_signal_analysis",
+      "timestamp": "2026-04-16T17:44:25.588283",
+      "detail": {
+        "result_preview": "### CR_BrkgReq (CR_FD1)\n  源表达式: `l_temp_u8_FCTB`\n  统计: min=0, max=1, mean=0.0526, 非零帧=99/1882 (5.3%)\n  **激活段 (2个)**:\n    1776092254.223s ~ 1776092255.203s (持续 980ms)\n    1776092255.263s ~ 1776092256.263s (持续 1000ms)\n  跳变 (4次, 前4条):\n    t=1776092254.223s: 0→1\n    t=1776092255.203s: 1→0\n    t=1776092255.263s: 0→1\n    t=1776092256.263s: 1→0\n\n### CR_BrkgReqVal (CR_FD1)\n  源表达式: `GetFctbBrakeValue()`\n  统计: min=-4.0000800000000005, max=-0.00043199999999998795, mean=-0.2108, 非零帧=1882/1882 (100.0%)\n  **激"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-16T18:05:20.461588",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "无专家分析文本可供比对，但数据显示：外部抑制信号检查显示 'AEB Brake Active 不激活导致保压释放' 与测试现象 'FCTB 成功避障但保压不足' 逻辑吻合，需确认此抑制逻辑是否为预期设计还是误触发。",
+          "信号极性检查警告：ESP_FD2 相关多个信号出现 '反向阈值判定为抑制满足' 提示，存在信号定义极性与实际代码逻辑不一致的风险。",
+          "状态机跳变异常：窗口 1 中 t=1776063433.46s 状态从 6 跳变为 2，但未观测到明确的 L1 层强输入信号（如急刹、车速骤变）支撑该跳变，存在逻辑漏洞嫌疑。"
+        ],
+        "verdict_preview": "\n\n### 根因\n**L1 信号链路失效导致抑制条件误触发 + L3 目标穿越属性降权导致报警提前清除**: `ESP_FD2.AEBBAActv_0x137` 映射代码被注释(L1) → `g_DTCCode.bAEBBAActiveFlg` 默认为 FALSE(L2) → 满足\"AEB 未激活则释放保压”逻辑(L2) → `FCTB obj_flag` 立即关闭且状态机跳变(L3) → 刹车压力释放(L4)。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 数据来源 |\n| :--- | :--- | :--- | :--- | :--- |\n| AEB Brake Active (BA) | == FALSE (释放) | 0.0000 (100% 帧) | 是 | 外部抑制信号实测 |\n| AEB Brake Active (IB) | == FALSE (释放) | 0.0000 (98.9% 帧) | 是 | 外部抑制信号实测 |\n| FCTB 系统状态机 | != 3 (非激活) | 6 → 2 | 是 | 窗口 1 数据 |\n| 目标障碍概率 |"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-16T18:05:42.129675",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTB003\\report.md"
+}

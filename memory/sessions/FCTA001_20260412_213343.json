@@ -1,0 +1,125 @@
+{
+  "session_id": "FCTA001_20260412_213343",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车辆都可以触发FCTA功能",
+  "created_at": "2026-04-12T21:33:43.606638",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-12T21:34:11.081498",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "问题明确指向FCTA功能，历史诊断已发现状态机高频振荡(warning_bytes[0] 3→4→1→2循环)，导致无法维持Active(3)状态。行人能触发说明感知链路正常，GVT不能触发可能是目标属性差异或状态窗口问题。",
+        "fail_type": "状态异常STATE",
+        "key_variables": [
+          "fctaSystemState",
+          "warning_bytes[0]",
+          "bFctaEnable",
+          "FCTASwtReq",
+          "adasEnable",
+          "g_DTCCode.selfInspFlg",
+          "target_height",
+          "target_radar_cross_section",
+          "target_velocity",
+          "target_angle",
+          "PERInputUpdate.adasEnable",
+          "PEROutput.adasWarning"
+        ],
+        "analysis_plan": [
+          "1. 验证FCTA状态机当前状态及历史转换序列，确认振荡模式",
+          "2. 检查功能使能信号链路：FCTASwtReq(CAN)→bFctaEnable→adasEnable",
+          "3. 对比行人与GVT目标属性差异（高度/RCS/速度/角度）",
+          "4. 分析双状态机调度时序：adasFunc.c vs ASWIN_SystemState.c执行顺序",
+          "5. 检查左右雷达数据合并逻辑(ASWOUT_OutCalc.c)是否影响FCTA输入",
+          "6. 验证DTC自检标志g_DTCCode.selfInspFlg状态",
+          "7. 检查FCTA阈值参数配置是否对GVT目标过严"
+        ],
+        "related_functions": [
+          "FCTB",
+          "ASWOUT_OutCalc",
+          "ASWIN_SystemState"
+        ],
+        "subtasks": [
+          {
+            "task": "查询FCTA状态机历史转换日志，统计各状态停留时间",
+            "complexity": "simple"
+          },
+          {
+            "task": "追踪FCTASwtReq CAN信号到bFctaEnable变量的映射链路",
+            "complexity": "simple"
+          },
+          {
+            "task": "对比行人与GVT目标的感知属性差异（高度/RCS/速度/角度）",
+            "complexity": "complex"
+          },
+          {
+            "task": "分析adasFunc.c与ASWIN_SystemState.c的调度时序冲突",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查ASWOUT_OutCalc中左右雷达FCTA数据合并逻辑",
+            "complexity": "complex"
+          },
+          {
+            "task": "验证g_DTCCode自检标志及adasEnable输入稳定性",
+            "complexity": "simple"
+          },
+          {
+            "task": "审查FCTA功能阈值参数配置，评估对GVT目标的适用性",
+            "complexity": "complex"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-12T21:34:17.192578",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-12T21:34:43.000537",
+      "detail": {
+        "keys": [
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[front_left]\n  car_spd: min=0.0, max=3.0767, avg=0.10\n  fcta_system_state: {6: 24, 2: 6} (0=None,1=Init,2=Standby,3=Active,4=Off,5=Failure,6=Passive)\n  fcta_enable: {1}\n  left_fcta_warning: {0}\n  right_fcta_warning: {0}\n  trc_0: vel_x=[-3.83, 1.25] avg=-0.09, nonzero=3 frames\n  trc_2: vel_x=[-0.15, 0.02] avg=-0.01, nonzero=1 frames\n  trc_3: vel_x=[-0.28, 0.03] avg=-0.01, nonzero=1 frames\n[front_right]\n  car_spd: min=0.0, max=2.3894, avg=0.08\n  fcta_system_state: {6: 23, 2: 7} (0=None,1=Init,2=St"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-12T21:54:16.435271",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "问题描述称'行人目标有功能触发'，但数据概览显示整个日志期间 left/right_fcta_warning 均为 0，需确认日志是否覆盖行人触发时段。",
+          "信号链路专家指出 warning_bytes 循环 3→4→1→2，但 fcta_system_state 数据仅显示 6(Passive)/2(Standby)，两者状态定义或映射关系未对齐。",
+          "算法专家引用速度阈值 0.5 km/h，系统状态专家推测阈值>2 km/h，两者对激活条件的具体数值存在分歧。"
+        ],
+        "verdict_preview": "\n\n### 根因\n自车平均车速 0.10 km/h 低于激活阈值 0.5 km/h，导致系统状态锁定 Passive(6) 而非 Active(3)。\n状态机无法进入 Active 导致警告输出门控关闭，最终无报警输出。\n因果链：车速 (0.10) → 阈值 (0.5) → 状态 (Passive) → 结果 (无报警)。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 来源 |\n|------|------|--------|--------|------|\n| 车速激活 | ≥0.5 km/h | 0.10 km/h | N | 算法/系统 |\n| 系统状态 | =3 (Active) | 6 (Passive) | N | 信号/架构 |\n| 功能使能 | =1 | 1 | Y | 信号 |\n| 警告输出 | >0 | 0 | N | 信号 |\n\n### 数据链路\nCAN 车速 (0.10km/h) → 内部变量 car_spd → 阈值判断 (<0.5km/h) → 状态机保持 Passive → 警告输出 0。\n警告字节 (3→4→1→2) → 状态机"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-12T21:54:33.007679",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

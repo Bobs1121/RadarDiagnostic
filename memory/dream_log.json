@@ -1,0 +1,51 @@
+[
+  {
+    "timestamp": "2026-04-12T15:26:03.686271",
+    "summary": "已完成 8 大功能源码状态机文档的结构化整合，并将 FCTA 会话中的目标类型触发差异问题固化为功能知识与分析模式。",
+    "conflicts": 0,
+    "patterns_added": 1,
+    "patterns_removed": 0
+  },
+  {
+    "timestamp": "2026-04-12T19:41:36.675553",
+    "summary": "整合了 FCTA 目标类型过滤与 FCTB 使能震荡问题，合并了 FCTA 重复记录，新增 FCTB 震荡模式，更新了项目知识库状态。",
+    "conflicts": 1,
+    "patterns_added": 1,
+    "patterns_removed": 0
+  },
+  {
+    "timestamp": "2026-04-13T17:03:17.458308",
+    "summary": "合并 FCTA 5 条重复会话记录为 1 条高置信度问题条目，保留 FCTB 震荡模式，无新增知识但完成记忆去重和结构化整理",
+    "conflicts": 1,
+    "patterns_added": 0,
+    "patterns_removed": 0
+  },
+  {
+    "timestamp": "2026-04-14T11:23:03.751644",
+    "summary": "完成 FCTA/FCTB 功能知识去重与修正，统一会话标签与内容分类，更新项目记忆至 2026-04-14。",
+    "conflicts": 2,
+    "patterns_added": 0,
+    "patterns_removed": 0
+  },
+  {
+    "timestamp": "2026-04-14T16:32:57.271478",
+    "summary": "整合了 FCTB 功能的多起重复诊断案例，将分散的根因（信号校验、时长阈值、抑制信号）合并为综合模式，修正了 FCTA/FCTB 案例标签错误，并更新了项目记忆中的用户偏好（条件检查汇总表格）。",
+    "conflicts": 2,
+    "patterns_added": 1,
+    "patterns_removed": 4
+  },
+  {
+    "timestamp": "2026-04-15T10:49:09.332913",
+    "summary": "整合了 17 次 FCTB/FCTA 诊断会话，将 4 条分散且重复的 FCTB 故障模式合并为 2 条高置信度综合模式，明确了信号校验、时长阈值及 TTC 逻辑三大核心根因，并更新了项目记忆中的用户偏好与知识库状态。",
+    "conflicts": 1,
+    "patterns_added": 2,
+    "patterns_removed": 4
+  },
+  {
+    "timestamp": "2026-04-17T15:16:48.313754",
+    "summary": "整合了 FCTB 和 FCTA 的重复会话记录，修正了 FCTB'退出晚'的根因认知（从感知失效修正为保压计时器与外部抑制信号的时序竞争），并清理了 3 条重复或矛盾的模式条目，新增 1 条关于退出延迟的精确模式。",
+    "conflicts": 2,
+    "patterns_added": 1,
+    "patterns_removed": 3
+  }
+]

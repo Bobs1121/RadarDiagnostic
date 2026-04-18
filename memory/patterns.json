@@ -1,0 +1,166 @@
+[
+  {
+    "function": "FCTA",
+    "symptom": "功能未触发报警，但目标列表中存在目标",
+    "root_cause": "目标类型过滤逻辑差异（如行人触发但 GVT 车不触发）或 ROI 阈值不匹配",
+    "keywords": [
+      "FCTA",
+      "No Alarm",
+      "Pedestrian Trigger",
+      "GVT Car",
+      "Target Type"
+    ],
+    "fix_hint": "检查目标分类属性 (objAttribCal) 及 FCTA ROI 阈值配置，确认 GVT 车是否被误分类或过滤",
+    "_learned_at": "2026-04-12T15:26:03.686271",
+    "_id": "29a8e601"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "FCTB 功能使能信号 (bFCTBEnable) 频繁震荡，导致功能间歇性失效",
+    "root_cause": "FCTB 使能逻辑依赖条件（如 FCTA 状态、车速、障碍物距离）处于临界值，或双状态机（adasFunc vs ASWIN_SystemState）竞争导致状态翻转",
+    "keywords": [
+      "FCTB",
+      "Enable Oscillation",
+      "bFCTBEnable",
+      "Toggle",
+      "State Machine Conflict"
+    ],
+    "fix_hint": "检查 adasFunc.c 中 FCTB 使能条件阈值，增加防抖逻辑；对比 adasFunc 与 ASWIN_SystemState 对同一状态变量的写入时序。",
+    "_learned_at": "2026-04-12T19:41:36.670519",
+    "_id": "c3c186f9"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "FCTA 触发警告但 FCTB 未触发制动，且状态机频繁跳变或提前回退",
+    "root_cause": "多因素叠加：1) 左右雷达信号合并逻辑中，对侧警告信号值不满足输出校验（如值 3 不匹配阈值 2）；2) 激活时长不足（<3.0s）导致状态机无法保持 Active；3) 车门未关闭或高油门/转向速率触发抑制机制；4) 车速在阈值边缘波动。",
+    "keywords": [
+      "FCTB",
+      "No Brake",
+      "Signal Merge",
+      "Duration Threshold",
+      "Suppression",
+      "State Retraction"
+    ],
+    "fix_hint": "检查 FL/FR 信号合并逻辑中的值校验条件；确认激活时长是否满足保持阈值；排查车门状态、油门开度、转向速率等抑制信号；优化车速阈值迟滞。",
+    "_learned_at": "2026-04-14T16:32:57.228478",
+    "_id": "30dae3b4"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "FCTB 成功触发制动但保压时间不足，目标穿过即释放",
+    "root_cause": "目标穿越导致 TTC 异常变为 Inf (风险消除) → 状态机提前退出 Active (时长 < 3.0s) + 外部抑制生效 (AEB=False) → 保压逻辑中断。",
+    "keywords": [
+      "FCTB",
+      "Hold Time",
+      "TTC=Inf",
+      "Risk Elimination",
+      "Brake Release",
+      "AEB Suppression"
+    ],
+    "fix_hint": "增加低速锁定逻辑，解耦 AEB 依赖，或引入独立保压计时器机制以覆盖目标穿越后的风险消除窗口。",
+    "_learned_at": "2026-04-15T10:49:09.323744",
+    "_id": "fdcfa4f3"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "用户感知FCTB退出流程延迟",
+    "root_cause": "退出阶段资源释放或状态清理耗时过长",
+    "keywords": [
+      "退出延迟",
+      "资源释放",
+      "流程优化"
+    ],
+    "fix_hint": "优化退出流程中的资源回收机制，减少阻塞操作",
+    "_learned_at": "2026-04-16T17:27:51.037683",
+    "_id": "5887d980"
+  },
+  {
+    "function": "FCTA",
+    "symptom": "FCTA功能未启动且无报警，行人目标触发但GVT车未触发",
+    "root_cause": "测试场景未满足车速阈值(0.5km/h)和DDCI范围(≤2.8m)的双重条件",
+    "keywords": [
+      "车速阈值",
+      "DDCI范围",
+      "系统状态震荡",
+      "感知层信号清除",
+      "ROI范围突破"
+    ],
+    "fix_hint": "优化测试场景参数确保车速稳定达标，校准DDCI检测范围，验证状态机逻辑稳定性",
+    "_learned_at": "2026-04-16T17:30:33.537285",
+    "_id": "0a784acc"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "用户感知FCTB制动退出滞后",
+    "root_cause": "内部制动保持定时器逻辑优先于外部AEB非激活信号，导致制动维持时间过长",
+    "keywords": [
+      "制动保持定时器",
+      "AEB非激活信号",
+      "CR_BrkgReq",
+      "Hold Timer",
+      "信号优先级冲突"
+    ],
+    "fix_hint": "优化制动释放逻辑优先级，确保外部AEB状态信号能及时覆盖内部定时器策略，或动态调整保压时长阈值",
+    "_learned_at": "2026-04-16T18:04:44.053470",
+    "_id": "5189dbd7"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "测试FCTB刹车避障成功但保压时间不足，目标车辆穿过后FCTB被释放不触发",
+    "root_cause": "L1信号链路失效导致抑制条件误触发及L3目标穿越属性降权导致报警提前清除",
+    "keywords": [
+      "保压时间不足",
+      "信号链路失效",
+      "目标穿越属性降权",
+      "AEBBAActv_0x137",
+      "FCTB系统状态机"
+    ],
+    "fix_hint": "恢复AEB信号链路映射、优化保压逻辑计时器、校准目标概率过滤算法",
+    "_learned_at": "2026-04-16T18:05:42.104546",
+    "_id": "759d1ff3"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "客户感知 FCTB 退出延迟（制动释放晚）",
+    "root_cause": "内部制动保持定时器逻辑（实测保压约 2.8s）优先于外部 AEB 非激活信号（ESP 侧 AEBBAActv=0）触发的释放条件，导致制动请求在风险可能解除后仍维持约 2.8s。",
+    "keywords": [
+      "FCTB",
+      "Exit Delay",
+      "Brake Hold",
+      "AEBBAActv",
+      "Timer Priority"
+    ],
+    "fix_hint": "检查内部保压计时器与外部抑制信号的优先级逻辑，优化释放条件判断顺序，确保外部抑制信号能立即触发释放或缩短保压时间。",
+    "_learned_at": "2026-04-17T15:16:48.311287",
+    "_id": "b4a146c2"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "FCTB触发时间过短（仅数百毫秒）导致制动保持未生效",
+    "root_cause": "角雷达目标丢失引发状态机降级，保压计时器强耦合Active状态导致累积重置",
+    "keywords": [
+      "角雷达目标丢失",
+      "状态机回退",
+      "保压计时器强耦合",
+      "制动保持阈值",
+      "预警标志撤销"
+    ],
+    "fix_hint": "解耦保压计时器与状态机，增加状态保持缓冲机制，优化目标跟踪稳定性",
+    "_learned_at": "2026-04-17T17:13:25.662892",
+    "_id": "c4eff6a8"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "FCTB触发时间过短，仅持续约1帧即被取消",
+    "root_cause": "角雷达目标跟踪不稳定导致预警标志抖动叠加车速阈值震荡，且AEB协同信号抑制生效",
+    "keywords": [
+      "角雷达目标跟踪不稳定",
+      "预警标志高频抖动",
+      "车速阈值边缘震荡",
+      "AEB协同信号抑制"
+    ],
+    "fix_hint": "优化雷达目标跟踪稳定性，增强预警标志抗抖动逻辑，调整车速阈值判定策略，检查AEB协同信号抑制条件合理性",
+    "_learned_at": "2026-04-17T18:26:38.187771",
+    "_id": "3b8c9a51"
+  }
+]

@@ -1,0 +1,100 @@
+{
+  "description": "Radar data knowledge base extracted from cr60_light_arbe and cr60_light_convert_radar_dataset",
+
+  "can_id_to_radar": {
+    "0x600": {"name": "RL", "position": "rear_left", "topic_suffix": 3},
+    "0x601": {"name": "RR", "position": "rear_right", "topic_suffix": 4},
+    "0x602": {"name": "FR", "position": "front_right", "topic_suffix": 1},
+    "0x603": {"name": "FL", "position": "front_left", "topic_suffix": 2}
+  },
+
+  "topic_to_radar": {
+    "/wf/corner_radar/lgu_data_1": {"radar": "FR", "radar_id": 1},
+    "/wf/corner_radar/lgu_data_2": {"radar": "FL", "radar_id": 2},
+    "/wf/corner_radar/lgu_data_3": {"radar": "RL", "radar_id": 3},
+    "/wf/corner_radar/lgu_data_4": {"radar": "RR", "radar_id": 4},
+    "/wf/objectlist_1": {"radar": "FR", "radar_id": 1},
+    "/wf/objectlist_2": {"radar": "FL", "radar_id": 2},
+    "/wf/objectlist_3": {"radar": "RL", "radar_id": 3},
+    "/wf/objectlist_4": {"radar": "RR", "radar_id": 4}
+  },
+
+  "warning_status_raw_byte_map": {
+    "source": "BYD_publisher_can/canfd_publisher_node.py kWarningSignalMap",
+    "bytes": {
+      "0": "radar_id",
+      "1": "BSD_L (BSD_LCA_warningReqleft)",
+      "2": "BSD_R (BSD_LCA_warningReqright)",
+      "3": "LCA_L (RSDS_LCA_WarReqLeft)",
+      "4": "LCA_R (RSDS_LCA_WarReqRight)",
+      "5": "DOW_L (RSDS_DOWWarReqLeft)",
+      "6": "DOW_R (RSDS_DOWWarReqRight)",
+      "7": "RCW (RSDS_RCW_Trigger)",
+      "8": "RCTA_L (RSDS_RCTA_WarReqLeft)",
+      "9": "RCTA_R (RSDS_RCTA_WarReqRight)",
+      "10": "RCTB_L (RSDS_RCTB_WarReqLeft)",
+      "11": "RCTB_R (RSDS_RCTB_WarReqRight)",
+      "12": "FCTA_L (RRadar_FCTA_Warning_Left_S)",
+      "13": "FCTA_R (RRadar_FCTA_Warning_Right_S)",
+      "14": "FCTB_L (RRadar_FCTB_Warning_Left_S)",
+      "15": "FCTB_R (RRadar_FCTB_Warning_Right_S)"
+    }
+  },
+
+  "a2l_to_egoCarInfo": {
+    "source": "SAIC_pri_can/canfd_sgu_pub.py SIGNAL_SPECS",
+    "mappings": {
+      "g_egoCarAddInfo.carSpd": "car_spd",
+      "g_egoCarAddInfo.carAccXr": "car_acc_xr",
+      "g_egoCarAddInfo.yawRate": "yaw_rate",
+      "g_egoCarAddInfo.steerAngle": "steer_angle",
+      "fctaSystemState": "fcta_system_state",
+      "fctbSystemState": "fctb_system_state",
+      "bsdSystemState": "bsd_system_state",
+      "lcaSystemState": "lca_system_state",
+      "dowSystemState": "dow_system_state",
+      "rcwSystemState": "rcw_system_state",
+      "rctaSystemState": "rcta_system_state",
+      "rctbSystemState": "rctb_system_state",
+      "PERInputUpdate.adasEnable.bFCTAEnable": "fcta_enable",
+      "PERInputUpdate.adasEnable.bFCTBEnable": "fctb_enable",
+      "PERInputUpdate.adasEnable.bBSDEnable": "bsd_enable",
+      "PERInputUpdate.adasEnable.bLCAEnable": "lca_enable",
+      "PERInputUpdate.adasEnable.bDOWEnable": "dow_enable",
+      "PERInputUpdate.adasEnable.bRCWEnable": "rcw_enable",
+      "PERInputUpdate.adasEnable.bRCTAEnable": "rcta_enable",
+      "PERInputUpdate.adasEnable.bRCTBEnable": "rctb_enable",
+      "sysPowerMod": "sys_power_mod",
+      "g_GWMSpecificVariant.actualGear": "actual_gear"
+    }
+  },
+
+  "wfAutosarData_structure": {
+    "header_magic": ["0xA55A", "0x5AA5"],
+    "fixed_length": 728,
+    "debug_info_offset": 584,
+    "debug_info_size": 144,
+    "obj_offset": 8,
+    "obj_size": 36,
+    "max_objects": 68,
+    "dot_out_size": 16,
+    "object_fields": [
+      "dist_x(i16/100)", "dist_y(i16/100)", "length(u16/100)", "width(u16/100)",
+      "yaw_ang(i16/100)", "obj_id(u8)", "obj_type(u8)", "dyn_flg(u8)",
+      "bsd(i8)", "lca(i8)", "dow(i8)", "rcw(i8)", "rcta(i8)", "rctb(i8)", "fcta(i8)", "fctb(i8)",
+      "refer_pt(u8)", "life_cycle(u8)", "padding(1B)",
+      "vel_x(i16/100)", "vel_y(i16/100)", "vel_abs_x(i16/100)", "vel_abs_y(i16/100)",
+      "f_ttc(u16/100)", "f_ddci(i16/100)"
+    ],
+    "debug_sections": ["egoCarInfoTrans(60B)", "calibInfoTrans(12B)", "ADASInfoTrans(12B)", "BLDInfoTrans(60B)"]
+  },
+
+  "adas_functions": {
+    "rear": ["BSD", "LCA", "DOW", "RCW", "RCTA", "RCTB"],
+    "front": ["FCTA", "FCTB"],
+    "system_state_enum": {
+      "0": "None", "1": "Init", "2": "Standby", "3": "Active",
+      "4": "Off", "5": "Failure", "6": "Passive"
+    }
+  }
+}

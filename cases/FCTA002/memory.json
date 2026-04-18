@@ -1,0 +1,7 @@
+{
+  "session_id": "FCTA002_20260416_165708",
+  "function": "FCTB",
+  "problem": "只触发了FCTB没有触发FCTB",
+  "diagnosis_summary": "\n\n### 根因\nCAN 信号 `ESP_FD2.AEBBAActv_0x137` 持续为 0 (抑制条件满足) → 内部变量 `bAEBBAActiveFlg` 置 FALSE → ECU 执行 Release Brake Hold 逻辑 → 保持时间 0.91s 未达到阈值 3.0s → 制动未生效。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 数据来源 |\n| :--- | :--- | :--- | :--- | :--- |\n| FCTB 系统保持时间 | ≥ 3.0 s | 0.91 s | **N** | 条件检查表 |\n| AEB 刹车激活标志 | == TRUE | 99.7% 为 FALSE | **N** | 抑制信号实测 |\n| 自车速度范围 | 0.5~21.0 km/h | 4.95~5.01 km/h | Y | 测试窗口 |\n| 左右雷达目标融合 | 双侧有效 | 仅 Radar=2 (FR) | **N** | 架构专家 |\n\n### 关键证据链 (结构化)\n**信号**: `ESP_FD2.AEBBAActv_0x137`",
+  "_updated": "2026-04-16T17:20:13.340745"
+}

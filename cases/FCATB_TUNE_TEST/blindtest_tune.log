@@ -1,0 +1,295 @@
+﻿ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ Corner Radar Analysis ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+Γöé FCATB_TUNE_TEST                                                              Γöé
+Γöé BAG: 1 file(s)                                                               Γöé
+Γöé CCCscp_far_20kph_nok_corner_radar_net_2026-04-12-13-06-38_0.bag              Γöé
+Γöé BLF: 1 file(s)  CCCscp-far_20kph_nok_Logging2026-04-12_13-06-41.blf          Γöé
+ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+
+Problem:  µâ│µèè FCTB τÜä fFctbObjWarningBaseTTMX Σ╗Ä 1.0 Φ░âΣ╝ÿσê░ 
+1.5∩╝îτ£ïΣ╕ÇΣ╕ïΦ┐ÖΣ╕¬ΘÿêσÇ╝Φ░âµò┤σ»╣ΦºªσÅæτ¿│σ«ÜµÇºτÜäσ╜▒σôì
+Expected: Φ░âΣ╝ÿσÉÄ FCTB ΦºªσÅæΘóæτÄçσ║öΦ»ÑµÿÄµÿ╛ΘÖìΣ╜Ä∩╝îΦ»»ΦºªσÅæσçÅσ░æ
+
+  Checking prerequisites: Checking prerequisites...
+  Understanding problem: AI is understanding the problem...
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 11776
+completion_tokens : 214
+total_tokens      : 11990  (9.1% of 131K context)
+elapsed           : 12.37s
+generation speed  : 17.3 tok/s
+overall throughput: 969.4 tok/s
+response preview  : {
+  "function": "FCTB",
+  "confidence": 0.95,
+  "reasoning": "τö¿µê╖µÿÄτí«µÅÉσÅèΦªüΦ░âµò┤ FCTB σèƒΦâ╜τÜäΘÿêσÇ╝σÅéµò░ 'fFctbObjWarningBaseTTMX'∩╝îσ╣╢Φºéσ»ƒσà╢σ»╣ΦºªσÅæτ¿│σ«Ü...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Understanding problem: Identified function: FCTB
+  classify: Classifying task type...
+  classify: task_type=verify func=FCTB focus=TTM (conf=0.92)
+  Parsing data: Parsing data files...
+[INFO] DBC: 89 conflicting IDs skipped (first-loaded wins). Affected DBCs: GAC_CR_FR&FL_Private_CAN_V1.3.dbc, GWM_RearCorner_Pri_V3.0 (1).dbc
+  Parsing data: Parsing 
+CCCscp_far_20kph_nok_corner_radar_net_2026-04-12-13-06-38_0.bag...
+  Parsing data: Writing 303039 radar objects...
+  Parsing data: Writing 10229 radar debug records...
+  Parsing data: Parsing CCCscp-far_20kph_nok_Logging2026-04-12_13-06-41.blf (DBC
+decode)...
+  Parsing data: TimeSync offset=28802.588s
+  Parsing data: Built 473 warning events
+  Detecting test windows: Detecting test-active time windows...
+  Detecting test windows: Using per-func speed thresholds for FCTB: 0.5, 21, 0, 
+22, 0.5, 22, 0.5, 22, 0.5, 22 km/h
+  Detecting test windows: Found 15 window(s): [1775970397.0s~1775970409.4s] 
+µèÑΦ¡ªσÅÿσîû + τè╢µÇüΦ╖│σÅÿ + τ¢«µáçσç║τÄ░ + ΘÇƒσ║ªσÅÿσîû; [1775970411.1s~1775970415.1s] 
+µèÑΦ¡ªσÅÿσîû; [1775970415.6s~1775970419.6s] µèÑΦ¡ªσÅÿσîû; [1775970420.2s~1775970426.7s] 
+µèÑΦ¡ªσÅÿσîû + τè╢µÇüΦ╖│σÅÿ + τ¢«µáçσç║τÄ░ + ΘÇƒσ║ªσÅÿσîû; [1775970438.4s~1775970442.4s] 
+ΘÇƒσ║ªσÅÿσîû; [1775970445.2s~1775970449.2s] µèÑΦ¡ªσÅÿσîû; [1775970452.9s~1775970461.1s] 
+µèÑΦ¡ªσÅÿσîû; [1775970461.7s~1775970465.7s] µèÑΦ¡ªσÅÿσîû; [1775970466.7s~1775970477.8s] 
+µèÑΦ¡ªσÅÿσîû + τ¢«µáçσç║τÄ░ + ΘÇƒσ║ªσÅÿσîû; [1775970477.9s~1775970481.9s] µèÑΦ¡ªσÅÿσîû; 
+[1775970495.2s~1775970499.6s] τ¢«µáçσç║τÄ░; [1775970506.5s~1775970510.6s] τ¢«µáçσç║τÄ░; 
+[1775970522.7s~1775970532.6s] µèÑΦ¡ªσÅÿσîû + τè╢µÇüΦ╖│σÅÿ + ΘÇƒσ║ªσÅÿσîû; 
+[1775970536.7s~1775970543.8s] µèÑΦ¡ªσÅÿσîû; [1775970544.2s~1775970551.1s] µèÑΦ¡ªσÅÿσîû +
+τè╢µÇüΦ╖│σÅÿ + τ¢«µáçσç║τÄ░ + ΘÇƒσ║ªσÅÿσîû
+  Analyzing frames: Extracting evidence for FCTB within windows...
+  Analyzing frames: Extracting warning timeline...
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[qwen3:14b]  complexity=simple  finish=stop
+prompt_tokens     : 1550
+completion_tokens : 324
+total_tokens      : 1874
+elapsed           : 202.25s
+generation speed  : 1.6 tok/s
+overall throughput: 9.3 tok/s
+response preview  : τè╢µÇüσÅÿσîûµ¿íσ╝Å∩╝Üradar_idΣ╕Äwarning_bytes/warning_hexσ£¿1-4Θù┤σ╛¬τÄ»σêçµìó∩╝îµ»ÅτºÆσÅæτöƒµò░τÖ╛µ¼íτè╢µÇüΦ╖│σÅÿπÇéσà│Θö«µù╢σê╗∩╝Ü1775970398.976-1775970398.999τºÆσåàΦ┐₧τ╗¡5µ¼íσ┐½ΘÇƒσêçµìóπÇéσ╝éσ╕╕τé╣∩╝ÜµèÑΦ¡ªσ╕ºµò░Σ╕ÄσÅÿσîûµ¼í...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Analyzing frames: Extracting target speeds, CAN values, ego speed 
+(windowed)...
+  Extracting conditions: Extracting FCTB activation conditions from code...
+  Extracting conditions: Extracted conditions (cached to 
+source_docs/FCTB_conditions.json)
+  Temporal Pattern Engine: Running Temporal Pattern Engine...
+  Temporal Pattern Engine: TPE: 6 patterns, 1 triggered, 11 unresolved vars, 0 
+missing CAN signals
+  Checking suppression signals: Checking 19 external suppression signals in CAN 
+data...
+  Checking suppression signals: Signal mapping loaded: 91 entries, 1 struct 
+aliases
+  Checking suppression signals:   AEBBAActv_0x137: ΓÜá∩╕Å **µèæσê╢µ¥íΣ╗╢µ╗íΦ╢│**
+  Checking suppression signals:   AEBIBActv_0x137: ΓÜá∩╕Å **µèæσê╢µ¥íΣ╗╢µ╗íΦ╢│**
+  Checking suppression signals:   VCU_ActAccrPedlRat: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   SteerWheelAng: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   SteerWheelSpd: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   ESPFuncOffSts_0x137: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   MSRActv_0x137: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   VDCActv_0x137: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   PTCActv_0x137: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   BTCActv_0x137: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   ESP_DiagActv_0x137: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   DrvDoorSts: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   LRDoorSts: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   PassengerDoorSts: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Checking suppression signals:   RRDoorSts: Γ£à µèæσê╢µ¥íΣ╗╢Σ╕ìµ╗íΦ╢│
+  Analyzing output signals: Analyzing output signals for FCTB from BLF...
+  Analyzing output signals: Target output signals: CR_BrkgReq, CR_BrkgReqVal, 
+FCTBTrig, FCTA_Warn, FCTA_B_FuncSts, CR_FCTB_Resp, CR_FCTA_Resp, CR_ErrSts
+  params: Scanning ADAS thresholds and running sensitivity analysis...
+  params: Parameters scanned: 10, observable: 7
+  params: What-if evaluation: 1 proposal(s) evaluated
+  Expert panel diagnosis: Launching expert panel (5 experts, 3 rounds)...
+  Expert panel: Round 1/3: 5Σ╜ìΣ╕ôσ«╢σ╣╢σÅæσêåµ₧É (fail_type=σà╢Σ╗ûOTHER)...
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 36039
+completion_tokens : 1993
+total_tokens      : 38032  (29.0% of 131K context)
+elapsed           : 96.89s
+generation speed  : 20.6 tok/s
+overall throughput: 392.5 tok/s
+response preview  : 
+
+## TPE Σ╕ÇΦç┤µÇº
+µùáτ¢╕σà│ΦºªσÅæµ¿íσ╝Å (µ£¼µ¼íΣ╕║σÅéµò░Φ░âΣ╝ÿΘ¬îΦ»üΣ╗╗σèí∩╝îΘ¥₧µòàΘÜ£Φ»èµû¡σ£║µÖ»)
+
+---
+
+## µ¥íΣ╗╢µúÇµƒÑΦí¿
+
+| µ¥íΣ╗╢ | ΘÿêσÇ╝/Φªüµ▒é | µò░µì«σ«₧ΘÖàσÇ╝ | µ╗íΦ╢│∩╝ƒ | σ»╣σ║öΣ╗úτáüΣ╜ìτ╜« |
+|------|-----------|---...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel:   ΓÜÖ∩╕Å τ«ùµ│òΘÇ╗Φ╛æΣ╕ôσ«╢ σ«îµêÉ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 25358
+completion_tokens : 4374
+total_tokens      : 29732  (22.7% of 131K context)
+elapsed           : 162.88s
+generation speed  : 26.9 tok/s
+overall throughput: 182.5 tok/s
+response preview  : 
+
+**TPE Σ╕ÇΦç┤µÇº**: µùáτï¼τ½ï TPE µûçΣ╗╢∩╝îσƒ║Σ║Äµ╡ïΦ»òτ¬ùσÅúΣ║ïΣ╗╢µùÑσ┐ùσêåµ₧ÉπÇé
+- **ΦºªσÅæµ¿íσ╝Å**: `warning_edge_on/off` Θóæτ╣üµêÉσ»╣σç║τÄ░∩╝êσªéτ¬ùσÅú 2, 3, 6, 7, 8, 10, 14∩╝ë∩╝îΘâ¿σêåσÉîσ╕ºΦ╖│σÅÿ∩╝êt=177...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel:   ≡ƒôí µ₧╢µ₧äΣ╕ôσ«╢ σ«îµêÉ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 37142
+completion_tokens : 5701
+total_tokens      : 42843  (32.7% of 131K context)
+elapsed           : 200.46s
+generation speed  : 28.4 tok/s
+overall throughput: 213.7 tok/s
+response preview  : 
+
+**TPE Σ╕ÇΦç┤µÇº**: µ£¼µ¼íΦ╛ôσàÑµ£¬µÅÉΣ╛¢µáçσçå TPE (Trigger Pattern Evidence) µ«╡ΦÉ╜∩╝îΣ╛¥µì«πÇîµò░µì«µù╢Θù┤τ║┐πÇìΣ╕¡τÜä `warning_edge_on/off` Σ║ïΣ╗╢µ╡üσÅè `state_change` µù╢σ║ÅΣ╜£Σ╕║ΦºªσÅæµ¿í...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel:   ≡ƒöù Σ┐íσÅ╖Θô╛Φ╖»Σ╕ôσ«╢ σ«îµêÉ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 43108
+completion_tokens : 5719
+total_tokens      : 48827  (37.3% of 131K context)
+elapsed           : 200.65s
+generation speed  : 28.5 tok/s
+overall throughput: 243.3 tok/s
+response preview  : 
+
+**TPE Σ╕ÇΦç┤µÇº**: µùáτï¼τ½ï TPE µûçΣ╗╢∩╝îΣ╛¥µì«πÇîµò░µì«µù╢Θù┤τ║┐πÇìΣ╕¡Θ½ÿΘóæ `warning_edge_on`/`warning_edge_off` σ»╣σü╢Σ║ïΣ╗╢∩╝êσªé t=400.99s, 413.08s, 417.55s, 454.91s ...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel:   ≡ƒæü∩╕Å µäƒτƒÑΣ╕Äτ¢«µáçΣ╕ôσ«╢ σ«îµêÉ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 32465
+completion_tokens : 6195
+total_tokens      : 38660  (29.5% of 131K context)
+elapsed           : 211.71s
+generation speed  : 29.3 tok/s
+overall throughput: 182.6 tok/s
+response preview  : 
+
+**TPE Σ╕ÇΦç┤µÇº**: 
+µ£¬µÅÉΣ╛¢µáçσçå TPE µ¿íσ╝ÅµûçΣ╗╢∩╝îΣ╛¥µì«**µ╡ïΦ»òτ¬ùσÅú**Σ║ïΣ╗╢µù╢σ║ÅΦ┐¢Φíîτ¡ëµòêσêåµ₧ÉπÇé
+- **τ¬ùσÅú 1 (400.99s)**: FCTB µèÑΦ¡ªΦºªσÅæ (`warning_edge_on`)∩╝îΣ╜åµ¡ñµù╢ `fctb_syste...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel:   ≡ƒöä τ│╗τ╗ƒτè╢µÇüΣ╕ôσ«╢ σ«îµêÉ
+  Expert panel: Round 1/3: σ«îµêÉ (211.7s, 5Σ╜ìΣ╕ôσ«╢σ╣╢σÅæ)
+  Expert panel: Round 2/3: Σ║ñσÅëσ«íµƒÑΣ╕ÄΦ┤¿τûæ...
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 10447
+completion_tokens : 3729
+total_tokens      : 14176  (10.8% of 131K context)
+elapsed           : 89.17s
+generation speed  : 41.8 tok/s
+overall throughput: 159.0 tok/s
+response preview  : 
+
+{
+  "contradictions": [
+    "τö¿µê╖µ£ƒµ£¢Σ╕ÄΘÇ╗Φ╛æτƒ¢τ¢╛∩╝Üτö¿µê╖µ£ƒµ£¢ΘÿêσÇ╝Φ░âσñº∩╝ê1.0ΓåÆ1.5∩╝ëΦâ╜ΘÖìΣ╜ÄΦºªσÅæΘóæτÄç∩╝îΣ╜åτ«ùµ│ò/Σ┐íσÅ╖/µ₧╢µ₧äΣ╕ôσ«╢σ¥çµîçσç║ TTMX<=Threshold τÜäΘÇ╗Φ╛æµäÅσæ│τ¥ÇΦ░âσñºΘÿêσÇ╝Σ╝Üµë⌐σñºΦºªσÅæΦîâσ¢┤∩╝îτÉåΦ«║ΦºªσÅæτÄç...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel: Round 2/3: 5Σ╜ìΣ╕ôσ«╢σ╣╢σÅæσ¢₧σ║öΦ┤¿τûæ...
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 17352
+completion_tokens : 1804
+total_tokens      : 19156  (14.6% of 131K context)
+elapsed           : 81.47s
+generation speed  : 22.1 tok/s
+overall throughput: 235.1 tok/s
+response preview  : 
+
+σƒ║Σ║Ä `adasFunc.c` µ║ÉτáüΣ╕Äµò░µì«σêåµ₧É∩╝Ü
+
+1.  **Θÿ▓µèûΦ«íµò░σÖ¿σ¡ÿσ£¿µÇº**∩╝Ü**µùá**πÇéσ»╣µ»ö BSD/RCTA σèƒΦâ╜σ«ÜΣ╣ëµ£ë `...Buffer[]` σÆî `KeepWarnFrm` σÅÿΘçÅ∩╝îFCTB µ«╡Σ╗àσ«ÜΣ╣ë `bFctbLe...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 15479
+completion_tokens : 2263
+total_tokens      : 17742  (13.5% of 131K context)
+elapsed           : 93.67s
+generation speed  : 24.2 tok/s
+overall throughput: 189.4 tok/s
+response preview  : 
+
+1. **µò░µì«µ¥Ñµ║Éτí«Φ«ñ**: µ╡ïΦ»òτ¬ùσÅúσåàµèÑΦ¡ªΣ╕╗Φªüµ║ÉΦç¬ **Front-Right (radar=2)**∩╝îσìáµ»ö >90%∩╝îσ╖ªΣ╛º (radar=1) Σ╗àσü╢σÅæπÇéσ╖ªσÅ│µò░µì«µ║Éσ£¿σ£║µÖ»σêåσ╕âΣ╕èσæêµÿ╛ΦæùΣ╕ìσ»╣τº░∩╝îΘ¥₧σÉîµ¡ÑΦºªσÅæπÇé
+
+2. **σÉêσ╣╢Σ╗▓ΦúüΘÇ╗Φ╛æµúÇµƒÑ*...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 20647
+completion_tokens : 2265
+total_tokens      : 22912  (17.5% of 131K context)
+elapsed           : 93.75s
+generation speed  : 24.2 tok/s
+overall throughput: 244.4 tok/s
+response preview  : 
+
+**σ¢₧τ¡öΦ┐╜Θù«∩╝ÜBLF Σ╕¡ TTMX σ║ÅσêùµÅÉσÅûσÅ»ΦíîµÇºΣ╕Äσêåσ╕âτ╗ƒΦ«í**
+
+1.  **µÅÉσÅûσÅ»ΦíîµÇºΣ┐«µ¡ú**∩╝Ü
+    µá╣µì«πÇîµ¥íΣ╗╢µúÇµƒÑΦí¿πÇìσÅèΣ┐íσÅ╖Θô╛Φ╖»σêåµ₧É∩╝î`radar_objects` Σ╕¡**µùáτ¢┤µÄÑ `trc_N_ttm_x` σ¡ùµ«╡**πÇéµ¡ñσëìσêåµ₧É...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 16740
+completion_tokens : 2981
+total_tokens      : 19721  (15.0% of 131K context)
+elapsed           : 111.63s
+generation speed  : 26.7 tok/s
+overall throughput: 176.7 tok/s
+response preview  : 
+
+**µ₧üµÇºτí«Φ«ñ**: µùáσÅìΦ╜¼πÇéµîë `ESP_FD2.AEBBAActv_0x137` σæ╜σÉìΦºäΦîâσÅèΘÇÜτö¿ CAN ΘÇ╗Φ╛æ∩╝î`1=Active`∩╝îµ║ÉτáüΣ╕¡µ£¬Φºüµÿ╛σ╝ÅσÅûσÅìµôìΣ╜£∩╝êσªé `!u8tmp`∩╝ë∩╝îµÿáσ░äΦç│ `g_DTCCode.bAEBBAActiv...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 14994
+completion_tokens : 3533
+total_tokens      : 18527  (14.1% of 131K context)
+elapsed           : 124.49s
+generation speed  : 28.4 tok/s
+overall throughput: 148.8 tok/s
+response preview  : 
+
+**σ¢₧τ¡ö∩╝Ü** µäƒτƒÑσ▒éΦ¡ªσæèµáçσ┐ùΣ╝Üτï¼τ½ïτöƒµêÉ∩╝îΣ╜åµ£Çτ╗êΦ╛ôσç║σÅù `ASWIN_SystemState` σà¿σ▒Çτè╢µÇüΣ╕Ñµá╝Θù¿µÄºπÇé
+
+1.  **µù╢σ║Åσ╖«σ╝é**∩╝Üτ¬ùσÅú 1 µÿ╛τñ║ `warning_edge_on` σÅæτöƒΣ║Ä 400.99s∩╝îΦÇî `fctb_...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Expert panel: Round 2/3: σ¢₧σ║öσ«îµêÉ (124.5s)
+  Expert panel: Round 3/3: τ╗╝σÉêµö╢µò¢∩╝îσ╜óµêÉµ£Çτ╗êΦ»èµû¡...
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[Qwen3.5-27B-FP16]  complexity=complex  finish=stop
+prompt_tokens     : 13427
+completion_tokens : 3912
+total_tokens      : 17339  (13.2% of 131K context)
+elapsed           : 95.50s
+generation speed  : 41.0 tok/s
+overall throughput: 181.6 tok/s
+response preview  : 
+
+### µá╣σ¢á
+σ╜ôσëì `fFctbObjWarningBaseTTMX` (1.0s) σñäΣ║Äτ¢«µáç TTMX σÖ¬σú░µ│óσè¿σ╕ª (µÄ¿µû¡ 0.95s~1.10s)∩╝îσ»╝Φç┤ `adasFunc.c:FctbUpdateSystemStatus` Σ╕¡τÜäΘÿê...
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Generating report: Generating report...
+  visualize: Rendering HTML visualization...
+  visualize: HTML report: 
+D:\RamboStar\idea\radarAnalyze\cases\FCATB_TUNE_TEST\report.html (charts=6)

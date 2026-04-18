@@ -1,0 +1,1564 @@
+{
+  "source_hash": "f7a04c826fcaf9fc",
+  "source_file": "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
+  "mapping_count": 91,
+  "mappings": [
+    {
+      "can_signal": "SteerWheelSpd",
+      "internal_var": "SteerWheelSpd",
+      "internal_full_path": "AdasStM.SteerWheelSpd",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SteerWheelSpd",
+      "internal_var": "egoSteeringWheelSpd",
+      "internal_full_path": "PEROutput.objEDRInfo.egoSteeringWheelSpd",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehSpd_0x137",
+      "internal_var": "actual_spd",
+      "internal_full_path": "VehcleInfoUpdate.actual_spd",
+      "transform": "ftmp * System_Kmh2ms",
+      "scaling": "*System_Kmh2ms",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehSpd_0x137",
+      "internal_var": "egoVx",
+      "internal_full_path": "PEROutput.objEDRInfo.egoVx",
+      "transform": "ftmp * System_Kmh2ms",
+      "scaling": "*System_Kmh2ms",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehSpd_0x137",
+      "internal_var": "egoMileage",
+      "internal_full_path": "PEROutput.objEDRInfo.egoMileage",
+      "transform": "ftmp * 0.02f + PEROutput.objEDRInfo.egoMileage",
+      "scaling": "*0.02",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehSpdVld_0x137",
+      "internal_var": "actual_spd_valid",
+      "internal_full_path": "VehcleInfoUpdate.actual_spd_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehYawRate",
+      "internal_var": "yaw_rate",
+      "internal_full_path": "VehcleInfoUpdate.yaw_rate",
+      "transform": "fabsf(ftmp) * System_R2D",
+      "scaling": "*System_R2D",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehYawRate",
+      "internal_var": "yaw_rate_sign",
+      "internal_full_path": "VehcleInfoUpdate.yaw_rate_sign",
+      "transform": "(ftmp > 0.0f) ? 0u : 1u",
+      "scaling": "",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehDynYawRateVld",
+      "internal_var": "yaw_rate_valid",
+      "internal_full_path": "VehcleInfoUpdate.yaw_rate_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehLatAccel",
+      "internal_var": "lat_accel",
+      "internal_full_path": "VehcleInfoUpdate.lat_accel",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehLatAccelVld",
+      "internal_var": "lat_accel_valid",
+      "internal_full_path": "VehcleInfoUpdate.lat_accel_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehLgtAccel",
+      "internal_var": "long_accel",
+      "internal_full_path": "VehcleInfoUpdate.long_accel",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehLgtAccel",
+      "internal_var": "egoAx",
+      "internal_full_path": "PEROutput.objEDRInfo.egoAx",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehLgtAccelVld",
+      "internal_var": "long_accel_valid",
+      "internal_full_path": "VehcleInfoUpdate.long_accel_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SteerWheelAng",
+      "internal_var": "steer_angle",
+      "internal_full_path": "VehcleInfoUpdate.steer_angle",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SteerWheelAng",
+      "internal_var": "egoSteeringWheel",
+      "internal_full_path": "PEROutput.objEDRInfo.egoSteeringWheel",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FLWheelSpd_0x13B",
+      "internal_var": "fl_whl_spd",
+      "internal_full_path": "VehcleInfoUpdate.fl_whl_spd",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FLWheelSpdVld_0x13B",
+      "internal_var": "fl_whl_spd_valid",
+      "internal_full_path": "VehcleInfoUpdate.fl_whl_spd_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FRWheelSpd_0x13B",
+      "internal_var": "fr_whl_spd",
+      "internal_full_path": "VehcleInfoUpdate.fr_whl_spd",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FRWheelSpdVld_0x13B",
+      "internal_var": "fr_whl_spd_valid",
+      "internal_full_path": "VehcleInfoUpdate.fr_whl_spd_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RLWheelSpd_0x13B",
+      "internal_var": "rl_whl_spd",
+      "internal_full_path": "VehcleInfoUpdate.rl_whl_spd",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RLWheelSpdVld_0x13B",
+      "internal_var": "rl_whl_spd_valid",
+      "internal_full_path": "VehcleInfoUpdate.rl_whl_spd_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RRWheelSpd_0x13B",
+      "internal_var": "rr_whl_spd",
+      "internal_full_path": "VehcleInfoUpdate.rr_whl_spd",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RRWheelSpdVld_0x13B",
+      "internal_var": "rr_whl_spd_valid",
+      "internal_full_path": "VehcleInfoUpdate.rr_whl_spd_valid",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RRWheelDriveDirection_0x13B",
+      "internal_var": "Vld_RRWheelDriveDirection",
+      "internal_full_path": "Vld_RRWheelDriveDirection",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RLWheelDriveDirection_0x13B",
+      "internal_var": "Vld_RLWheelDriveDirection",
+      "internal_full_path": "Vld_RLWheelDriveDirection",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FRWheelDriveDirection_0x13B",
+      "internal_var": "Vld_FRWheelDriveDirection",
+      "internal_full_path": "Vld_FRWheelDriveDirection",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FLWheelDriveDirection_0x13B",
+      "internal_var": "Vld_FLWheelDriveDirection",
+      "internal_full_path": "Vld_FLWheelDriveDirection",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SteerWheelAngSign",
+      "internal_var": "steer_angle_sign",
+      "internal_full_path": "VehcleInfoUpdate.steer_angle_sign",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "TGS_LEVER",
+      "internal_var": "Vld_TGS_LEVER",
+      "internal_full_path": "Vld_TGS_LEVER",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "LTurnLmpSwtSts",
+      "internal_var": "turn_light_left",
+      "internal_full_path": "VehcleInfoUpdate.turn_light_left",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RTurnLmpSwtSts",
+      "internal_var": "turn_light_right",
+      "internal_full_path": "VehcleInfoUpdate.turn_light_right",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PassengerDoorSts",
+      "internal_var": "open_door_left_top",
+      "internal_full_path": "VehcleInfoUpdate.open_door_left_top",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "DrvDoorSts",
+      "internal_var": "open_door_right_top",
+      "internal_full_path": "VehcleInfoUpdate.open_door_right_top",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "DrvDoorSts",
+      "internal_var": "open_door_left_top",
+      "internal_full_path": "VehcleInfoUpdate.open_door_left_top",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PassengerDoorSts",
+      "internal_var": "open_door_right_top",
+      "internal_full_path": "VehcleInfoUpdate.open_door_right_top",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "LRDoorSts",
+      "internal_var": "open_door_left_bottom",
+      "internal_full_path": "VehcleInfoUpdate.open_door_left_bottom",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RRDoorSts",
+      "internal_var": "open_door_right_bottom",
+      "internal_full_path": "VehcleInfoUpdate.open_door_right_bottom",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "LCASwtReq",
+      "internal_var": "bBSDEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bBSDEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "LCASwtReq",
+      "internal_var": "bLCAEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bLCAEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "DOWSwtReq",
+      "internal_var": "bDOWEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bDOWEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCWSwtReq",
+      "internal_var": "bRCWEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bRCWEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCTABrkSwtReq",
+      "internal_var": "bRCTAEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bRCTAEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCTABrkSwtReq",
+      "internal_var": "bRCTBEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bRCTBEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCTASwtReq",
+      "internal_var": "bRCTAEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bRCTAEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCTABrkSwtReq",
+      "internal_var": "bRCTBEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bRCTBEnable",
+      "transform": "((u8tmp == 1) ? TRUE : FALSE)",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FCTABrkSwtReq",
+      "internal_var": "bFCTAEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bFCTAEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FCTABrkSwtReq",
+      "internal_var": "bFCTBEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bFCTBEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FCTASwtReq",
+      "internal_var": "bFCTAEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bFCTAEnable",
+      "transform": "(u8tmp == 1) ? TRUE : FALSE",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "FCTABrkSwtReq",
+      "internal_var": "bFCTBEnable",
+      "internal_full_path": "PERInputUpdate.adasEnable.bFCTBEnable",
+      "transform": "((u8tmp == 1) ? TRUE : FALSE)",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "Time_Year_Right",
+      "internal_var": "egoYear",
+      "internal_full_path": "PEROutput.objEDRInfo.egoYear",
+      "transform": "((u8tmp_TL & 0xF) << 4) | (u8tmp_TR & 0xF)",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "Time_Month",
+      "internal_var": "egoMonth",
+      "internal_full_path": "PEROutput.objEDRInfo.egoMonth",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "Time_Day",
+      "internal_var": "egoDay",
+      "internal_full_path": "PEROutput.objEDRInfo.egoDay",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "Time_Hour",
+      "internal_var": "egoHour",
+      "internal_full_path": "PEROutput.objEDRInfo.egoHour",
+      "transform": "(u8tmp <= 23) ? u8tmp : 0",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "Time_Minutes",
+      "internal_var": "egoMinute",
+      "internal_full_path": "PEROutput.objEDRInfo.egoMinute",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "Time_Second",
+      "internal_var": "egoSecond",
+      "internal_full_path": "PEROutput.objEDRInfo.egoSecond",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "DrvDoorSts",
+      "internal_var": "DrvDoorSts",
+      "internal_full_path": "AdasStM.DrvDoorSts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "LRDoorSts",
+      "internal_var": "LRDoorSts",
+      "internal_full_path": "AdasStM.LRDoorSts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PassengerDoorSts",
+      "internal_var": "PassengerDoorSts",
+      "internal_full_path": "AdasStM.PassengerDoorSts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RRDoorSts",
+      "internal_var": "RRDoorSts",
+      "internal_full_path": "AdasStM.RRDoorSts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "ESPFuncOffSts_0x137",
+      "internal_var": "ESPFUN",
+      "internal_full_path": "AdasStM.ESPFUN",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "TrailerSts",
+      "internal_var": "TrailerSts",
+      "internal_full_path": "AdasStM.TrailerSts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "TrailerSts",
+      "internal_var": "TrailerSts",
+      "internal_full_path": "AdasStM.TrailerSts",
+      "transform": "0",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "ESP_DiagActv_0x137",
+      "internal_var": "ESPDiagActv",
+      "internal_full_path": "AdasStM.ESPDiagActv",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "MSRActv_0x137",
+      "internal_var": "MSRActv",
+      "internal_full_path": "AdasStM.MSRActv",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "MSRActv_RA_0x137",
+      "internal_var": "MSRActv_RA",
+      "internal_full_path": "AdasStM.MSRActv_RA",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VDCActv_0x137",
+      "internal_var": "VDCActv",
+      "internal_full_path": "AdasStM.VDCActv",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PTCActv_0x137",
+      "internal_var": "PTCActv",
+      "internal_full_path": "AdasStM.PTCActv",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "BTCActv_0x137",
+      "internal_var": "BTCActv",
+      "internal_full_path": "AdasStM.BTCActv",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PTCActv_RA_0x137",
+      "internal_var": "PTCActv_RA",
+      "internal_full_path": "AdasStM.PTCActv_RA",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "BTCActv_RA_0x137",
+      "internal_var": "BTCActv_RA",
+      "internal_full_path": "AdasStM.BTCActv_RA",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VCU_ActAccrPedlRat",
+      "internal_var": "AccPedPosDiag",
+      "internal_full_path": "AdasStM.AccPedPosDiag",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VCU_ActAccrPedlRat",
+      "internal_var": "egoAccelPedalPos",
+      "internal_full_path": "PEROutput.objEDRInfo.egoAccelPedalPos",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VCU_ActAccrPedlRat",
+      "internal_var": "egoAccelPedalPosDiagc",
+      "internal_full_path": "PEROutput.objEDRInfo.egoAccelPedalPosDiagc",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PushrodStauts",
+      "internal_var": "PushrodStauts",
+      "internal_full_path": "AdasStM.PushrodStauts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "PushrodStauts",
+      "internal_var": "egoBrakePedalPos",
+      "internal_full_path": "PEROutput.objEDRInfo.egoBrakePedalPos",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SysPowerMod",
+      "internal_var": "SysPowerMod",
+      "internal_full_path": "AdasStM.SysPowerMod",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SysPowerMod",
+      "internal_var": "SysPowerMod",
+      "internal_full_path": "SysselfTestMgr.SysPowerMod",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "AEBBAActv_0x137",
+      "internal_var": "bAEBBAActiveFlg",
+      "internal_full_path": "PERInputCapture.DTCCode.bAEBBAActiveFlg",
+      "transform": "bool",
+      "scaling": "bool",
+      "data_type": "bool",
+      "direction": "read"
+    },
+    {
+      "can_signal": "AEBIBActv_0x137",
+      "internal_var": "bAEBIBActiveFlg",
+      "internal_full_path": "PERInputCapture.DTCCode.bAEBIBActiveFlg",
+      "transform": "bool",
+      "scaling": "bool",
+      "data_type": "bool",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SysPowerModVld",
+      "internal_var": "SysPowerModVld",
+      "internal_full_path": "AdasStM.SysPowerModVld",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RSDS_Pass_LED_Sts",
+      "internal_var": "Vld_RSDS_Pass_LED_Sts",
+      "internal_full_path": "Vld_RSDS_Pass_LED_Sts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RSDS_Driver_LED_Sts",
+      "internal_var": "Vld_RSDS_Driver_LED_Sts",
+      "internal_full_path": "Vld_RSDS_Driver_LED_Sts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "ESPFailSts_0x137",
+      "internal_var": "Vld_ESPFailSts",
+      "internal_full_path": "Vld_ESPFailSts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VehStandstill_0x137",
+      "internal_var": "Vld_VehStandstill",
+      "internal_full_path": "Vld_VehStandstill",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "ESP_MasterCylBrkPress_0x137",
+      "internal_var": "Vld_ESP_MasterCylBrkPress",
+      "internal_full_path": "Vld_ESP_MasterCylBrkPress",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "float",
+      "direction": "read"
+    },
+    {
+      "can_signal": "ESP_MasterCylBrkPressVld_0x137",
+      "internal_var": "Vld_ESP_MasterCylBrkPressVld",
+      "internal_full_path": "Vld_ESP_MasterCylBrkPressVld",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "SAS_Sts",
+      "internal_var": "Vld_SAS_Sts",
+      "internal_full_path": "Vld_SAS_Sts",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "VCU_APedlPosVld",
+      "internal_var": "Vld_VCU_APedlPosVld",
+      "internal_full_path": "Vld_VCU_APedlPosVld",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCTA_B__L__TTC_0x301_RX",
+      "internal_var": "rcta_b_ttc_min",
+      "internal_full_path": "rcta_b_ttc_min",
+      "transform": "passthrough",
+      "scaling": "1:1",
+      "data_type": "uint8",
+      "direction": "read"
+    },
+    {
+      "can_signal": "RCTA_B__L__TTC_0x301_RX",
+      "internal_var": "has_valid_value",
+      "internal_full_path": "has_valid_value",
+      "transform": "true",
+      "scaling": "",
+      "data_type": "uint8",
+      "direction": "read"
+    }
+  ],
+  "internal_to_can": {
+    "SteerWheelSpd": [
+      "SteerWheelSpd"
+    ],
+    "egoSteeringWheelSpd": [
+      "SteerWheelSpd"
+    ],
+    "actual_spd": [
+      "VehSpd_0x137"
+    ],
+    "egoVx": [
+      "VehSpd_0x137"
+    ],
+    "egoMileage": [
+      "VehSpd_0x137"
+    ],
+    "actual_spd_valid": [
+      "VehSpdVld_0x137"
+    ],
+    "yaw_rate": [
+      "VehYawRate"
+    ],
+    "yaw_rate_sign": [
+      "VehYawRate"
+    ],
+    "yaw_rate_valid": [
+      "VehDynYawRateVld"
+    ],
+    "lat_accel": [
+      "VehLatAccel"
+    ],
+    "lat_accel_valid": [
+      "VehLatAccelVld"
+    ],
+    "long_accel": [
+      "VehLgtAccel"
+    ],
+    "egoAx": [
+      "VehLgtAccel"
+    ],
+    "long_accel_valid": [
+      "VehLgtAccelVld"
+    ],
+    "steer_angle": [
+      "SteerWheelAng"
+    ],
+    "egoSteeringWheel": [
+      "SteerWheelAng"
+    ],
+    "fl_whl_spd": [
+      "FLWheelSpd_0x13B"
+    ],
+    "fl_whl_spd_valid": [
+      "FLWheelSpdVld_0x13B"
+    ],
+    "fr_whl_spd": [
+      "FRWheelSpd_0x13B"
+    ],
+    "fr_whl_spd_valid": [
+      "FRWheelSpdVld_0x13B"
+    ],
+    "rl_whl_spd": [
+      "RLWheelSpd_0x13B"
+    ],
+    "rl_whl_spd_valid": [
+      "RLWheelSpdVld_0x13B"
+    ],
+    "rr_whl_spd": [
+      "RRWheelSpd_0x13B"
+    ],
+    "rr_whl_spd_valid": [
+      "RRWheelSpdVld_0x13B"
+    ],
+    "Vld_RRWheelDriveDirection": [
+      "RRWheelDriveDirection_0x13B"
+    ],
+    "Vld_RLWheelDriveDirection": [
+      "RLWheelDriveDirection_0x13B"
+    ],
+    "Vld_FRWheelDriveDirection": [
+      "FRWheelDriveDirection_0x13B"
+    ],
+    "Vld_FLWheelDriveDirection": [
+      "FLWheelDriveDirection_0x13B"
+    ],
+    "steer_angle_sign": [
+      "SteerWheelAngSign"
+    ],
+    "Vld_TGS_LEVER": [
+      "TGS_LEVER"
+    ],
+    "turn_light_left": [
+      "LTurnLmpSwtSts"
+    ],
+    "turn_light_right": [
+      "RTurnLmpSwtSts"
+    ],
+    "open_door_left_top": [
+      "PassengerDoorSts",
+      "DrvDoorSts"
+    ],
+    "open_door_right_top": [
+      "DrvDoorSts",
+      "PassengerDoorSts"
+    ],
+    "open_door_left_bottom": [
+      "LRDoorSts"
+    ],
+    "open_door_right_bottom": [
+      "RRDoorSts"
+    ],
+    "bBSDEnable": [
+      "LCASwtReq"
+    ],
+    "bLCAEnable": [
+      "LCASwtReq"
+    ],
+    "bDOWEnable": [
+      "DOWSwtReq"
+    ],
+    "bRCWEnable": [
+      "RCWSwtReq"
+    ],
+    "bRCTAEnable": [
+      "RCTABrkSwtReq",
+      "RCTASwtReq"
+    ],
+    "bRCTBEnable": [
+      "RCTABrkSwtReq"
+    ],
+    "bFCTAEnable": [
+      "FCTABrkSwtReq",
+      "FCTASwtReq"
+    ],
+    "bFCTBEnable": [
+      "FCTABrkSwtReq"
+    ],
+    "egoYear": [
+      "Time_Year_Right"
+    ],
+    "egoMonth": [
+      "Time_Month"
+    ],
+    "egoDay": [
+      "Time_Day"
+    ],
+    "egoHour": [
+      "Time_Hour"
+    ],
+    "egoMinute": [
+      "Time_Minutes"
+    ],
+    "egoSecond": [
+      "Time_Second"
+    ],
+    "DrvDoorSts": [
+      "DrvDoorSts"
+    ],
+    "LRDoorSts": [
+      "LRDoorSts"
+    ],
+    "PassengerDoorSts": [
+      "PassengerDoorSts"
+    ],
+    "RRDoorSts": [
+      "RRDoorSts"
+    ],
+    "ESPFUN": [
+      "ESPFuncOffSts_0x137"
+    ],
+    "TrailerSts": [
+      "TrailerSts"
+    ],
+    "ESPDiagActv": [
+      "ESP_DiagActv_0x137"
+    ],
+    "MSRActv": [
+      "MSRActv_0x137"
+    ],
+    "MSRActv_RA": [
+      "MSRActv_RA_0x137"
+    ],
+    "VDCActv": [
+      "VDCActv_0x137"
+    ],
+    "PTCActv": [
+      "PTCActv_0x137"
+    ],
+    "BTCActv": [
+      "BTCActv_0x137"
+    ],
+    "PTCActv_RA": [
+      "PTCActv_RA_0x137"
+    ],
+    "BTCActv_RA": [
+      "BTCActv_RA_0x137"
+    ],
+    "AccPedPosDiag": [
+      "VCU_ActAccrPedlRat"
+    ],
+    "egoAccelPedalPos": [
+      "VCU_ActAccrPedlRat"
+    ],
+    "egoAccelPedalPosDiagc": [
+      "VCU_ActAccrPedlRat"
+    ],
+    "PushrodStauts": [
+      "PushrodStauts"
+    ],
+    "egoBrakePedalPos": [
+      "PushrodStauts"
+    ],
+    "SysPowerMod": [
+      "SysPowerMod"
+    ],
+    "bAEBBAActiveFlg": [
+      "AEBBAActv_0x137"
+    ],
+    "bAEBIBActiveFlg": [
+      "AEBIBActv_0x137"
+    ],
+    "SysPowerModVld": [
+      "SysPowerModVld"
+    ],
+    "Vld_RSDS_Pass_LED_Sts": [
+      "RSDS_Pass_LED_Sts"
+    ],
+    "Vld_RSDS_Driver_LED_Sts": [
+      "RSDS_Driver_LED_Sts"
+    ],
+    "Vld_ESPFailSts": [
+      "ESPFailSts_0x137"
+    ],
+    "Vld_VehStandstill": [
+      "VehStandstill_0x137"
+    ],
+    "Vld_ESP_MasterCylBrkPress": [
+      "ESP_MasterCylBrkPress_0x137"
+    ],
+    "Vld_ESP_MasterCylBrkPressVld": [
+      "ESP_MasterCylBrkPressVld_0x137"
+    ],
+    "Vld_SAS_Sts": [
+      "SAS_Sts"
+    ],
+    "Vld_VCU_APedlPosVld": [
+      "VCU_APedlPosVld"
+    ],
+    "rcta_b_ttc_min": [
+      "RCTA_B__L__TTC_0x301_RX"
+    ],
+    "has_valid_value": [
+      "RCTA_B__L__TTC_0x301_RX"
+    ]
+  },
+  "can_to_internal": {
+    "SteerWheelSpd": [
+      "SteerWheelSpd",
+      "egoSteeringWheelSpd"
+    ],
+    "VehSpd_0x137": [
+      "actual_spd",
+      "egoVx",
+      "egoMileage"
+    ],
+    "VehSpdVld_0x137": [
+      "actual_spd_valid"
+    ],
+    "VehYawRate": [
+      "yaw_rate",
+      "yaw_rate_sign"
+    ],
+    "VehDynYawRateVld": [
+      "yaw_rate_valid"
+    ],
+    "VehLatAccel": [
+      "lat_accel"
+    ],
+    "VehLatAccelVld": [
+      "lat_accel_valid"
+    ],
+    "VehLgtAccel": [
+      "long_accel",
+      "egoAx"
+    ],
+    "VehLgtAccelVld": [
+      "long_accel_valid"
+    ],
+    "SteerWheelAng": [
+      "steer_angle",
+      "egoSteeringWheel"
+    ],
+    "FLWheelSpd_0x13B": [
+      "fl_whl_spd"
+    ],
+    "FLWheelSpdVld_0x13B": [
+      "fl_whl_spd_valid"
+    ],
+    "FRWheelSpd_0x13B": [
+      "fr_whl_spd"
+    ],
+    "FRWheelSpdVld_0x13B": [
+      "fr_whl_spd_valid"
+    ],
+    "RLWheelSpd_0x13B": [
+      "rl_whl_spd"
+    ],
+    "RLWheelSpdVld_0x13B": [
+      "rl_whl_spd_valid"
+    ],
+    "RRWheelSpd_0x13B": [
+      "rr_whl_spd"
+    ],
+    "RRWheelSpdVld_0x13B": [
+      "rr_whl_spd_valid"
+    ],
+    "RRWheelDriveDirection_0x13B": [
+      "Vld_RRWheelDriveDirection"
+    ],
+    "RLWheelDriveDirection_0x13B": [
+      "Vld_RLWheelDriveDirection"
+    ],
+    "FRWheelDriveDirection_0x13B": [
+      "Vld_FRWheelDriveDirection"
+    ],
+    "FLWheelDriveDirection_0x13B": [
+      "Vld_FLWheelDriveDirection"
+    ],
+    "SteerWheelAngSign": [
+      "steer_angle_sign"
+    ],
+    "TGS_LEVER": [
+      "Vld_TGS_LEVER"
+    ],
+    "LTurnLmpSwtSts": [
+      "turn_light_left"
+    ],
+    "RTurnLmpSwtSts": [
+      "turn_light_right"
+    ],
+    "PassengerDoorSts": [
+      "open_door_left_top",
+      "open_door_right_top",
+      "PassengerDoorSts"
+    ],
+    "DrvDoorSts": [
+      "open_door_right_top",
+      "open_door_left_top",
+      "DrvDoorSts"
+    ],
+    "LRDoorSts": [
+      "open_door_left_bottom",
+      "LRDoorSts"
+    ],
+    "RRDoorSts": [
+      "open_door_right_bottom",
+      "RRDoorSts"
+    ],
+    "LCASwtReq": [
+      "bBSDEnable",
+      "bLCAEnable"
+    ],
+    "DOWSwtReq": [
+      "bDOWEnable"
+    ],
+    "RCWSwtReq": [
+      "bRCWEnable"
+    ],
+    "RCTABrkSwtReq": [
+      "bRCTAEnable",
+      "bRCTBEnable"
+    ],
+    "RCTASwtReq": [
+      "bRCTAEnable"
+    ],
+    "FCTABrkSwtReq": [
+      "bFCTAEnable",
+      "bFCTBEnable"
+    ],
+    "FCTASwtReq": [
+      "bFCTAEnable"
+    ],
+    "Time_Year_Right": [
+      "egoYear"
+    ],
+    "Time_Month": [
+      "egoMonth"
+    ],
+    "Time_Day": [
+      "egoDay"
+    ],
+    "Time_Hour": [
+      "egoHour"
+    ],
+    "Time_Minutes": [
+      "egoMinute"
+    ],
+    "Time_Second": [
+      "egoSecond"
+    ],
+    "ESPFuncOffSts_0x137": [
+      "ESPFUN"
+    ],
+    "TrailerSts": [
+      "TrailerSts"
+    ],
+    "ESP_DiagActv_0x137": [
+      "ESPDiagActv"
+    ],
+    "MSRActv_0x137": [
+      "MSRActv"
+    ],
+    "MSRActv_RA_0x137": [
+      "MSRActv_RA"
+    ],
+    "VDCActv_0x137": [
+      "VDCActv"
+    ],
+    "PTCActv_0x137": [
+      "PTCActv"
+    ],
+    "BTCActv_0x137": [
+      "BTCActv"
+    ],
+    "PTCActv_RA_0x137": [
+      "PTCActv_RA"
+    ],
+    "BTCActv_RA_0x137": [
+      "BTCActv_RA"
+    ],
+    "VCU_ActAccrPedlRat": [
+      "AccPedPosDiag",
+      "egoAccelPedalPos",
+      "egoAccelPedalPosDiagc"
+    ],
+    "PushrodStauts": [
+      "PushrodStauts",
+      "egoBrakePedalPos"
+    ],
+    "SysPowerMod": [
+      "SysPowerMod"
+    ],
+    "AEBBAActv_0x137": [
+      "bAEBBAActiveFlg"
+    ],
+    "AEBIBActv_0x137": [
+      "bAEBIBActiveFlg"
+    ],
+    "SysPowerModVld": [
+      "SysPowerModVld"
+    ],
+    "RSDS_Pass_LED_Sts": [
+      "Vld_RSDS_Pass_LED_Sts"
+    ],
+    "RSDS_Driver_LED_Sts": [
+      "Vld_RSDS_Driver_LED_Sts"
+    ],
+    "ESPFailSts_0x137": [
+      "Vld_ESPFailSts"
+    ],
+    "VehStandstill_0x137": [
+      "Vld_VehStandstill"
+    ],
+    "ESP_MasterCylBrkPress_0x137": [
+      "Vld_ESP_MasterCylBrkPress"
+    ],
+    "ESP_MasterCylBrkPressVld_0x137": [
+      "Vld_ESP_MasterCylBrkPressVld"
+    ],
+    "SAS_Sts": [
+      "Vld_SAS_Sts"
+    ],
+    "VCU_APedlPosVld": [
+      "Vld_VCU_APedlPosVld"
+    ],
+    "RCTA_B__L__TTC_0x301_RX": [
+      "rcta_b_ttc_min",
+      "has_valid_value"
+    ]
+  },
+  "fullpath_to_can": {
+    "AdasStM.SteerWheelSpd": [
+      "SteerWheelSpd"
+    ],
+    "PEROutput.objEDRInfo.egoSteeringWheelSpd": [
+      "SteerWheelSpd"
+    ],
+    "VehcleInfoUpdate.actual_spd": [
+      "VehSpd_0x137"
+    ],
+    "PEROutput.objEDRInfo.egoVx": [
+      "VehSpd_0x137"
+    ],
+    "PEROutput.objEDRInfo.egoMileage": [
+      "VehSpd_0x137"
+    ],
+    "VehcleInfoUpdate.actual_spd_valid": [
+      "VehSpdVld_0x137"
+    ],
+    "VehcleInfoUpdate.yaw_rate": [
+      "VehYawRate"
+    ],
+    "VehcleInfoUpdate.yaw_rate_sign": [
+      "VehYawRate"
+    ],
+    "VehcleInfoUpdate.yaw_rate_valid": [
+      "VehDynYawRateVld"
+    ],
+    "VehcleInfoUpdate.lat_accel": [
+      "VehLatAccel"
+    ],
+    "VehcleInfoUpdate.lat_accel_valid": [
+      "VehLatAccelVld"
+    ],
+    "VehcleInfoUpdate.long_accel": [
+      "VehLgtAccel"
+    ],
+    "PEROutput.objEDRInfo.egoAx": [
+      "VehLgtAccel"
+    ],
+    "VehcleInfoUpdate.long_accel_valid": [
+      "VehLgtAccelVld"
+    ],
+    "VehcleInfoUpdate.steer_angle": [
+      "SteerWheelAng"
+    ],
+    "PEROutput.objEDRInfo.egoSteeringWheel": [
+      "SteerWheelAng"
+    ],
+    "VehcleInfoUpdate.fl_whl_spd": [
+      "FLWheelSpd_0x13B"
+    ],
+    "VehcleInfoUpdate.fl_whl_spd_valid": [
+      "FLWheelSpdVld_0x13B"
+    ],
+    "VehcleInfoUpdate.fr_whl_spd": [
+      "FRWheelSpd_0x13B"
+    ],
+    "VehcleInfoUpdate.fr_whl_spd_valid": [
+      "FRWheelSpdVld_0x13B"
+    ],
+    "VehcleInfoUpdate.rl_whl_spd": [
+      "RLWheelSpd_0x13B"
+    ],
+    "VehcleInfoUpdate.rl_whl_spd_valid": [
+      "RLWheelSpdVld_0x13B"
+    ],
+    "VehcleInfoUpdate.rr_whl_spd": [
+      "RRWheelSpd_0x13B"
+    ],
+    "VehcleInfoUpdate.rr_whl_spd_valid": [
+      "RRWheelSpdVld_0x13B"
+    ],
+    "Vld_RRWheelDriveDirection": [
+      "RRWheelDriveDirection_0x13B"
+    ],
+    "Vld_RLWheelDriveDirection": [
+      "RLWheelDriveDirection_0x13B"
+    ],
+    "Vld_FRWheelDriveDirection": [
+      "FRWheelDriveDirection_0x13B"
+    ],
+    "Vld_FLWheelDriveDirection": [
+      "FLWheelDriveDirection_0x13B"
+    ],
+    "VehcleInfoUpdate.steer_angle_sign": [
+      "SteerWheelAngSign"
+    ],
+    "Vld_TGS_LEVER": [
+      "TGS_LEVER"
+    ],
+    "VehcleInfoUpdate.turn_light_left": [
+      "LTurnLmpSwtSts"
+    ],
+    "VehcleInfoUpdate.turn_light_right": [
+      "RTurnLmpSwtSts"
+    ],
+    "VehcleInfoUpdate.open_door_left_top": [
+      "PassengerDoorSts",
+      "DrvDoorSts"
+    ],
+    "VehcleInfoUpdate.open_door_right_top": [
+      "DrvDoorSts",
+      "PassengerDoorSts"
+    ],
+    "VehcleInfoUpdate.open_door_left_bottom": [
+      "LRDoorSts"
+    ],
+    "VehcleInfoUpdate.open_door_right_bottom": [
+      "RRDoorSts"
+    ],
+    "PERInputUpdate.adasEnable.bBSDEnable": [
+      "LCASwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bLCAEnable": [
+      "LCASwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bDOWEnable": [
+      "DOWSwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bRCWEnable": [
+      "RCWSwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bRCTAEnable": [
+      "RCTABrkSwtReq",
+      "RCTASwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bRCTBEnable": [
+      "RCTABrkSwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bFCTAEnable": [
+      "FCTABrkSwtReq",
+      "FCTASwtReq"
+    ],
+    "PERInputUpdate.adasEnable.bFCTBEnable": [
+      "FCTABrkSwtReq"
+    ],
+    "PEROutput.objEDRInfo.egoYear": [
+      "Time_Year_Right"
+    ],
+    "PEROutput.objEDRInfo.egoMonth": [
+      "Time_Month"
+    ],
+    "PEROutput.objEDRInfo.egoDay": [
+      "Time_Day"
+    ],
+    "PEROutput.objEDRInfo.egoHour": [
+      "Time_Hour"
+    ],
+    "PEROutput.objEDRInfo.egoMinute": [
+      "Time_Minutes"
+    ],
+    "PEROutput.objEDRInfo.egoSecond": [
+      "Time_Second"
+    ],
+    "AdasStM.DrvDoorSts": [
+      "DrvDoorSts"
+    ],
+    "AdasStM.LRDoorSts": [
+      "LRDoorSts"
+    ],
+    "AdasStM.PassengerDoorSts": [
+      "PassengerDoorSts"
+    ],
+    "AdasStM.RRDoorSts": [
+      "RRDoorSts"
+    ],
+    "AdasStM.ESPFUN": [
+      "ESPFuncOffSts_0x137"
+    ],
+    "AdasStM.TrailerSts": [
+      "TrailerSts"
+    ],
+    "AdasStM.ESPDiagActv": [
+      "ESP_DiagActv_0x137"
+    ],
+    "AdasStM.MSRActv": [
+      "MSRActv_0x137"
+    ],
+    "AdasStM.MSRActv_RA": [
+      "MSRActv_RA_0x137"
+    ],
+    "AdasStM.VDCActv": [
+      "VDCActv_0x137"
+    ],
+    "AdasStM.PTCActv": [
+      "PTCActv_0x137"
+    ],
+    "AdasStM.BTCActv": [
+      "BTCActv_0x137"
+    ],
+    "AdasStM.PTCActv_RA": [
+      "PTCActv_RA_0x137"
+    ],
+    "AdasStM.BTCActv_RA": [
+      "BTCActv_RA_0x137"
+    ],
+    "AdasStM.AccPedPosDiag": [
+      "VCU_ActAccrPedlRat"
+    ],
+    "PEROutput.objEDRInfo.egoAccelPedalPos": [
+      "VCU_ActAccrPedlRat"
+    ],
+    "PEROutput.objEDRInfo.egoAccelPedalPosDiagc": [
+      "VCU_ActAccrPedlRat"
+    ],
+    "AdasStM.PushrodStauts": [
+      "PushrodStauts"
+    ],
+    "PEROutput.objEDRInfo.egoBrakePedalPos": [
+      "PushrodStauts"
+    ],
+    "AdasStM.SysPowerMod": [
+      "SysPowerMod"
+    ],
+    "SysselfTestMgr.SysPowerMod": [
+      "SysPowerMod"
+    ],
+    "PERInputCapture.DTCCode.bAEBBAActiveFlg": [
+      "AEBBAActv_0x137"
+    ],
+    "PERInputCapture.DTCCode.bAEBIBActiveFlg": [
+      "AEBIBActv_0x137"
+    ],
+    "AdasStM.SysPowerModVld": [
+      "SysPowerModVld"
+    ],
+    "Vld_RSDS_Pass_LED_Sts": [
+      "RSDS_Pass_LED_Sts"
+    ],
+    "Vld_RSDS_Driver_LED_Sts": [
+      "RSDS_Driver_LED_Sts"
+    ],
+    "Vld_ESPFailSts": [
+      "ESPFailSts_0x137"
+    ],
+    "Vld_VehStandstill": [
+      "VehStandstill_0x137"
+    ],
+    "Vld_ESP_MasterCylBrkPress": [
+      "ESP_MasterCylBrkPress_0x137"
+    ],
+    "Vld_ESP_MasterCylBrkPressVld": [
+      "ESP_MasterCylBrkPressVld_0x137"
+    ],
+    "Vld_SAS_Sts": [
+      "SAS_Sts"
+    ],
+    "Vld_VCU_APedlPosVld": [
+      "VCU_APedlPosVld"
+    ],
+    "rcta_b_ttc_min": [
+      "RCTA_B__L__TTC_0x301_RX"
+    ],
+    "has_valid_value": [
+      "RCTA_B__L__TTC_0x301_RX"
+    ]
+  }
+}

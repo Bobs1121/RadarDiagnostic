@@ -1,0 +1,314 @@
+[
+  {
+    "name": "actual_spd",
+    "type": "float",
+    "function": "COMMON",
+    "source_file": "perception_public_def.h",
+    "description": "自车实际速度，用于判断功能激活条件",
+    "possible_values": "[0-255.0] m/s"
+  },
+  {
+    "name": "actual_gear",
+    "type": "uint8_t",
+    "function": "COMMON",
+    "source_file": "perception_public_def.h",
+    "description": "自车档位，用于判断功能激活条件（如倒车时激活RCTA/RCTB）",
+    "possible_values": "0:invalid, 4/5:Forward, 6:Neutral, 7:Reverse, 8:Park"
+  },
+  {
+    "name": "turn_light_left",
+    "type": "uint8_t",
+    "function": "LCA",
+    "source_file": "perception_public_def.h",
+    "description": "左转向灯状态，LCA 功能触发必要条件",
+    "possible_values": "0:OFF, 1:ON"
+  },
+  {
+    "name": "turn_light_right",
+    "type": "uint8_t",
+    "function": "LCA",
+    "source_file": "perception_public_def.h",
+    "description": "右转向灯状态，LCA 功能触发必要条件",
+    "possible_values": "0:OFF, 1:ON"
+  },
+  {
+    "name": "open_door_left_top",
+    "type": "uint8_t",
+    "function": "DOW",
+    "source_file": "perception_public_def.h",
+    "description": "左前门开启状态，DOW 功能触发必要条件",
+    "possible_values": "0:close, 1:open"
+  },
+  {
+    "name": "open_door_right_top",
+    "type": "uint8_t",
+    "function": "DOW",
+    "source_file": "perception_public_def.h",
+    "description": "右前门开启状态，DOW 功能触发必要条件",
+    "possible_values": "0:close, 1:open"
+  },
+  {
+    "name": "bBSDEnable",
+    "type": "bool",
+    "function": "BSD",
+    "source_file": "perception_public_def.h",
+    "description": "BSD 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bLCAEnable",
+    "type": "bool",
+    "function": "LCA",
+    "source_file": "perception_public_def.h",
+    "description": "LCA 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bDOWEnable",
+    "type": "bool",
+    "function": "DOW",
+    "source_file": "perception_public_def.h",
+    "description": "DOW 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bRCWEnable",
+    "type": "bool",
+    "function": "RCW",
+    "source_file": "perception_public_def.h",
+    "description": "RCW 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bRCTAEnable",
+    "type": "bool",
+    "function": "RCTA",
+    "source_file": "perception_public_def.h",
+    "description": "RCTA 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bRCTBEnable",
+    "type": "bool",
+    "function": "RCTB",
+    "source_file": "perception_public_def.h",
+    "description": "RCTB 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bFCTAEnable",
+    "type": "bool",
+    "function": "FCTA",
+    "source_file": "perception_public_def.h",
+    "description": "FCTA 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "bFCTBEnable",
+    "type": "bool",
+    "function": "FCTB",
+    "source_file": "perception_public_def.h",
+    "description": "FCTB 功能使能开关",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "AdasStM.BSDState",
+    "type": "uint8_t",
+    "function": "BSD",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "BSD 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.LCAState",
+    "type": "uint8_t",
+    "function": "LCA",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "LCA 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.DOWState",
+    "type": "uint8_t",
+    "function": "DOW",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "DOW 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.RCWState",
+    "type": "uint8_t",
+    "function": "RCW",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "RCW 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.RCTAState",
+    "type": "uint8_t",
+    "function": "RCTA",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "RCTA 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.RCTBState",
+    "type": "uint8_t",
+    "function": "RCTB",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "RCTB 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.FCTAState",
+    "type": "uint8_t",
+    "function": "FCTA",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "FCTA 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "AdasStM.FCTBState",
+    "type": "uint8_t",
+    "function": "FCTB",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "FCTB 功能状态机状态",
+    "possible_values": "0:None, 1:Init, 2:Standby, 3:Active, 4:Off, 5:Failure, 6:Passive"
+  },
+  {
+    "name": "fBsdActiveSpd",
+    "type": "float",
+    "function": "BSD",
+    "source_file": "adasFunc.h",
+    "description": "BSD 系统激活速度阈值",
+    "possible_values": "km/h"
+  },
+  {
+    "name": "fLcaObjWarningTTC",
+    "type": "float",
+    "function": "LCA",
+    "source_file": "adasFunc.h",
+    "description": "LCA 目标报警 TTC 阈值",
+    "possible_values": "s"
+  },
+  {
+    "name": "fDowObjWarningTTC",
+    "type": "float",
+    "function": "DOW",
+    "source_file": "adasFunc.h",
+    "description": "DOW 目标报警 TTC 阈值",
+    "possible_values": "s"
+  },
+  {
+    "name": "fRcwObjWarningTTC",
+    "type": "float",
+    "function": "RCW",
+    "source_file": "adasFunc.h",
+    "description": "RCW 目标报警 TTC 阈值",
+    "possible_values": "s"
+  },
+  {
+    "name": "fRctaObjWarningTTM",
+    "type": "float",
+    "function": "RCTA",
+    "source_file": "adasFunc.h",
+    "description": "RCTA 目标报警 TTM 阈值",
+    "possible_values": "s"
+  },
+  {
+    "name": "fRctbObjWarningTTM",
+    "type": "float",
+    "function": "RCTB",
+    "source_file": "adasFunc.h",
+    "description": "RCTB 目标报警 TTM 阈值",
+    "possible_values": "s"
+  },
+  {
+    "name": "fRctbBrakeValue",
+    "type": "float",
+    "function": "RCTB",
+    "source_file": "adasFunc.h",
+    "description": "RCTB 制动请求参数值",
+    "possible_values": "float"
+  },
+  {
+    "name": "bldWarningOUT.bldWarningInfo.bldWarningFlag",
+    "type": "uint8_t",
+    "function": "BSD",
+    "source_file": "perception_public_def.h",
+    "description": "BSD 盲区报警标志位",
+    "possible_values": "0:No Warning, 1:Warning"
+  },
+  {
+    "name": "is_alarm_active",
+    "type": "boolean",
+    "function": "COMMON",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "全局报警激活标志",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "is_brake_active",
+    "type": "boolean",
+    "function": "RCTB/FCTB",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "制动功能激活标志",
+    "possible_values": "true/false"
+  },
+  {
+    "name": "RCW_DELAY_TIME",
+    "type": "uint32_t",
+    "function": "RCW",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "RCW 报警延迟时间",
+    "possible_values": "2900 ms"
+  },
+  {
+    "name": "RCTB_HOLD",
+    "type": "uint32_t",
+    "function": "RCTB",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "RCTB 制动保持时间",
+    "possible_values": "3000 ms"
+  },
+  {
+    "name": "FCTB_FUNC_GAP",
+    "type": "uint32_t",
+    "function": "FCTB",
+    "source_file": "ASWIN_SystemState.h",
+    "description": "FCTB 功能触发间隔时间",
+    "possible_values": "10000 ms"
+  },
+  {
+    "name": "fDowObjWarningYawAngle",
+    "type": "float",
+    "function": "DOW",
+    "source_file": "adasFunc.h",
+    "description": "DOW 目标报警绝对偏航角阈值",
+    "possible_values": "degree"
+  },
+  {
+    "name": "fRcwObjWarningDeAcc",
+    "type": "float",
+    "function": "RCW",
+    "source_file": "adasFunc.h",
+    "description": "RCW 目标报警减速度阈值",
+    "possible_values": "m/s^2"
+  },
+  {
+    "name": "fRctaObjWarningLowYawAngle",
+    "type": "float",
+    "function": "RCTA",
+    "source_file": "adasFunc.h",
+    "description": "RCTA 目标报警绝对偏航角下限",
+    "possible_values": "degree"
+  },
+  {
+    "name": "fFctaObjWarningTTMX",
+    "type": "float",
+    "function": "FCTA",
+    "source_file": "adasFunc.h",
+    "description": "FCTA 目标 X 轴报警 TTM 阈值",
+    "possible_values": "s"
+  }
+]

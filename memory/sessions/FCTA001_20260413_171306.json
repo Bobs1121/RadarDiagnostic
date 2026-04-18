@@ -1,0 +1,154 @@
+{
+  "session_id": "FCTA001_20260413_171306",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车都能触发报警",
+  "created_at": "2026-04-13T17:13:06.934164",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-13T17:13:31.285292",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "问题明确指向FCTA功能未启动且无报警，行人目标可触发但GVT车不能触发，说明功能部分工作但存在目标类型相关的差异。历史记忆显示车速阈值问题可能导致状态异常，但当前问题更复杂，涉及目标分类差异。",
+        "fail_type": "漏报FN",
+        "key_variables": [
+          "fctaSystemState",
+          "fctaWarning",
+          "objAttribCal.targetType",
+          "objAttribCal.ttc",
+          "fctaROI",
+          "fctaSpeedThreshold",
+          "adasWarning.fctaWarning",
+          "PEROutput.adasWarning",
+          "ASWOUT_OutCalc.fctaOutput"
+        ],
+        "analysis_plan": [
+          "检查FCTA系统状态机当前状态(fctaSystemState)，确认是否为Active(3)",
+          "对比行人和GVT车目标的属性差异(类型、速度、TTC、位置)",
+          "验证FCTA ROI区域配置，确认GVT车是否在检测区域内",
+          "检查FCTA速度阈值和TTC阈值参数配置",
+          "检查左右雷达数据融合逻辑，确认FR雷达是否接收FL数据",
+          "追踪报警输出链路：adasFunc→ASWIN_SystemState→ASWOUT_OutCalc→CAN输出",
+          "检查是否存在目标过滤逻辑导致GVT车被排除"
+        ],
+        "related_functions": [
+          "FCTB",
+          "ASWOUT_OutCalc"
+        ],
+        "subtasks": [
+          {
+            "task": "查询FCTA系统状态机当前状态值(fctaSystemState)",
+            "complexity": "simple"
+          },
+          {
+            "task": "提取行人和GVT车目标的完整属性数据(类型、速度、TTC、距离、角度)",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析目标属性差异与FCTA触发条件的匹配关系",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查FCTA ROI区域参数和阈值配置",
+            "complexity": "simple"
+          },
+          {
+            "task": "追踪报警输出链路，确认adasWarning.fctaWarning和PEROutput.adasWarning值",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查左右雷达数据融合逻辑，确认FR是否接收FL的GVT车目标",
+            "complexity": "complex"
+          },
+          {
+            "task": "诊断根因：车速阈值/目标分类/ROI配置/状态机逻辑",
+            "complexity": "complex"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-13T17:13:38.638624",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-13T17:13:38.701462",
+      "detail": {
+        "count": 2,
+        "windows": [
+          {
+            "t_start": 1775962915.7897701,
+            "t_end": 1775962919.8792446,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775962948.9221113,
+            "t_end": 1775962956.4501202,
+            "reason": "状态跳变 + 目标出现 + 速度变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-13T17:14:08.176939",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_1_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[窗口1] 1775962915.79s ~ 1775962919.88s (4.1s) — 目标出现\n[窗口2] 1775962948.92s ~ 1775962956.45s (7.5s) — 状态跳变 + 目标出现 + 速度变化\n\n[状态跳变] (4次)\n  t=1775962950.972s front_left fcta_system_state: 6→2\n  t=1775962952.245s front_left fctb_system_state: 6→2\n  t=1775962950.922s front_right fcta_system_state: 6→2\n  t=1775962952.234s front_right fctb_system_state: 6→2\n\n[front_left] (47帧)\n  car_spd: min=0.000, max=3.077, avg=0.406\n  fcta_system_state: {6: 20, 2: 27} (0=None,1=Init,2=Standby,3=Active,4=Off,5=Failure,6=",
+        "window_count": 2,
+        "transition_count": 4
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-13T17:23:10.093560",
+      "detail": {
+        "has_conditions": false,
+        "preview": "(条件提取失败: AI提取失败)"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-13T18:02:16.175043",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "问题描述称“行人目标有功能触发”，但数据明确显示 `left_fcta_warning` 和 `right_fcta_warning` 全为 0，无报警输出。",
+          "所有专家均使用“预估阈值”（如车速>5km/h）进行分析，但原始“条件检查表”提取失败，缺乏代码实际阈值支撑。",
+          "算法逻辑专家部分内容为空，未提供核心逻辑分析，与其他专家形成分析缺失的矛盾。"
+        ],
+        "verdict_preview": "\n\n### 根因\n自车车速 (0.4 km/h) → 激活阈值 (预估>5 km/h, 不满足) → 系统状态 (Standby) → 报警输出 (0)。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 来源 |\n|---|---|---|---|---|\n| 功能使能 | 1 | 1 | Y | `fcta_enable` |\n| 车速 | >5 km/h (预估) | 0.00~3.13 km/h | N | `car_spd` |\n| 系统状态 | 3 (Active) | 2 (Standby)/6 (Passive) | N | `fcta_system_state` |\n| 报警输出 | >0 | 0 | N | `fcta_warning` |\n\n### 数据链路\n`VehSpd_0x137` → `car_spd` → 状态机判断 (Standby) → `fcta_warning` (0)。\n\n### 测试窗口分析\n窗口内车速最高仅 3.13 km/h，状态在 6 与 2 间跳变，始终未达 3；目标 TTC 多为 inf 或无效。\n状态机未进入"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-13T18:02:32.951707",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

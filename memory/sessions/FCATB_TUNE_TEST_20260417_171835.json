@@ -1,0 +1,143 @@
+{
+  "session_id": "FCATB_TUNE_TEST_20260417_171835",
+  "case_id": "FCATB_TUNE_TEST",
+  "problem": "想把 FCTB 的 fFctbObjWarningBaseTTMX 从 1.0 调优到 1.5，看一下这个阈值调整对触发稳定性的影响",
+  "expected": "调优后 FCTB 触发频率应该明显降低，误触发减少",
+  "created_at": "2026-04-17T17:18:35.391973",
+  "status": "started",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-17T17:18:49.206711",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 1.0,
+        "reasoning": "用户明确指定了功能 FCTB 和具体的阈值变量 fFctbObjWarningBaseTTMX，目的是通过调整该阈值（从 1.0 到 1.5）来降低触发频率并减少误触发。这直接指向 FCTB 功能的报警触发逻辑验证。",
+        "fail_type": "误报FP",
+        "key_variables": [
+          "fFctbObjWarningBaseTTMX",
+          "fFctbObjWarningTTMXOffSet",
+          "fFctbObjDeWarningTTMXOffSet",
+          "fFctbAEBActiveThresh",
+          "fFctbDetectLowSpd",
+          "fFctbDetectUpSpd",
+          "bFctbDetectFlg",
+          "fctaSystemState",
+          "fctbSystemState",
+          "TTMX",
+          "TTMY"
+        ],
+        "related_functions": [
+          "FCTA"
+        ]
+      }
+    },
+    {
+      "step": "classify",
+      "timestamp": "2026-04-17T17:18:49.262682",
+      "detail": {
+        "task_type": "diagnose",
+        "confidence": 0.85,
+        "target_function": "FCTB",
+        "focus_parameters": [
+          "TTM"
+        ],
+        "focus_signals": [],
+        "reasoning": "Diagnose pattern matched: 误触发"
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-17T17:19:57.436825",
+      "detail": {
+        "bag_frames": 58351,
+        "can_frames": 950226
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-17T17:19:57.587908",
+      "detail": {
+        "count": 15,
+        "windows": [
+          {
+            "t_start": 1775970397.0288978,
+            "t_end": 1775970409.4115095,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970411.075362,
+            "t_end": 1775970415.0781064,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970415.5543363,
+            "t_end": 1775970419.561442,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970420.2269204,
+            "t_end": 1775970426.7170315,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970438.4023862,
+            "t_end": 1775970442.4414203,
+            "reason": "速度变化"
+          },
+          {
+            "t_start": 1775970445.1954596,
+            "t_end": 1775970449.2114995,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970452.9143715,
+            "t_end": 1775970461.0778887,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970461.693545,
+            "t_end": 1775970465.6949859,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970466.7230349,
+            "t_end": 1775970477.8200402,
+            "reason": "报警变化 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970477.9300969,
+            "t_end": 1775970481.9447415,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970495.1879573,
+            "t_end": 1775970499.5848823,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775970506.4525447,
+            "t_end": 1775970510.6497433,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775970522.651415,
+            "t_end": 1775970532.561328,
+            "reason": "报警变化 + 状态跳变 + 速度变化"
+          },
+          {
+            "t_start": 1775970536.6755388,
+            "t_end": 1775970543.7782214,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970544.2418706,
+            "t_end": 1775970551.0999174,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          }
+        ]
+      }
+    }
+  ],
+  "findings": []
+}

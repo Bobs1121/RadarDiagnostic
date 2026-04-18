@@ -1,0 +1,123 @@
+{
+  "session_id": "FCTA001_20260412_164434",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车辆都可以触发FCTA功能",
+  "created_at": "2026-04-12T16:44:34.734105",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-12T16:45:06.452123",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "问题明确指向FCTA功能失效，历史记忆显示存在状态机周期性复位和GVT目标无法触发的双重问题。行人可触发说明感知链路基本正常，GVT失效说明存在目标分类或阈值问题。",
+        "fail_type": "漏报FN",
+        "key_variables": [
+          "fctaSystemState",
+          "warning_status_raw",
+          "adasEnable",
+          "g_DTCCode.selfInspFlg",
+          "PERInputUpdate.adasEnable",
+          "targetType",
+          "targetClassification",
+          "FCTA_ROI",
+          "TTC_threshold",
+          "g_RteComMapping_RLWarnSig",
+          "ASWOUT_OutCalc"
+        ],
+        "analysis_plan": [
+          "1. 检查FCTA状态机当前状态及历史状态变化轨迹，确认是否存在周期性复位",
+          "2. 对比行人目标与GVT车辆目标的分类标签、速度、角度等属性差异",
+          "3. 检查FCTA ROI区域定义及GVT目标是否落入有效检测区域",
+          "4. 分析左右雷达融合逻辑，确认FL雷达数据是否正确传输至FR",
+          "5. 检查adasFunc.c与ASWIN_SystemState.c双状态机调度时序冲突",
+          "6. 验证FCTA功能使能信号FCTASwtReq及adasEnable条件",
+          "7. 检查GVT目标TTC计算值是否满足报警阈值",
+          "8. 分析ASWOUT_OutCalc中左右雷达报警合并逻辑"
+        ],
+        "related_functions": [
+          "FCTB",
+          "BSD"
+        ],
+        "subtasks": [
+          {
+            "task": "查询FCTA状态机变量fctaSystemState当前值及历史变化",
+            "complexity": "simple"
+          },
+          {
+            "task": "检查FCTA功能使能信号FCTASwtReq和adasEnable状态",
+            "complexity": "simple"
+          },
+          {
+            "task": "对比行人目标与GVT车辆目标的分类标签、速度、角度、TTC等属性",
+            "complexity": "complex"
+          },
+          {
+            "task": "分析adasFunc.c与ASWIN_SystemState.c双状态机调度时序及变量覆盖关系",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查FL→FR私CAN数据链路及g_RteComMapping_RLWarnSig融合状态",
+            "complexity": "complex"
+          },
+          {
+            "task": "验证FCTA ROI区域定义及GVT目标位置是否满足触发条件",
+            "complexity": "complex"
+          },
+          {
+            "task": "检查ASWOUT_OutCalc中左右雷达报警合并逻辑max(本侧,对侧)",
+            "complexity": "complex"
+          },
+          {
+            "task": "查询FCTA相关阈值参数配置(TTC、速度、角度等)",
+            "complexity": "simple"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-12T16:45:49.836335",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-12T16:46:37.719114",
+      "detail": {
+        "keys": [
+          "warning_states",
+          "objectlist_1",
+          "objectlist_2",
+          "objectlist_3",
+          "objectlist_4",
+          "ego_front_left",
+          "ego_front_right",
+          "can_summary",
+          "can_VCU_FD1"
+        ],
+        "frame_analysis_len": 541
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-12T17:07:14.100378",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "感知专家称状态循环 3→4→1→2 为'系统侧无故障'，与信号/系统/架构专家认定的'状态异常震荡'直接矛盾（状态 4 为 Off，无法报警）",
+          "问题描述称'行人目标有功能触发'，但同时也称'没有报警'，若状态频繁进入 Off(4)，则无法维持报警输出，两者逻辑冲突",
+          "算法与感知专家将原因归结为'目标属性阈值'（无数据支撑），而系统状态专家将原因归结为'状态机震荡'（有数据支撑），分析优先级倒置"
+        ],
+        "verdict_preview": "\n\n### 根因\n系统状态机高频震荡 (9465 次变化) → 无法维持 Active(3) 状态 → 报警输出被频繁复位 (State 04 抑制)。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？|\n| 系统状态 | 稳定 Active(3) | 03→04→01→02 循环 | N |\n| 功能使能 | bFCTAEnable=1 | 未知 (推测抖动) | N |\n\n### 数据链路\n0x137(AEB) → bAEBBAActiveFlg → 抑制逻辑 → 状态复位 (04)\nwarning_bytes → fctaSystemState → 报警输出 → 被清零\n\n### 行人 vs GVT 差异原因\n行人触发时恰逢 Active(3) 窗口，GVT 出现时处于 Off(4) 或 Init(1) 状态；\n或 GVT 高度<1.6m 被过滤 (无数据证实，需补充目标日志)。\n\n### 修复建议\n1. 增加状态机滤波，防止 03→04 高频跳变。\n2. 补充 GVT 目标属性日志，验证感知过滤阈值。\n\n### 置信度：70/100\n状态震荡数据确凿，但 GV"
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-12T17:07:53.014654",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

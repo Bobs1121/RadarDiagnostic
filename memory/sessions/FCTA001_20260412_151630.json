@@ -1,0 +1,91 @@
+{
+  "session_id": "FCTA001_20260412_151630",
+  "case_id": "FCTA001",
+  "problem": "FCTA功能没有启动，没有报警，行人目标有功能触发，GVT车没有功能触发",
+  "expected": "行人和GVT车辆都可以触发FCTA功能",
+  "created_at": "2026-04-12T15:16:30.186694",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-12T15:16:51.072516",
+      "detail": {
+        "function": "FCTA",
+        "confidence": 0.95,
+        "reasoning": "问题明确指向FCTA功能未启动且无报警，行人和GVT车辆触发行为不一致，属于典型的功能漏报(FN)或状态异常(STATE)问题。需要分析FCTA状态机、目标检测逻辑、触发阈值等。",
+        "fail_type": "漏报FN",
+        "key_variables": [
+          "fctaSystemState",
+          "fctaWarningLevel",
+          "fctaTTC",
+          "fctaROI",
+          "egoSpeed",
+          "gearStatus",
+          "objectType",
+          "objectVelocity",
+          "objectDistance"
+        ],
+        "analysis_plan": [
+          "1. 确认FCTA系统状态机当前状态及历史状态变化",
+          "2. 分析行人和GVT车辆的目标检测数据（位置、速度、类型）",
+          "3. 检查FCTA激活条件（自车速度、档位、系统状态）",
+          "4. 对比行人和GVT车辆触发FCTA的差异原因",
+          "5. 验证FCTA ROI区域定义和TTC阈值参数",
+          "6. 检查CAN信号输出和报警状态"
+        ],
+        "related_functions": [
+          "FCTB",
+          "RCTA",
+          "RCTB"
+        ],
+        "subtasks": [
+          {
+            "task": "解析bag文件获取FCTA状态机变量和目标列表数据",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析FCTA系统状态时间线，确认是否进入Active状态",
+            "complexity": "complex"
+          },
+          {
+            "task": "分析行人和GVT车辆的目标轨迹及TTC计算",
+            "complexity": "complex"
+          },
+          {
+            "task": "读取FCTA功能文档确认触发阈值和ROI定义",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析CAN信号中FCTA相关报警输出",
+            "complexity": "simple"
+          },
+          {
+            "task": "综合诊断根因并生成报告",
+            "complexity": "complex"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-12T15:16:57.751453",
+      "detail": {
+        "bag_frames": 16357,
+        "can_frames": 242830
+      }
+    },
+    {
+      "step": "frame_analysis",
+      "timestamp": "2026-04-12T15:17:35.171939",
+      "detail": "根据您提供的 FCTA（可能是指某种高级驾驶辅助系统或传感器数据）报警状态变化数据和关注变量列表，我将进行以下关键发现总结。\n\n---\n\n### 💡 关键发现总结\n\n#### 1. 报警状态的整体模式：高度动态且周期性\n* **高频变化率 (High Frequency):** 在总共 9466 帧中发生了 9465 次变化，这意味着系统状态在极短的时间内（毫秒级）经历了频繁的切换。\n* **周期性循环 (Cyclical Pattern):** 从提供的样本数据来看，报警状态（`warning_bytes` 和 `warning_hex`）的变化呈现出非常规律的、可预测的循环模式（例如：$1 \\to 2 \\to 3 \\to 4 \\to 1 \\to 2 \\dots$）。\n* **推论：** 这种高度规律的循环模式，**更倾向于系统处于测试、仿真或执行预设的循环测试流程中**，而非系统在一次突发故障或随机异常状态下的表现。\n\n#### 2. 关键变化时刻：状态的快速切换与阈值触发\n* **变化机制：** 关键时刻是系统从一个警告等级（`old`）快速切换到下一个警告等级（`new`）的瞬"
+    },
+    {
+      "step": "diagnosis",
+      "timestamp": "2026-04-12T15:18:45.817005",
+      "detail": "\n\n# FCTA功能未启动深度根因诊断报告\n\n## 1. 问题理解\n\n**问题复述：**\n- FCTA功能未启动（系统状态非Active/Standby）\n- 无报警输出\n- 行人目标有功能触发迹象但无报警\n- GVT车辆无功能触发\n\n**故障类型：** 功能漏报 (False Negative, FN) + 状态异常 (State Anomaly)\n\n**核心矛盾：** 报警状态数据呈现周期性循环(1→2→3→4)，但用户报告\"无报警\"，需验证状态值与报警输出的映射关系。\n\n---\n\n## 2. 分析过程\n\n### 2.1 数据解析与状态机分析\n\n```python\n# 调用工具解析bag文件\nparse_bag(\n    bag_file=\"corner_radar_net_2026-04-12-11-01-57_0.bag\",\n    topics=[\"/corner_radar/warning_status_raw\", \"/wf/objectlist_1~4\", \"/wf/ego_car_info/front_left/parsed\"],\n    time_range=[177"
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-12T15:18:59.143127",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTA001\\report.md"
+}

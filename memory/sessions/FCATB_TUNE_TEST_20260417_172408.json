@@ -1,0 +1,245 @@
+{
+  "session_id": "FCATB_TUNE_TEST_20260417_172408",
+  "case_id": "FCATB_TUNE_TEST",
+  "problem": "想把 FCTB 的 fFctbObjWarningBaseTTMX 从 1.0 调优到 1.5，看一下这个阈值调整对触发稳定性的影响",
+  "expected": "调优后 FCTB 触发频率应该明显降低，误触发减少",
+  "created_at": "2026-04-17T17:24:08.493436",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-17T17:24:17.128969",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 1.0,
+        "reasoning": "用户明确提到要调整 FCTB 功能的阈值参数 fFctbObjWarningBaseTTMX，并观察其对触发稳定性的影响。该参数直接控制 FCTB 的报警触发时间阈值。",
+        "fail_type": "误报FP",
+        "key_variables": [
+          "fFctbObjWarningBaseTTMX",
+          "fFctbObjWarningTTMXOffSet",
+          "fFctbObjDeWarningTTMXOffSet",
+          "fctbSystemState",
+          "bFctbDetectFlg",
+          "TTMX",
+          "TTMY",
+          "fFctbAEBActiveThresh",
+          "bFctbKeepBrakeFlg"
+        ],
+        "related_functions": [
+          "FCTA"
+        ]
+      }
+    },
+    {
+      "step": "classify",
+      "timestamp": "2026-04-17T17:24:17.143504",
+      "detail": {
+        "task_type": "verify",
+        "confidence": 0.92,
+        "target_function": "FCTB",
+        "focus_parameters": [
+          "TTM"
+        ],
+        "focus_signals": [],
+        "reasoning": "Explicit numeric change detected (tune_hit=调优 verify_hit=-)"
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-17T17:24:44.542808",
+      "detail": {
+        "bag_frames": 58351,
+        "can_frames": 950226
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-17T17:24:44.634183",
+      "detail": {
+        "count": 15,
+        "windows": [
+          {
+            "t_start": 1775970397.0288978,
+            "t_end": 1775970409.4115095,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970411.075362,
+            "t_end": 1775970415.0781064,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970415.5543363,
+            "t_end": 1775970419.561442,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970420.2269204,
+            "t_end": 1775970426.7170315,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970438.4023862,
+            "t_end": 1775970442.4414203,
+            "reason": "速度变化"
+          },
+          {
+            "t_start": 1775970445.1954596,
+            "t_end": 1775970449.2114995,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970452.9143715,
+            "t_end": 1775970461.0778887,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970461.693545,
+            "t_end": 1775970465.6949859,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970466.7230349,
+            "t_end": 1775970477.8200402,
+            "reason": "报警变化 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1775970477.9300969,
+            "t_end": 1775970481.9447415,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970495.1879573,
+            "t_end": 1775970499.5848823,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775970506.4525447,
+            "t_end": 1775970510.6497433,
+            "reason": "目标出现"
+          },
+          {
+            "t_start": 1775970522.651415,
+            "t_end": 1775970532.561328,
+            "reason": "报警变化 + 状态跳变 + 速度变化"
+          },
+          {
+            "t_start": 1775970536.6755388,
+            "t_end": 1775970543.7782214,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1775970544.2418706,
+            "t_end": 1775970551.0999174,
+            "reason": "报警变化 + 状态跳变 + 目标出现 + 速度变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-17T17:30:11.719688",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_1_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "radar_objects_warned",
+          "radar_objects_summary",
+          "adas_enable_states",
+          "bld_summary",
+          "warning_events",
+          "can_summary",
+          "KEY_FACTS",
+          "tpe_report",
+          "tpe_block"
+        ],
+        "key_facts": "[窗口1] 1775970397.03s ~ 1775970409.41s (12.4s) — 报警变化 + 状态跳变 + 目标出现 + 速度变化\n[窗口2] 1775970411.08s ~ 1775970415.08s (4.0s) — 报警变化\n[窗口3] 1775970415.55s ~ 1775970419.56s (4.0s) — 报警变化\n[窗口4] 1775970420.23s ~ 1775970426.72s (6.5s) — 报警变化 + 状态跳变 + 目标出现 + 速度变化\n[窗口5] 1775970438.4s ~ 1775970442.44s (4.0s) — 速度变化\n[窗口6] 1775970445.2s ~ 1775970449.21s (4.0s) — 报警变化\n[窗口7] 1775970452.91s ~ 1775970461.08s (8.2s) — 报警变化\n[窗口8] 1775970461.69s ~ 1775970465.69s (4.0s) — 报警变化\n[窗口9] 1775970466.72s ~ 1775970477.82s (11.1",
+        "window_count": 15,
+        "transition_count": 18
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-17T17:30:11.897709",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTB 激活条件\n\n**自车速度范围:**\n  active: [fFctbActiveLowSpd=0.5, fFctbActiveUpSpd=21.0] km/h\n  deactive: [fFctbDeactiveLowSpd=0.0, fFctbDeactiveUpSpd=22.0] km/h\n  detect: [fFctbDetectLowSpd=0.5, fFctbDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=0.5, fFctaObjWarningUpSpd=22.0)"
+      }
+    },
+    {
+      "step": "tpe",
+      "timestamp": "2026-04-17T17:30:13.331913",
+      "detail": {
+        "pattern_count": 6,
+        "triggered_count": 1,
+        "unresolved_variables": 11,
+        "missing_can_signals": 0,
+        "has_triggers": true
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-17T17:30:21.501687",
+      "detail": {
+        "signal_count": 19,
+        "result_preview": "### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release → Release Brake Hold\n  变量: g_DTCCode.bAEBBAActiveFlg, 阈值: == FALSE\n  **ESP_FD2.AEBBAActv_0x137**: ⚠️ **抑制条件满足**\n    判定: 阈值=== FALSE: 99.9%帧为零 (7932/7938)\n    原始统计: min=0.0000, max=1.0000, mean=0.0008, 非零帧=0.1%\n    帧数: 7938, 变化: 2次\n    ⚠ 极性交叉检查: 反向阈值'== TRUE'→阈值=== TRUE: 0.1%帧非零 (6/7938)\n      原始判定为抑制满足，请专家结合代码逻辑确认极性\n      t=1775999223.556s: 0 → 1\n      t=1775999223.676s: 1 → 0\n\n### [AEB] "
+      }
+    },
+    {
+      "step": "output_signal_analysis",
+      "timestamp": "2026-04-17T17:30:28.232722",
+      "detail": {
+        "result_preview": "### CR_BrkgReq (CR_FD1)\n  源表达式: `l_temp_u8_FCTB`\n  统计: min=0, max=1, mean=0.0117, 非零帧=93/7938 (1.2%)\n  **激活段 (2个)**:\n    1775999223.328s ~ 1775999224.288s (持续 960ms)\n    1775999347.347s ~ 1775999348.247s (持续 900ms)\n  跳变 (4次, 前4条):\n    t=1775999223.328s: 0→1\n    t=1775999224.288s: 1→0\n    t=1775999347.347s: 0→1\n    t=1775999348.247s: 1→0\n\n### CR_BrkgReqVal (CR_FD1)\n  源表达式: `GetFctbBrakeValue()`\n  统计: min=-4.0000800000000005, max=-0.00043199999999998795, mean=-0.0473, 非零帧=7938/7938 (100.0%)\n  **激活"
+      }
+    },
+    {
+      "step": "param_sensitivity",
+      "timestamp": "2026-04-17T17:30:28.697402",
+      "detail": {
+        "func": "FCTB",
+        "total": 10,
+        "analyzed": 7
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-17T17:39:38.243728",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "功能使能信号冲突：系统状态专家指出 CR_FCTA_Resp 恒为 0（暗示禁用），但信号链路专家指出 CR_FCTB_Resp 100% 为 1（暗示启用）。需确认 FCTB 是否依赖 FCTA 使能，或两者为独立配置。",
+          "调优方向与物理逻辑矛盾：感知、算法、信号三位专家均指出，若触发公式为 TTM <= Threshold，则阈值从 1.0s 增至 1.5s 会扩大触发区间（增加灵敏度），与用户期望“减少误触”直接相反。除非变量定义反向。",
+          "数据时间基准不一致：信号链路专家指出日志存在约 8 小时时间戳差异（Test Windows vs Output Signals），导致无法将特定警告事件与外部制动请求精确对齐，而系统状态专家基于窗口事件推断状态机跳变，缺乏总线佐证。",
+          "关注点偏差：系统状态专家聚焦于‘制动保持时长不足 (<3s)’导致状态回退；算法/感知专家聚焦于‘警告标志抖动’。这暗示问题可能分属 L3 观测的不同分支（报警 vs 执行），需确认用户痛点究竟是哪一层。"
+        ],
+        "verdict_preview": "\n\n### 根因\n**无法量化验证且调优方向存疑**: L1 层缺失连续 TTM 序列 (`radar_objects.trc_x_ttm_x`) 导致无法离线重算 1.5s 阈值下的超阈帧数分布；且按标准逻辑 `TTM<=Threshold`，增大阈值 (1.0→1.5) 理论会**增加**触发敏感度，与“减少误触”目标存在物理逻辑冲突。\n因果链: **L1 信号**(无 TTM 原始流) → **L2 逻辑**(阈值比较方向不明) → **L3 观测**(warning_edge_on 高频抖动) → **L4 现象**(验证失败/预期落空)。\n\n### 时序耦合 (TPE 触发清单)\n| 模式 | 源文件：行 | 首触发 t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|--------|\n| Warning Chatter | adasFunc.c (推测): N/A | 1775970400.99s | ~1-2 帧 | TTM 临界震荡 | obj_flag On/Off 频繁跳变 |\n*("
+      }
+    },
+    {
+      "step": "visualize",
+      "timestamp": "2026-04-17T17:39:43.040361",
+      "detail": {
+        "html_path": "D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCATB_TUNE_TEST\\report.html",
+        "charts_built": 4,
+        "warnings": []
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-17T17:43:46.860500",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCATB_TUNE_TEST\\report.md"
+}

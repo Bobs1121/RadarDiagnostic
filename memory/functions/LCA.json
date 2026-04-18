@@ -1,0 +1,7 @@
+{
+  "description": "变道辅助，监测侧后方盲区及相邻车道动态目标。",
+  "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
+  "logic_ref": "adasFunc.c / LcaUpdateSystemStatus",
+  "status": "Doc integrated",
+  "_updated": "2026-04-12T15:26:03.663070"
+}

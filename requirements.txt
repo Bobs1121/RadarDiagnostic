@@ -1,0 +1,10 @@
+rosbags>=0.9.0
+python-can>=4.0.0
+cantools>=39.0.0
+openai>=1.0.0
+pandas>=2.0.0
+pyyaml>=6.0
+python-dotenv>=1.0.0
+rich>=13.0.0
+plotly>=5.20.0
+markdown>=3.5

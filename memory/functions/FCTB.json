@@ -1,0 +1,93 @@
+{
+  "description": "前方交叉交通制动，FCTA 的制动延伸，风险加剧时自动制动。",
+  "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
+  "logic_ref": "adasFunc.c / FctbUpdateSystemStatus",
+  "status": "Doc integrated & Patterns Merged & Updated",
+  "_updated": "2026-04-17T18:26:38.191833",
+  "diagnosis_count": 29,
+  "known_issues": [
+    {
+      "id": "FCTB001",
+      "problem": "adasEnable.bFCTBEnable 信号震荡导致功能间歇性失效",
+      "sessions": [
+        "FCTA001_20260412_180344"
+      ],
+      "date": "2026-04-12",
+      "analysis": "FCTB 使能逻辑依赖 FCTA 状态或外部条件，在临界条件下频繁翻转。双状态机（adasFunc vs ASWIN_SystemState）竞争导致状态变量被反复改写。",
+      "confidence": 0.85,
+      "status": "Consolidated"
+    },
+    {
+      "id": "FCTB002",
+      "problem": "FCTA 触发报警但 FCTB 未触发制动（多因素叠加）",
+      "sessions": [
+        "FCTA002_20260414_101341",
+        "FCTA002_20260414_112303",
+        "FCATB001_20260414_140835",
+        "FCATB001_20260414_144741",
+        "FCATB001_20260414_152110",
+        "FCATB001_20260414_163257",
+        "FCATB001_20260414_174300",
+        "FCTA002_20260416_165708"
+      ],
+      "date": "2026-04-14 ~ 2026-04-16",
+      "analysis": "多因素导致：1) 左右雷达信号合并逻辑中，FL 侧警告信号值 (3) 不满足输出校验 (==2)；2) 激活时长 (0.91s) 小于保持阈值 (3.0s) 导致状态提前回退；3) 车门未关闭或高油门/转向速率触发抑制机制；4) 车速在阈值边缘波动。",
+      "confidence": 0.95,
+      "status": "Consolidated from 8 duplicate entries"
+    },
+    {
+      "id": "FCTB003",
+      "problem": "FCTB 成功触发制动但保压时间不足，目标穿过即释放",
+      "sessions": [
+        "FCTB003_20260414_191015",
+        "FCTB003_20260414_194345",
+        "FCTB003_20260416_165708",
+        "FCTB003_20260416_174319"
+      ],
+      "date": "2026-04-14 ~ 2026-04-16",
+      "analysis": "目标穿越导致 TTC 异常变为 Inf (风险消除) → 状态机提前退出 Active (时长 < 3.0s) + 外部抑制生效 (AEB=False) → 保压逻辑中断，刹车释放。需增加低速锁定逻辑或独立保压计时器。",
+      "confidence": 0.92,
+      "status": "Consolidated from 4 duplicate entries"
+    },
+    {
+      "id": "FCTB004",
+      "problem": "客户感知 FCTB 退出延迟（制动释放晚）",
+      "sessions": [
+        "FCTABLate001_20260415_105229",
+        "FCTABLate001_20260415_132455",
+        "FCTABLate001_20260416_165708",
+        "FCTABLate001_20260416_173548"
+      ],
+      "date": "2026-04-15 ~ 2026-04-16",
+      "analysis": "内部制动保持定时器逻辑（实测保压约 2.8s）优先于外部 AEB 非激活信号（ESP 侧 AEBBAActv=0）触发的释放条件，导致制动请求在风险可能解除后仍维持约 2.8s。因果链：`ESP_FD2.AEBBAActv_0x137`=0(L1 信号) → `bAEBBAActiveFlg`=FALSE(L2 变量) → 内部保压计时器未清零 → 制动持续。",
+      "confidence": 0.9,
+      "status": "New pattern consolidated from 4 sessions"
+    },
+    {
+      "problem": "FCTB 触发后激活时间很短，刚进入激活就退出了，没有持续制动",
+      "session": "FCATB001_20260417_151648",
+      "date": "2026-04-17"
+    },
+    {
+      "problem": "FCTB 触发后激活时间很短，刚进入激活就退出了，没有持续制动",
+      "session": "FCATB001_20260417_155149",
+      "date": "2026-04-17"
+    },
+    {
+      "problem": "FCTB触发时间很短，几百毫秒就退出了",
+      "session": "FCATB001_20260417_165515",
+      "date": "2026-04-17"
+    },
+    {
+      "problem": "想把 FCTB 的 fFctbObjWarningBaseTTMX 从 1.0 调优到 1.5，看一下这个阈值调整对触发稳定性的影响",
+      "session": "FCATB_TUNE_TEST_20260417_172408",
+      "date": "2026-04-17"
+    },
+    {
+      "problem": "FCATB001这个FCTB触发时间很短，只有1帧左右就被取消了",
+      "session": "FCATB001_20260417_180840",
+      "date": "2026-04-17"
+    }
+  ],
+  "function": "FCTB"
+}

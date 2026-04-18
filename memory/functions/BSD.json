@@ -1,0 +1,7 @@
+{
+  "description": "盲区检测，监测车辆两侧后方盲区，依赖角雷达跟踪数据。",
+  "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
+  "logic_ref": "adasFunc.c / BsdUpdateSystemStatus",
+  "status": "Doc integrated",
+  "_updated": "2026-04-12T15:26:03.661113"
+}

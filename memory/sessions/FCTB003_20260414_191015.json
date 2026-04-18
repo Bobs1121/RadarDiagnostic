@@ -1,0 +1,145 @@
+{
+  "session_id": "FCTB003_20260414_191015",
+  "case_id": "FCTB003",
+  "problem": "测试FCTB都能成功的刹车避障，但是保压时间不够，当目标车辆穿过自车后，FCTB就被释放不触发了",
+  "expected": "FCTB能够维持保压3秒",
+  "created_at": "2026-04-14T19:10:15.532181",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-14T19:10:34.238437",
+      "detail": {
+        "function": "FCTB",
+        "confidence": 0.98,
+        "reasoning": "用户明确描述问题为'FCTB 保压时间不够'，即功能触发后在目标穿过自车后过早释放，未能维持预期的 3 秒保压。这属于 FCTB 功能逻辑中的状态保持或退出条件判断问题，而非感知漏检。",
+        "fail_type": "状态异常 STATE",
+        "key_variables": [
+          "fctbSystemState",
+          "fctbHoldTimeCounter",
+          "fctbTargetCrossedFlg",
+          "fctbBrakeReleaseCondition",
+          "adasFunc.fctbLogic",
+          "ASWIN_SystemState.fctbState"
+        ],
+        "analysis_plan": [
+          "1. 确认 FCTB 状态机在目标穿过后的状态流转，检查是否从 Active(3) 提前跳变至 Standby(2) 或 None(0)。",
+          "2. 分析保压计时器 (Hold Time Counter) 的初始化与清零逻辑，确认是否在目标消失时立即清零。",
+          "3. 检查双状态机 (adasFunc.c vs ASWIN_SystemState.c) 在目标穿过瞬间的调度顺序，确认是否存在状态覆盖导致保压中断。",
+          "4. 验证 FCTB 退出条件中关于'目标穿过'的定义是否过于激进，导致保压逻辑未执行。",
+          "5. 对比 FCTB 与 RCTB 的保压逻辑代码，确认是否存在配置参数差异或代码复用错误。"
+        ],
+        "related_functions": [
+          "FCTA",
+          "RCTB"
+        ],
+        "subtasks": [
+          {
+            "task": "查询 FCTB 状态机代码中关于保压时间 (Hold Time) 的计数器逻辑及退出条件",
+            "complexity": "complex"
+          },
+          {
+            "task": "提取测试日志中目标穿过瞬间的 fctbSystemState 和 adasEnable 信号变化序列",
+            "complexity": "simple"
+          },
+          {
+            "task": "分析 asw_coem_Mainfunctin_20ms 任务中 ASWIN_SystemState.c 对 FCTB 状态的改写逻辑",
+            "complexity": "complex"
+          },
+          {
+            "task": "对比 FCTB 与 RCTB 的保压参数配置 (Calibration Parameters)",
+            "complexity": "simple"
+          }
+        ]
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-14T19:10:55.318631",
+      "detail": {
+        "bag_frames": 12478,
+        "can_frames": 224236
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-14T19:10:55.356863",
+      "detail": {
+        "count": 2,
+        "windows": [
+          {
+            "t_start": 1776063428.0633576,
+            "t_end": 1776063436.216746,
+            "reason": "状态跳变 + 目标出现 + 速度变化"
+          },
+          {
+            "t_start": 1776063451.793888,
+            "t_end": 1776063461.633646,
+            "reason": "状态跳变 + 速度变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-14T19:11:30.496154",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "ego_front_left",
+          "ego_front_left_stats",
+          "trc_0_stats_front_left",
+          "trc_1_stats_front_left",
+          "trc_2_stats_front_left",
+          "trc_3_stats_front_left",
+          "ego_front_right",
+          "ego_front_right_stats",
+          "trc_0_stats_front_right",
+          "trc_1_stats_front_right",
+          "trc_2_stats_front_right",
+          "trc_3_stats_front_right",
+          "timeline",
+          "state_transitions",
+          "can_summary",
+          "KEY_FACTS"
+        ],
+        "key_facts": "[窗口1] 1776063428.06s ~ 1776063436.22s (8.2s) — 状态跳变 + 目标出现 + 速度变化\n[窗口2] 1776063451.79s ~ 1776063461.63s (9.8s) — 状态跳变 + 速度变化\n\n[状态跳变] (8次)\n  t=1776063433.605s front_left fctb_system_state: 6→2\n  t=1776063434.01s front_left fctb_system_state: 2→6\n  t=1776063434.217s front_left fctb_system_state: 6→2\n  t=1776063433.458s front_right fctb_system_state: 6→2\n  t=1776063434.014s front_right fctb_system_state: 2→6\n  t=1776063434.201s front_right fctb_system_state: 6→2\n  t=1776063453.794s front_right fctb",
+        "window_count": 2,
+        "transition_count": 8
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-14T19:11:30.532920",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTB 激活条件\n\n**自车速度范围:**\n  active: [fFctbActiveLowSpd=0.5, fFctbActiveUpSpd=21.0] km/h\n  deactive: [fFctbDeactiveLowSpd=0.0, fFctbDeactiveUpSpd=22.0] km/h\n  detect: [fFctbDetectLowSpd=0.5, fFctbDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=0.5, fFctaObjWarningUpSpd=22.0)"
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-14T19:11:30.891301",
+      "detail": {
+        "signal_count": 19,
+        "result_preview": "### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT active, causing FCTB brake hold to release → Release Brake Hold\n  变量: g_DTCCode.bAEBBAActiveFlg, 阈值: == FALSE\n  **ESP_FD2.AEBBAActv_0x137**: ⚠️ **抑制条件满足**\n    判定: 阈值=== FALSE: 100.0%帧为零 (1882/1882)\n    原始统计: min=0.0000, max=0.0000, mean=0.0000, 非零帧=0.0%\n    帧数: 1882, 变化: 0次\n    ⚠ 极性交叉检查: 反向阈值'== TRUE'→阈值=== TRUE: 0.0%帧非零 (0/1882)\n      原始判定为抑制满足，请专家结合代码逻辑确认极性\n\n### [AEB] AEB Brake Active (BA) or AEB Inactive Brake (IB) is NOT activ"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-14T19:27:06.707370",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "状态码定义冲突：代码条件表定义的状态为 0/1/4/5，而数据时间线实测状态为 2/3/6。各专家直接使用了实测值分析，但未建立与代码逻辑文档的统一映射，可能导致状态跳转原因判断错误。",
+          "根因主次逻辑矛盾：算法专家认为主因是 TTC 失效（目标穿过），架构/链路专家认为主因是 AEB 信号缺失。若外部抑制表规定'AEB=0 即释放'，则无法解释为何实测能保压 2s；若保压 2s 是允许行为，则需确认设计意图是否为‘无 AEB 支持时最大仅保压 2s'。",
+          "速度阈值边界模糊：实测最小车速 0.13km/h 低于激活下限 0.5km/h，但激活范围标注为[0.5, 21.0]。专家仅标记‘部分满足’，未分析车速跌破阈值的时间点是否与状态回退（3→2）完全同步。"
+        ],
+        "verdict_preview": "\n\n### 根因\n目标穿过自车后相对速度变向导致 TTC 变为 Inf（实际值 inf, 来源：感知专家）→ FCTB 系统状态由 3(Active) 跳变至 2(Standby)（实际值 2.06s 维持，来源：测试窗口）→ 未达到 3 秒保压阈值且 AEB 信号持续为 0（实际值 0, 来源：抑制信号实测）满足释放条件强制退出。\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 数据来源 |\n|---|---|---|---|---|\n| FCTB 保压时长 | ≥ 3.0 s | 2.06 s (3→2 态间隔) | ❌ 否 | 测试窗口/状态时间线 |\n| AEB BA Active | == TRUE (维持保压) | 100% 帧为 0 | ⚠️ 抑制满足 | 抑制信号实测 |\n| AEB IB Active | == TRUE (维持保压) | 98.9% 帧为 0 | ⚠️ 抑制满足 | 抑制信号实测 |\n| 自车车速 | [0.5, 21.0] km/h | 0.13 ~ 2.98 km/h | ⚠️ 边缘 | 条件检查表 |\n| 目标 TTC "
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-14T19:27:37.842971",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\FCTB003\\report.md"
+}
