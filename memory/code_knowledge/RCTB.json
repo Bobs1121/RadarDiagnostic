@@ -1,12 +1,16 @@
 {
   "_meta": {
     "function": "RCTB",
-    "last_updated": "2026-04-18T17:24:48.888514",
+    "last_updated": "2026-04-18T19:32:14.163968",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7"
     }
   },
   "alarm_logic": {
@@ -287,6 +291,290 @@
         },
         "id": "item-8f6d8117",
         "_learned_at": "2026-04-18T17:24:48.888514"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "bRctbWarningFlg": {
+        "description": "RCTB 左右侧报警标志位（最终判断量）",
+        "formula": "(TTM <= fRctbObjWarningTTM) && (DDCI >= Offset) ? Warning : Normal",
+        "inputs": [
+          "objOutStruct.distY",
+          "objOutStruct.velX",
+          "objOutStruct.velY"
+        ],
+        "data_source": "ADAS 逻辑层基于感知目标计算",
+        "output_usage": "驱动 BMS/Chassis 执行制动请求或 HMI 报警",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 797,
+          "function": "Global Declaration"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      "rctbSystemState": {
+        "description": "RCTB 系统状态机（0-None, 3-Active, etc.）",
+        "formula": "EgoSpeed > ActiveLow && EgoSpeed < ActiveUp && Gear == Reverse ? Active : Standby/Off",
+        "inputs": [
+          "EgoVelocity",
+          "GearStatus",
+          "SteeringAngle"
+        ],
+        "data_source": "车辆总线信号 (Vehicle Bus)",
+        "output_usage": "作为功能启用的总开关，影响所有目标检测逻辑",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 780,
+          "function": "Variable Definition"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      "fRctbTTM": {
+        "description": "预测碰撞时间 (Time-To-Merge/Impact)",
+        "formula": "DistanceToPath / RelativeVelocity (带符号保护)",
+        "inputs": [
+          "Target DistX/Y",
+          "Target VelX/Y",
+          "EgoVel"
+        ],
+        "data_source": "感知层 objOutStruct (来自 postProcess)",
+        "output_usage": "与 fRctbObjWarningTTM 比较决定触发等级",
+        "code_ref": {
+          "file": "adasFunc.c (Logic Implied)",
+          "line": 441,
+          "function": "Parameter Reference"
+        },
+        "confidence": 0.7,
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      "fRctbBrakeReqVal": {
+        "description": "RCTB 制动请求值 (Deceleration m/s²)",
+        "formula": "Severity == High ? fRctbHighSpeedBrakeValue : fRctbBrakeValue",
+        "inputs": [
+          "bRctbWarningFlg",
+          "CollisionSeverity",
+          "CurrentSpeed"
+        ],
+        "data_source": "ADAS 决策层输出至 Chassis",
+        "output_usage": "控制 ESP/VB 执行减速度干预",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 795,
+          "function": "Variable Definition"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Radar/Perception Targets (postProcess)",
+        "to": "objOutStruct[i].(distX, distY, velX, velY)",
+        "in_file": "objAttribCal.c / track.c",
+        "transform": "坐标滤波、轨迹融合、属性关联",
+        "id": "item-55ed248e",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "step": 2,
+        "from": "Perception Targets",
+        "to": "fRctbTTM / fRctbDDCI (中间风险指标)",
+        "in_file": "adasFunc.c (Logic Implied)",
+        "transform": "相对运动解算得到时间与距离阈值",
+        "id": "item-7fe85dfd",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "step": 3,
+        "from": "Risk Metrics & Sys Status",
+        "to": "bRctbWarningFlg (报警标志) / rctbSystemState",
+        "in_file": "adasFunc.c",
+        "transform": "布尔逻辑判定 (TTM<Thresh && DDCI>Offset)",
+        "id": "item-34217bcf",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "step": 4,
+        "from": "Warning Flag History (Buffer)",
+        "to": "fRctbBrakeReqVal (最终控制指令)",
+        "in_file": "adasFunc.c",
+        "transform": "迟滞保持计数与强度分级映射",
+        "id": "item-73093d8d",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fRctbActiveUpSpd",
+        "value": "9.0 km/h",
+        "role": "系统激活最高车速限制",
+        "id": "frctbactiveupspd-c1dd4cca",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbDetectLowSpd",
+        "value": "0.7 km/h",
+        "role": "目标检测最低自车车速门槛",
+        "id": "frctbdetectlowspd-53bd95df",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbObjWarningTTM",
+        "value": "1.6 s",
+        "role": "预警触发最小剩余时间",
+        "id": "frctbobjwarningttm-06a5e428",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbObjDeWarningTTM",
+        "value": "2.0 s",
+        "role": "撤警滞后时间阈值",
+        "id": "frctbobjdewarningttm-32bfd060",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbObjWarningLowerDDCIOffSet",
+        "value": "-2.0 m",
+        "role": "危险距离碰撞点偏移量",
+        "id": "frctbobjwarninglowerddci-f9034ddb",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbObjWarningLowerCDDCIOffSet",
+        "value": "-4.0 m",
+        "role": "严重危险距离碰撞点偏移量",
+        "id": "frctbobjwarninglowercddc-0bd0bb77",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbBrakeValue",
+        "value": "-4.0 m/s²",
+        "role": "标准减速请求强度",
+        "id": "frctbbrakevalue-506c064c",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbHighSpeedBrakeValue",
+        "value": "-6.0 m/s²",
+        "role": "高速/高风险场景减速请求强度",
+        "id": "frctbhighspeedbrakevalue-ad3bbcd1",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      },
+      {
+        "name": "fRctbStopSpd",
+        "value": "0.277 m/s (1km/h)",
+        "role": "停驶判定速度阈值",
+        "id": "frctbstopspd-27654c7f",
+        "_learned_at": "2026-04-18T19:03:40.392816"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-1",
+        "internal_var": "adasWarning.bLeftRctbWarning / bRightRctbWarning",
+        "description": "RCTB 左右侧碰撞预警等级（0-无，1-预警，2-制动请求）",
+        "set_location": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": "1126/1127",
+          "function": "AdasWarningReset / CloseRctbFunc"
+        },
+        "merge_logic": "RR 与 RL 雷达警告信号取最大值 (Max)",
+        "merge_location": {
+          "file": "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
+          "line": 1187,
+          "context": "rctb_max_value = (l_temp_u8_RCTB_RR >= l_temp_u8_RCTB_RLPri) ? l_temp_u8_RCTB_RR : l_temp_u8_RCTB_RLPri;"
+        },
+        "can_signal": "RSDS_CTA_Actv / RCTB_BrakeReq (Inferring from GetRctbBrakeValue)",
+        "rte_write_location": {
+          "file": "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
+          "line": 815,
+          "note": "显式写信号为 RSDS_CTA_Actv (状态)，制动值通过 GetRctbBrakeValue 仲裁后下发"
+        },
+        "transform": "uint8 映射 (Internal 0-2 -> CAN 0-2)",
+        "message_id": "0x??? (RTE Signal: RSDS_CTA_Actv)",
+        "downstream": [
+          "ESP (执行制动)",
+          "HMI/仪表 (显示状态)"
+        ],
+        "gating_conditions": [
+          "rctbSystemState == 3 (Active)",
+          "adasEnable.bRCTBEnable == TRUE",
+          "Vehicle Speed <= 9.0 km/h",
+          "Gear == 6U or 7U (Reverse)"
+        ],
+        "_learned_at": "2026-04-18T19:32:14.163968"
+      },
+      {
+        "id": "out-2",
+        "internal_var": "adasWarning.fBrakeValue",
+        "description": "RCTB 目标减速度/制动请求值",
+        "set_location": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 795,
+          "variable": "fRctbBrakeReqVal"
+        },
+        "merge_logic": "基于触发时间戳的优先级仲裁 (先触发优先)",
+        "merge_location": {
+          "file": "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c",
+          "line": 995,
+          "function": "GetRctbBrakeValue"
+        },
+        "can_signal": "RCTB_DecelReq (Implied via RTE Mapping)",
+        "rte_write_location": {
+          "file": "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
+          "line": "TxRunnable_FuncSignal (Truncated around L1188)",
+          "note": "具体写入位置被截断，但逻辑通过 GetRctbBrakeValue 提供数据源"
+        },
+        "transform": "Float 透传 / 缩放",
+        "message_id": "0x???",
+        "downstream": [
+          "ESP"
+        ],
+        "gating_conditions": [
+          "Left/Right Warning > 0",
+          "No AEB Intervention Conflict",
+          "g_DTCCode.bBrakeNotReadyFlg == FALSE"
+        ],
+        "_learned_at": "2026-04-18T19:32:14.163968"
+      }
+    ],
+    "merge_strategy": "双雷达（RL/RR）协同策略：1. 预警信号：在 RteComMapping 层对左右雷达发出的 RCTB 警告级别取最大值。2. 制动值：在 ASWOUT_OutCalc 层通过 GetRctbBrakeValue 比较左右侧的触发时间戳（left_timestamp / right_timestamp），选择最早触发的雷达制动值作为输出，防止重复请求冲突。",
+    "external_gating": [
+      {
+        "source": "adasEnable.bRCTBEnable (Switch/User Config)",
+        "effect": "为 FALSE 时功能禁用，强制清空 Warning 和 BrakeValue",
+        "id": "item-1ae6749b",
+        "_learned_at": "2026-04-18T19:32:14.163968"
+      },
+      {
+        "source": "g_DTCCode.bBrakeNotReadyFlg",
+        "effect": "为 TRUE 时 rctbSystemState 置为 Passive，不发送制动请求",
+        "id": "item-97762c7b",
+        "_learned_at": "2026-04-18T19:32:14.163968"
+      },
+      {
+        "source": "CarSpeed (g_egoCarAddInfo.carSpd)",
+        "effect": "超出 0.7~9.0 km/h 范围或 >10 km/h (去激活) 时退出 Active 状态",
+        "id": "item-bd48b80b",
+        "_learned_at": "2026-04-18T19:32:14.163968"
+      },
+      {
+        "source": "Actual Gear (g_egoCarAddInfo.actual_gear)",
+        "effect": "非倒档 (Gear != 6U/7U) 时功能不激活",
+        "id": "item-4e37e851",
+        "_learned_at": "2026-04-18T19:32:14.163968"
+      },
+      {
+        "source": "ERR_STS / DTC",
+        "effect": "任一侧雷达故障 (ErrSts()==TRUE) 抑制对应通道警告及状态上报",
+        "id": "item-6c454da4",
+        "_learned_at": "2026-04-18T19:32:14.163968"
       }
     ]
   }

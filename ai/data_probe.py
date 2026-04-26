@@ -142,7 +142,17 @@ SEMANTIC_FIELDS = {
         [],  # uses probe.windows, not a column
         "True if the row's timestamp falls inside any provided test window",
     ),
+    "is_stable_target": (
+        ["life_cycle"],
+        "life_cycle >= 5 — radar has tracked this object stably for several "
+        "frames (filters out flickering ghost targets and short-lived clutter)",
+    ),
 }
+
+# Threshold for ``is_stable_target``. Radar tracking typically stabilises in
+# 3–5 frames; we pick 5 to bias towards *real* targets even if a handful of
+# early frames of a real object are dropped.
+_STABLE_TARGET_MIN_LIFE = 5
 
 
 # ── Safe expression evaluation ────────────────────────────────────────────
@@ -358,6 +368,8 @@ class DataProbe:
             for (t0, t1) in self.windows_ns:
                 in_win |= (ts >= t0) & (ts <= t1)
             cols["in_window"] = in_win
+        if "is_stable_target" in used_semantic and "life_cycle" in cols:
+            cols["is_stable_target"] = cols["life_cycle"] >= _STABLE_TARGET_MIN_LIFE
 
         # 5) Apply filter
         if filter:

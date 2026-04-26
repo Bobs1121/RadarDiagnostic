@@ -1,0 +1,7 @@
+{
+  "session_id": "FCTBNOoccur_20260420_150326",
+  "function": "FCTB",
+  "problem": "FCTB没有发生",
+  "diagnosis_summary": "\n\n### 根因\n**L1/L2.5 耦合导致的状态清零是直接的软件原因**：**ESP 侧 AEB 协同信号（`AEBBAActv_0x137`/`AEBIBActv_0x137`）持续为 0**，在 **t=1776614587.22s** 首次触发 **`HoldRelease`** 模式（`adasFunc.c:6378-6382`），副作用变量 **`bFctbKeepBrakeFlg`** 被清零，阻断了制动请求维持；同时 **目标横向距离（`dist_y`≈15m）严重超出 ROI 阈值（±1.5m）**（来源：Variable Probe），导致感知层未生成有效激活目标，双重因素共同导致 FCTB 未发生。\n\n### 时序耦合(TPE 触发清单)\n| 模式 | 源文件：行 | 首触发 t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|-------|\n| **HoldRelease** | `adasFunc.c:6378-6382` | `1776614587.224s` | `224",
+  "_updated": "2026-04-20T15:14:42.793597"
+}

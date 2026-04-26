@@ -2,6 +2,10 @@
   "description": "后方交叉交通制动，倒车时风险加剧自动制动。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / RctaRctbUpdateStatus",
-  "status": "Doc integrated",
-  "_updated": "2026-04-12T15:26:03.665071"
+  "status": "Output Chain Added & Validated",
+  "_updated": "2026-04-20T10:37:56.217468",
+  "output_chain_items": 7,
+  "calculation_chain_items": 17,
+  "alarm_logic_items": 17,
+  "latest_update": "2026-04-20T10:30:00.000000"
 }

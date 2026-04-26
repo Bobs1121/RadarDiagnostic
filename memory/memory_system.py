@@ -247,6 +247,100 @@ class MemorySystem:
                 pass
         return {}
 
+    def read_constants(self) -> dict:
+        """读取全局数值常量表（``memory/code_knowledge/constants.json``）。
+
+        由 ``CodeLearner._learn_constants_if_needed()`` 写入。所有功能共享。
+        若文件不存在或损坏返回空 dict。
+        """
+        path = self.memory_dir / "code_knowledge" / "constants.json"
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def render_constants_for_context(
+        self,
+        func_name: Optional[str] = None,
+        max_chars: int = 2000,
+    ) -> str:
+        """把数值常量表渲染成紧凑 markdown 段，供 Planner / Expert Panel 使用。
+
+        若 ``func_name`` 提供，则优先展示与该功能相关的条目（按 ``used_by``
+        字段过滤）；其他功能仍会被展示，但放在 "其他相关" 折叠区。
+
+        返回空串表示暂无常量知识。
+        """
+        data = self.read_constants()
+        if not data:
+            return ""
+
+        vc = data.get("vehicle_config") or {}
+        ft = data.get("function_thresholds") or {}
+        roi = data.get("roi_derived") or {}
+        if not (vc or ft or roi):
+            return ""
+
+        fn_upper = (func_name or "").upper()
+
+        def _is_for(item: dict) -> bool:
+            if not fn_upper:
+                return True
+            used = {u.upper() for u in (item.get("used_by") or [])}
+            return (not used) or (fn_upper in used)
+
+        lines: list[str] = ["## 已学数值常量（全局，可用于数值对比）"]
+        if vc:
+            lines.append("**vehicle_config**（基础物理常量）:")
+            for name, it in list(vc.items())[:20]:
+                if not isinstance(it, dict):
+                    continue
+                v = it.get("value", "?")
+                u = it.get("unit", "")
+                desc = it.get("description", "")
+                lines.append(f"  - `{name}` = **{v}{(' ' + u) if u else ''}**  _{desc}_")
+
+        if roi:
+            lines.append("")
+            lines.append("**roi_derived**（边界数值 = 公式 + 已算出的数字）:")
+            related = [(n, it) for n, it in roi.items() if isinstance(it, dict) and _is_for(it)]
+            others = [(n, it) for n, it in roi.items() if isinstance(it, dict) and not _is_for(it)]
+            for name, it in related[:20]:
+                cv = it.get("computed_value", "?")
+                u = it.get("unit", "")
+                formula = it.get("formula", "")
+                used = "/".join(it.get("used_by") or [])
+                desc = it.get("description", "")
+                lines.append(
+                    f"  - `{name}` = **{cv}{(' ' + u) if u else ''}**  "
+                    f"[公式: {formula}]  [{used}]  _{desc}_"
+                )
+            if others and fn_upper:
+                lines.append(f"  _其他 ROI 边界 ({len(others)} 条) 与 {fn_upper} 不直接相关，已省略_")
+
+        if ft:
+            lines.append("")
+            lines.append("**function_thresholds**（按功能命名的阈值）:")
+            related = [(n, it) for n, it in ft.items() if isinstance(it, dict) and _is_for(it)]
+            others_count = len(ft) - len(related)
+            for name, it in related[:25]:
+                v = it.get("value", "?")
+                u = it.get("unit", "")
+                role = it.get("role", "")
+                used = "/".join(it.get("used_by") or [])
+                lines.append(
+                    f"  - `{name}` = **{v}{(' ' + u) if u else ''}**  [{used}]  _{role}_"
+                )
+            if others_count and fn_upper:
+                lines.append(f"  _其他 ({others_count}) 与 {fn_upper} 无关_")
+
+        text = "\n".join(lines)
+        if len(text) > max_chars:
+            text = text[: max_chars - 40] + "\n... [constants truncated] ..."
+        return text
+
     def render_code_knowledge_for_context(
         self, func_name: str, max_chars: int = 6000,
     ) -> str:

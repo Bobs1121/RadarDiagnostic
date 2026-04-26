@@ -2,6 +2,9 @@
   "description": "开门预警，防止静止/低速开门时与后方接近目标碰撞。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / DOWUpdateSystemStatus",
-  "status": "Doc integrated",
-  "_updated": "2026-04-12T15:26:03.662066"
+  "status": "Calculation Chain Added",
+  "_updated": "2026-04-20T10:09:02.119501",
+  "calculation_chain_items": 11,
+  "alarm_logic_items": 16,
+  "latest_update": "2026-04-18T19:27:03.828431"
 }

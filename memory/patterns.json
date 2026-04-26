@@ -1,65 +1,20 @@
 [
   {
-    "function": "FCTA",
-    "symptom": "功能未触发报警，但目标列表中存在目标",
-    "root_cause": "目标类型过滤逻辑差异（如行人触发但 GVT 车不触发）或 ROI 阈值不匹配",
-    "keywords": [
-      "FCTA",
-      "No Alarm",
-      "Pedestrian Trigger",
-      "GVT Car",
-      "Target Type"
-    ],
-    "fix_hint": "检查目标分类属性 (objAttribCal) 及 FCTA ROI 阈值配置，确认 GVT 车是否被误分类或过滤",
-    "_learned_at": "2026-04-12T15:26:03.686271",
-    "_id": "29a8e601"
-  },
-  {
     "function": "FCTB",
-    "symptom": "FCTB 功能使能信号 (bFCTBEnable) 频繁震荡，导致功能间歇性失效",
-    "root_cause": "FCTB 使能逻辑依赖条件（如 FCTA 状态、车速、障碍物距离）处于临界值，或双状态机（adasFunc vs ASWIN_SystemState）竞争导致状态翻转",
+    "symptom": "FCTB 触发时间极短（1 帧或几百毫秒）即退出，无持续制动",
+    "root_cause": "角雷达目标跟踪不稳定导致预警标志 (fctb_obj_flag) 高频抖动，叠加自车车速在激活阈值 (0.5km/h) 边缘震荡，致使状态机无法维持 Active 态。",
     "keywords": [
       "FCTB",
-      "Enable Oscillation",
-      "bFCTBEnable",
-      "Toggle",
-      "State Machine Conflict"
+      "Short Duration",
+      "Jitter",
+      "fctb_obj_flag",
+      "Speed Threshold"
     ],
-    "fix_hint": "检查 adasFunc.c 中 FCTB 使能条件阈值，增加防抖逻辑；对比 adasFunc 与 ASWIN_SystemState 对同一状态变量的写入时序。",
-    "_learned_at": "2026-04-12T19:41:36.670519",
-    "_id": "c3c186f9"
-  },
-  {
-    "function": "FCTB",
-    "symptom": "FCTA 触发警告但 FCTB 未触发制动，且状态机频繁跳变或提前回退",
-    "root_cause": "多因素叠加：1) 左右雷达信号合并逻辑中，对侧警告信号值不满足输出校验（如值 3 不匹配阈值 2）；2) 激活时长不足（<3.0s）导致状态机无法保持 Active；3) 车门未关闭或高油门/转向速率触发抑制机制；4) 车速在阈值边缘波动。",
-    "keywords": [
-      "FCTB",
-      "No Brake",
-      "Signal Merge",
-      "Duration Threshold",
-      "Suppression",
-      "State Retraction"
-    ],
-    "fix_hint": "检查 FL/FR 信号合并逻辑中的值校验条件；确认激活时长是否满足保持阈值；排查车门状态、油门开度、转向速率等抑制信号；优化车速阈值迟滞。",
-    "_learned_at": "2026-04-14T16:32:57.228478",
-    "_id": "30dae3b4"
-  },
-  {
-    "function": "FCTB",
-    "symptom": "FCTB 成功触发制动但保压时间不足，目标穿过即释放",
-    "root_cause": "目标穿越导致 TTC 异常变为 Inf (风险消除) → 状态机提前退出 Active (时长 < 3.0s) + 外部抑制生效 (AEB=False) → 保压逻辑中断。",
-    "keywords": [
-      "FCTB",
-      "Hold Time",
-      "TTC=Inf",
-      "Risk Elimination",
-      "Brake Release",
-      "AEB Suppression"
-    ],
-    "fix_hint": "增加低速锁定逻辑，解耦 AEB 依赖，或引入独立保压计时器机制以覆盖目标穿越后的风险消除窗口。",
-    "_learned_at": "2026-04-15T10:49:09.323744",
-    "_id": "fdcfa4f3"
+    "fix_hint": "检查目标跟踪稳定性（objAttribCal 输出波动），增加 fctb_obj_flag 防抖逻辑；优化车速阈值迟滞区间。",
+    "learned_at": "2026-04-20T10:15:00.000000",
+    "id": "fctb_jitter_v13",
+    "_learned_at": "2026-04-20T10:18:37.412919",
+    "_id": "1bdda56e"
   },
   {
     "function": "FCTB",
@@ -73,52 +28,73 @@
       "Timer Priority"
     ],
     "fix_hint": "检查内部保压计时器与外部抑制信号的优先级逻辑，优化释放条件判断顺序，确保外部抑制信号能立即触发释放或缩短保压时间。",
-    "_learned_at": "2026-04-17T15:16:48.311287",
-    "_id": "b4a146c2"
+    "learned_at": "2026-04-20T10:15:00.000000",
+    "id": "fctb_delay_v13",
+    "_learned_at": "2026-04-20T10:18:37.421553",
+    "_id": "013df7e3"
   },
   {
-    "function": "FCTB",
-    "symptom": "FCTB触发时间过短，仅持续约1帧即被取消",
-    "root_cause": "角雷达目标跟踪不稳定导致预警标志抖动叠加车速阈值震荡，且AEB协同信号抑制生效",
+    "function": "FCTA",
+    "symptom": "FCTA 报警触发距离过近或报警晚",
+    "root_cause": "FCTA 状态机 (L6: FCTA/state_machine) 中 TTM/TTM 计算逻辑或 ROI 阈值配置导致目标筛选过早失效，或 `fFctbObjWarningBaseTTMX` 阈值设置过于激进，导致在目标进入有效区域前即被过滤。",
     "keywords": [
-      "角雷达目标跟踪不稳定",
-      "预警标志高频抖动",
-      "车速阈值边缘震荡",
-      "AEB协同信号抑制"
+      "FCTA",
+      "Late Warning",
+      "TTM Threshold",
+      "ROI Filtering",
+      "State Machine"
     ],
-    "fix_hint": "优化雷达目标跟踪稳定性，增强预警标志抗抖动逻辑，调整车速阈值判定策略，检查AEB协同信号抑制条件合理性",
-    "_learned_at": "2026-04-17T18:26:38.187771",
-    "_id": "3b8c9a51"
+    "fix_hint": "检查 L6 代码中 FCTA 状态机的 TTM 计算逻辑；验证 `fFctbObjWarningBaseTTMX` 阈值 (当前 1.0s) 是否需调整；分析目标在 ROI 内的停留时间与状态机转换时序。",
+    "learned_at": "2026-04-20T14:00:00.000000",
+    "id": "fcta_late_warning_v15",
+    "_learned_at": "2026-04-20T15:03:25.837432",
+    "_id": "f19fa054"
   },
   {
     "function": "FCTB",
-    "symptom": "FCTB 触发时间极短（1 帧或几百毫秒）即退出，无持续制动",
-    "root_cause": "角雷达目标跟踪不稳定导致预警标志 (fctb_obj_flag) 高频抖动，叠加自车车速在激活阈值 (0.5km/h) 边缘震荡，致使状态机无法维持 Active 态；同时可能伴随 AEB 协同信号链路失效或抑制条件误触发。",
-    "keywords": [
-      "FCTB",
-      "Short Duration",
-      "Jitter",
-      "fctb_obj_flag",
-      "Speed Threshold",
-      "AEB Link Failure"
-    ],
-    "fix_hint": "检查目标跟踪稳定性（objAttribCal 输出波动），增加 fctb_obj_flag 防抖逻辑；优化车速阈值迟滞区间；排查 AEBBAActv 信号链路映射及有效性。",
-    "_learned_at": "2026-04-18T16:42:05.223264",
-    "_id": "ef819d19"
-  },
-  {
-    "function": "FCTB",
-    "symptom": "FCTB 触发时间极短（仅 1 帧或数百毫秒）即被取消，无法维持制动",
-    "root_cause": "角雷达目标跟踪不稳定导致预警标志 (fctb_obj_flag) 高频抖动，叠加自车车速在激活阈值（如 0.5km/h）边缘震荡，致使状态机无法维持在 Active 态超过最小保持时间（3.0s）。",
+    "symptom": "FCTB 阈值调优导致触发稳定性变化",
+    "root_cause": "调整 `fFctbObjWarningBaseTTMX` 阈值 (如 1.0s -> 1.5s) 改变了 FCTB 状态机进入 Active 态的 TTM 门槛，直接影响目标筛选的灵敏度与误报率。",
     "keywords": [
       "FCTB",
-      "Trigger Instant Exit",
-      "fctb_obj_flag Jitter",
-      "Speed Threshold Oscillation",
-      "Active State Failure"
+      "Threshold Tuning",
+      "TTMX",
+      "Stability",
+      "Sensitivity"
     ],
-    "fix_hint": "检查目标跟踪稳定性算法；增加车速阈值迟滞；优化状态机进入 Active 态的防抖逻辑；确认 fctb_obj_flag 在目标穿越过程中的连续性。",
-    "_learned_at": "2026-04-18T17:37:14.496083",
-    "_id": "1127c195"
+    "fix_hint": "参考 FCATB_TUNE_TEST 案例，对比调整前后目标 TTM 分布与状态机转换帧数；评估阈值调整对“触发即退出”抖动问题的改善效果。",
+    "learned_at": "2026-04-20T14:00:00.000000",
+    "id": "fctb_threshold_tuning_v15",
+    "_learned_at": "2026-04-20T15:03:25.847437",
+    "_id": "2e81109c"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "FCTB未按预期触发",
+    "root_cause": "AEB协同信号异常与目标横向距离超出ROI阈值共同导致制动请求阻断",
+    "keywords": [
+      "AEBBAActv_0x137",
+      "AEBIBActv_0x137",
+      "HoldRelease模式",
+      "ROI阈值",
+      "bFctbKeepBrakeFlg清零"
+    ],
+    "fix_hint": "检查AEB协同信号逻辑异常，优化目标横向距离ROI阈值判定，确保制动状态维持机制有效性",
+    "_learned_at": "2026-04-20T15:15:12.779725",
+    "_id": "b145c572"
+  },
+  {
+    "function": "FCTB",
+    "symptom": "测试CCCscp near side 60kph时FCTB功能未触发",
+    "root_cause": "档位状态不满足(D/R)导致使能关闭且外部抑制信号清除制动保持状态",
+    "keywords": [
+      "actual_gear",
+      "fctb_enable",
+      "HoldRelease",
+      "AEBBAActv_0x137",
+      "bFctbKeepBrakeFlg"
+    ],
+    "fix_hint": "检查档位使能逻辑与AEB协同释放信号的优先级冲突，验证制动保持状态清除条件",
+    "_learned_at": "2026-04-23T17:20:02.223235",
+    "_id": "a82b5626"
   }
 ]

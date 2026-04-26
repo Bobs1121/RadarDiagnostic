@@ -81,16 +81,27 @@ _USER_TEMPLATE = """## 问题描述
 ## 已学的代码知识（L6）
 {code_knowledge}
 
+## 已学数值常量（全局，可直接写入查询表达式）
+{constants}
+
 ## 可查数据表 & 字段
 {inventory}
 
 ## 语义派生字段（可直接用）
 - `side`：`'left' if dist_y >= 0 else 'right'`（仅在 radar_objects 表可用）
 - `in_window`：当前行时间戳是否落在任一测试窗口内（bool）
+- `is_stable_target`：`life_cycle >= 5`（仅 radar_objects）—— 目标已被雷达稳定
+  跟踪数帧，排除闪烁/瞬现鬼影。**对任何涉及目标距离/ROI/速度的查询，默认在
+  filter 里加 `is_stable_target`**（除非你明确要研究跟踪不稳定性本身）。
 
 ## 已有基础 evidence（不要重复查）
 Expert Panel 已经能看到：每个测试窗口的 target 速度/距离基础统计、ego 速度、
 warning 状态跳变、帧级时间线。请**聚焦代码知识揭示的、不在基础 evidence 里的变量**。
+
+## 重要：阈值数值化
+如果"已学数值常量"里已经有某个 ROI 边界（例如 `LineBSDLCAL = -4.288 m`），
+**请直接在 filter 里用数字**（如 `filter: "in_window & (dist_y < -4.288)"`），
+这样 probe 返回的统计能直接被专家拿去做"超出/未超出"的数值判断。
 
 ## 输出格式（严格 JSON）
 ```json
@@ -203,6 +214,7 @@ class VariableQueryPlanner:
         default plan on any error.
         """
         knowledge_txt = self._render_code_knowledge(func_name)
+        constants_txt = self._render_constants(func_name)
         inventory_txt = self._render_inventory(store)
         focus_txt = ", ".join(focus_params) if focus_params else "(未分类)"
 
@@ -213,6 +225,7 @@ class VariableQueryPlanner:
             fail_type=fail_type or "UNKNOWN",
             focus_params=focus_txt,
             code_knowledge=knowledge_txt,
+            constants=constants_txt,
             inventory=inventory_txt,
         )
 
@@ -263,6 +276,23 @@ class VariableQueryPlanner:
         except Exception:
             rendered = ""
         return rendered or "(暂无代码知识)"
+
+    def _render_constants(self, func_name: str, max_chars: int = 1800) -> str:
+        """Pull the global numeric-constants table, filtered to ``func_name``.
+
+        This is what makes the Planner able to write
+        ``filter: "abs(dist_y) > 4.288"`` instead of the vague
+        ``"abs(dist_y) > ROI_THRESHOLD"``.
+        """
+        if not self.memory:
+            return "(暂无常量表)"
+        try:
+            rendered = self.memory.render_constants_for_context(
+                func_name, max_chars=max_chars
+            )
+        except Exception:
+            rendered = ""
+        return rendered or "(暂无常量表 — 请先运行 `python cli.py --learn-constants`)"
 
     # ------------------------------------------------------------------
 

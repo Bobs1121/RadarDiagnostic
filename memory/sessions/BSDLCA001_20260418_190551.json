@@ -1,0 +1,299 @@
+{
+  "session_id": "BSDLCA001_20260418_190551",
+  "case_id": "BSDLCA001",
+  "problem": "高速公路测试 GAO SU1，在 16:35:50、16:36、16:37 三个时刻出现左侧 LCA 报警晚的现象，关键帧在 456 帧和 790 帧附近。本应由 LCA 先报警的场景，LCA 没有及时触发，一直等到目标进入 BSD 区域才开始报警。",
+  "expected": "LCA 应在目标从左后方接近相邻车道时先触发报警（比 BSD 早报），而不是等目标进入 BSD 盲区才开始报。",
+  "created_at": "2026-04-18T19:05:51.624135",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-18T19:06:00.487123",
+      "detail": {
+        "function": "LCA",
+        "confidence": 0.95,
+        "reasoning": "问题描述明确指出'LCA 报警晚'，且预期行为是 LCA 应在目标进入 BSD 区域前触发。现象是 LCA 未能及时触发，导致报警延迟，直到目标进入 BSD 区域才由 BSD 触发。核心问题在于 LCA 功能的触发逻辑、ROI 判定或状态机转换延迟。",
+        "fail_type": "延迟DELAY",
+        "key_variables": [
+          "lcaSystemState",
+          "PEROutput.adasWarning.bLeftLcaWarning",
+          "bLCAEnable",
+          "g_DTCCode",
+          "adasEnable",
+          "PERInputUpdate.adasEnable",
+          "LCA_ROI_Thresholds",
+          "fLcaObjWarningSpd",
+          "TTC_Threshold",
+          "ASWOUT_OutCalc 合并逻辑",
+          "adasFunc.c 感知侧 LCA 逻辑",
+          "ASWIN_SystemState.c 平台侧 LCA 逻辑"
+        ],
+        "related_functions": [
+          "BSD"
+        ]
+      }
+    },
+    {
+      "step": "classify",
+      "timestamp": "2026-04-18T19:06:41.248002",
+      "detail": {
+        "task_type": "diagnose",
+        "confidence": 0.95,
+        "target_function": "LCA",
+        "focus_parameters": [
+          "ROI",
+          "TTC",
+          "TTM",
+          "ANGLE",
+          "HOLD"
+        ],
+        "focus_signals": [
+          "car_spd",
+          "trc_0_vel_x",
+          "trc_0_angle",
+          "trc_0_dist",
+          "adasWarning->lca_state"
+        ],
+        "reasoning": "LCA在目标进入相邻车道时未及时触发报警，可能涉及ROI区域定义、TTC/TTM阈值判定、雷达角度覆盖（ANGLE）及状态保持（HOLD）参数配置异常"
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-18T19:06:49.147455",
+      "detail": {
+        "bag_frames": 56256,
+        "can_frames": 0
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-18T19:06:49.200705",
+      "detail": {
+        "count": 12,
+        "windows": [
+          {
+            "t_start": 1776242122.8331826,
+            "t_end": 1776242126.8411734,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242137.4367976,
+            "t_end": 1776242145.2661421,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242149.907028,
+            "t_end": 1776242159.6977508,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242159.7975914,
+            "t_end": 1776242163.7975914,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242173.6712902,
+            "t_end": 1776242199.047375,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242207.9861825,
+            "t_end": 1776242216.147306,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242219.904331,
+            "t_end": 1776242234.4278076,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242236.344851,
+            "t_end": 1776242240.357924,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242241.6330087,
+            "t_end": 1776242247.2078245,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242253.052675,
+            "t_end": 1776242264.6828065,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242264.9848526,
+            "t_end": 1776242268.9910734,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776242269.6533847,
+            "t_end": 1776242285.291234,
+            "reason": "报警变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-18T19:07:27.754391",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "timeline",
+          "state_transitions",
+          "radar_objects_warned",
+          "radar_objects_summary",
+          "adas_enable_states",
+          "bld_summary",
+          "warning_events",
+          "KEY_FACTS",
+          "tpe_report",
+          "tpe_block"
+        ],
+        "key_facts": "[窗口1] 1776242122.83s ~ 1776242126.84s (4.0s) — 报警变化\n[窗口2] 1776242137.44s ~ 1776242145.27s (7.8s) — 报警变化\n[窗口3] 1776242149.91s ~ 1776242159.7s (9.8s) — 报警变化\n[窗口4] 1776242159.8s ~ 1776242163.8s (4.0s) — 报警变化\n[窗口5] 1776242173.67s ~ 1776242199.05s (25.4s) — 报警变化\n[窗口6] 1776242207.99s ~ 1776242216.15s (8.2s) — 报警变化\n[窗口7] 1776242219.9s ~ 1776242234.43s (14.5s) — 报警变化\n[窗口8] 1776242236.34s ~ 1776242240.36s (4.0s) — 报警变化\n[窗口9] 1776242241.63s ~ 1776242247.21s (5.6s) — 报警变化\n[窗口10] 1776242253.05s ~ 1776242264",
+        "window_count": 12,
+        "transition_count": 0
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-18T19:07:27.800405",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### LCA 激活条件\n\n**自车速度范围:**\n  active: [fLcaActiveSpd=12.0, fLcaActiveUpperSpd=146.0] km/h\n  deactive: [fLcaDeactiveSpd=10.0, fLcaDeactiveUpperSpd=151.0] km/h\n  detect: [fLcaObjWarningSpd=7.2, fLcaObjDeWarningSpd=3.6] km/h\n\n**目标速度范围:**\n  warning_enter: (fLcaObjWarningSpd=7.2, None) km/h\n  warning_exit:"
+      }
+    },
+    {
+      "step": "tpe",
+      "timestamp": "2026-04-18T19:07:27.852199",
+      "detail": {
+        "pattern_count": 7,
+        "triggered_count": 0,
+        "unresolved_variables": 10,
+        "missing_can_signals": 0,
+        "has_triggers": false
+      }
+    },
+    {
+      "step": "variable_probe",
+      "timestamp": "2026-04-18T19:07:47.225247",
+      "detail": {
+        "plan_count": 6,
+        "plans": [
+          {
+            "field": "ttc",
+            "table": "radar_objects",
+            "stats": [
+              "min",
+              "p50",
+              "count"
+            ],
+            "group_by": "side",
+            "filter": "in_window & (side == 'left') & (dist_x < 0) & (lca_flag == 0)",
+            "reasoning": "检查 LCA 未触发时（lca_flag=0）目标的 TTC 值，验证是否因 TTC 始终大于预警阈值导致未触发，或阈值参数设置过高。"
+          },
+          {
+            "field": "dist_y",
+            "table": "radar_objects",
+            "stats": [
+              "min",
+              "max",
+              "p50"
+            ],
+            "group_by": "side",
+            "filter": "in_window & (side == 'left') & (dist_x < 0) & (lca_flag == 0)",
+            "reasoning": "检查 LCA 未触发时目标的横向距离 dist_y，验证目标是否实际位于 LCA ROI 区域内，排除因目标未进入 ROI 导致不报警。"
+          },
+          {
+            "field": "lca_enable",
+            "table": "radar_debug",
+            "stats": [
+              "min",
+              "max",
+              "count"
+            ],
+            "group_by": "radar_id",
+            "filter": "in_window",
+            "reasoning": "确认测试窗口内 LCA 功能使能状态（lca_enable），排除因功能被禁用（cancel_conditions）导致无法报警。"
+          },
+          {
+            "field": "actual_spd",
+            "table": "radar_debug",
+            "stats": [
+              "min",
+              "max",
+              "p50"
+            ],
+            "group_by": "radar_id",
+            "filter": "in_window",
+            "reasoning": "检查自车速度是否处于 LCA 激活速度范围内，排除因速度过低或过高（trigger_conditions）导致系统未激活。"
+          },
+          {
+            "field": "ttc",
+            "table": "radar_objects",
+            "stats": [
+              "min",
+              "max",
+              "count"
+            ],
+            "group_by": "side",
+            "filter": "in_window & (side == 'left') & (dist_x < 0) & (bsd_flag == 1) & (lca_flag == 0)",
+            "reasoning": "对比 BSD 已触发但 LCA 未触发时刻的 TTC，分析 LCA 与 BSD 的 TTC 阈值差异，验证是否存在 LCA 阈值设置不合理导致晚于 BSD 报警。"
+          },
+          {
+            "field": "dist_x",
+            "table": "radar_objects",
+            "stats": [
+              "min",
+              "max",
+              "count"
+            ],
+            "group_by": "side",
+            "filter": "in_window & (side == 'left') & (lca_flag == 1) & (bsd_flag == 0)",
+            "reasoning": "检查 LCA 先于 BSD 触发时的纵向距离 dist_x，作为正常行为的基准，对比异常时刻的 dist_x 分布以定位触发时机差异。"
+          }
+        ],
+        "result_preview": "## 按问题动态探查 (Variable Probe)\n> 由 VariableQueryPlanner 根据问题+L6代码知识自动生成的查询结果\n\n### ttc  (group_by=side)  [filter: in_window & (side == 'left') & (dist_x < 0) & (lca_flag == 0)]\n_规划理由_: 检查 LCA 未触发时（lca_flag=0）目标的 TTC 值，验证是否因 TTC 始终大于预警阈值导致未触发，或阈值参数设置过高。\n- 参与行数: 29178\n- `left`: count=29178 min=0.0 p50=655.35\n\n### dist_y  (group_by=side)  [filter: in_window & (side == 'left') & (dist_x < 0) & (lca_flag == 0)]\n_规划理由_: 检查 LCA 未触发时目标的横向距离 dist_y，验证目标是否实际位于 LCA ROI 区域内，排除因目标未进入 ROI 导致不报警。\n- 参与行数: 29178\n- `"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-04-18T19:17:24.558987",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          {
+            "expert_pair": "系统状态专家 vs 信号链路专家 vs 数据事实",
+            "content": "多位专家（如信号链路专家）断定根因为外部 CAN 信号 `LCASwtReq` 不稳定。但 Variable Probe 数据显示仅雷达 2 (左后角) 的 `lca_enable` 呈现 [0,1] 跳变，而雷达 3、4 的稳定为 1。若根源是公共 CAN 总线信号抖动，理论上所有接收该信号的雷达端变量均应体现波动，为何仅雷达 2 异常？这暗示问题可能非单纯外部信号抖动，而是雷达 2 节点特有的接收或映射故障。"
+          },
+          {
+            "expert_pair": "算法逻辑专家 vs TPE 分析结果",
+            "content": "专家直接引用代码行号 (adasFunc.c:3998) 和具体逻辑 (清零警告保持计时器) 作为定论，但 TPE 分析明确标记这些模式为「无法判定 (Unable to determine)」，原因是未能建立内部变量与 CAN 信号的映射链。在无动态调试证据支持当前版本代码逻辑的情况下，仅凭历史案例推断特定代码行为存在风险，需确认该逻辑是否在当前软件版本中仍保留。"
+          },
+          {
+            "expert_pair": "感知专家 vs BSD 表现",
+            "content": "感知专家提出「BSD 可能不受此开关波动影响」，但未明确指出 BSD 是否依赖独立的使能信号或不同的雷达源。已知数据中左侧 LCA 晚于 BSD 报警，若两者共用同一全局 `LCASwtReq` 且该信号在 LCA 窗口内确实为 0，则 BSD 理应同样受影响。专家未解释为何 BSD 能正常触发，缺乏对 LCA/BSD 独立控制路径的对比验证。"
+          }
+        ],
+        "verdict_preview": "\n\n### 根因\nL1 信号层左后雷达 (ID=2) 使能信号 `lca_enable` 发生 [0,1] 震荡 → 触发 TPE 候选逻辑 `adasFunc.c:3998` (HoldRelease) 的复位分支 → 警告状态变量被清零 → LCA 报警需重新累积时长，晚于 BSD 触发。**注意：** TPE 标记“无法判定”，此因果链基于 Variable Probe 数据反推。\n\n### 时序耦合(TPE 触发清单)\n| 模式 | 源文件：行 | 首触发 t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|--------|\n| 无 | N/A | N/A | N/A | N/A | N/A |\n*(所有 7 个 HoldRelease 模式 TPE verdict 均为\"无法判定\")*\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足？ | 数据来源 | 相关 TPE 模式 |\n|------|------|--------|------|----------|--------"
+      }
+    },
+    {
+      "step": "visualize",
+      "timestamp": "2026-04-18T19:17:25.923854",
+      "detail": {
+        "html_path": "D:\\RamboStar\\idea\\radarAnalyze\\cases\\BSDLCA001\\report.html",
+        "charts_built": 0,
+        "warnings": [
+          "ego speed chart skipped: no ego_info frames",
+          "output signal chart skipped: no CAN signals found"
+        ]
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-04-18T19:17:53.279196",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\BSDLCA001\\report.md"
+}

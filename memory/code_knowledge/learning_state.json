@@ -1,5 +1,5 @@
 {
-  "cursor": 8,
+  "cursor": 26,
   "warmup_done": true,
   "pair_hashes": {
     "FCTB/alarm_logic": "5b8b9159e79e3dee",
@@ -9,7 +9,25 @@
     "BSD/alarm_logic": "5b8b9159e79e3dee",
     "LCA/alarm_logic": "5b8b9159e79e3dee",
     "DOW/alarm_logic": "5b8b9159e79e3dee",
-    "RCW/alarm_logic": "5b8b9159e79e3dee"
+    "RCW/alarm_logic": "5b8b9159e79e3dee",
+    "FCTB/calculation_chain": "a564f1bdfacce99d",
+    "FCTA/calculation_chain": "a564f1bdfacce99d",
+    "RCTB/calculation_chain": "a564f1bdfacce99d",
+    "RCTA/calculation_chain": "a564f1bdfacce99d",
+    "LCA/calculation_chain": "a564f1bdfacce99d",
+    "DOW/calculation_chain": "a564f1bdfacce99d",
+    "RCW/calculation_chain": "a564f1bdfacce99d",
+    "FCTB/output_chain": "a0fcddb880fd37e7",
+    "FCTA/output_chain": "a0fcddb880fd37e7",
+    "RCTB/output_chain": "a0fcddb880fd37e7",
+    "BSD/calculation_chain": "a564f1bdfacce99d",
+    "RCTA/output_chain": "a0fcddb880fd37e7",
+    "BSD/output_chain": "a0fcddb880fd37e7",
+    "LCA/output_chain": "a0fcddb880fd37e7",
+    "DOW/output_chain": "a0fcddb880fd37e7",
+    "RCW/output_chain": "a0fcddb880fd37e7",
+    "FCTB/state_machine": "18a6ebe36eb76711",
+    "FCTA/state_machine": "18a6ebe36eb76711"
   },
   "learned_pairs": [
     "FCTB/alarm_logic",
@@ -19,8 +37,26 @@
     "BSD/alarm_logic",
     "LCA/alarm_logic",
     "DOW/alarm_logic",
-    "RCW/alarm_logic"
+    "RCW/alarm_logic",
+    "FCTB/calculation_chain",
+    "FCTA/calculation_chain",
+    "RCTB/calculation_chain",
+    "RCTA/calculation_chain",
+    "LCA/calculation_chain",
+    "DOW/calculation_chain",
+    "RCW/calculation_chain",
+    "FCTB/output_chain",
+    "FCTA/output_chain",
+    "RCTB/output_chain",
+    "BSD/calculation_chain",
+    "RCTA/output_chain",
+    "BSD/output_chain",
+    "LCA/output_chain",
+    "DOW/output_chain",
+    "RCW/output_chain",
+    "FCTB/state_machine",
+    "FCTA/state_machine"
   ],
-  "total_learned_pairs": 8,
-  "last_learn_at": "2026-04-18T17:35:21.194453"
+  "total_learned_pairs": 26,
+  "last_learn_at": "2026-04-20T15:01:36.515078"
 }

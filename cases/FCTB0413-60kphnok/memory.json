@@ -1,0 +1,7 @@
+{
+  "session_id": "FCTB0413-60kphnok_20260423_171104",
+  "function": "FCTB",
+  "problem": "测试CCCscp near side 60kph,FCTB没有触发功能",
+  "diagnosis_summary": "\n\n### 根因\n**功能未触发的核心原因为车辆工况不满足（档位 N/P）导致系统使能关闭**，叠加**外部抑制信号维持状态清零**。\n具体因果链：L1 信号 `actual_gear`=7（来源：Variable Probe） → L2 状态机判定使能无效（`fctb_enable`=0，来源：Variable Probe） → 功能处于非激活态；同时 L2.5 时序耦合检测到 **HoldRelease** 模式在 `coem/GWM_B26/components/AswPerception/func/adasFunc.c:6378-6382` 于 t=1776963417.63s 被 `AEBBAActv_0x137`=0 及 `AEBIBActv_0x137`=0 触发（来源：TPE），清除副作用变量 `bFctbKeepBrakeFlg` 等，确保制动请求无法保持。尽管 L3 观测到雷达告警标志，但因 L2 入口阻断，未输出控制指令。\n\n### 时序耦合 (TPE 触发清单)\n| 模式 | 源文件：行 | 首触发 t | 持续 | 触发信号 | 副作用 |\n|------|-",
+  "_updated": "2026-04-23T17:19:39.676813"
+}

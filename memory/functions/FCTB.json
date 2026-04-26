@@ -2,9 +2,9 @@
   "description": "前方交叉交通制动，FCTA 的制动延伸，风险加剧时自动制动。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / FctbUpdateSystemStatus",
-  "status": "Doc integrated & Patterns Merged & Updated & New Issue Added",
-  "_updated": "2026-04-18T17:37:14.414493",
-  "diagnosis_count": 40,
+  "status": "State Machine Added & Validated",
+  "_updated": "2026-04-23T17:20:02.228316",
+  "diagnosis_count": 54,
   "known_issues": [
     {
       "id": "FCTB001",
@@ -60,12 +60,12 @@
       ],
       "date": "2026-04-15 ~ 2026-04-16",
       "analysis": "内部制动保持定时器逻辑（实测保压约 2.8s）优先于外部 AEB 非激活信号（ESP 侧 AEBBAActv=0）触发的释放条件，导致制动请求在风险可能解除后仍维持约 2.8s。",
-      "confidence": 0.95,
-      "status": "Consolidated from 4 duplicate entries"
+      "confidence": 0.9,
+      "status": "Consolidated"
     },
     {
       "id": "FCTB005",
-      "problem": "FCTB 触发即退出（仅持续 1 帧或数百毫秒）",
+      "problem": "FCTB 触发时间极短（1 帧或几百毫秒）即退出，无持续制动",
       "sessions": [
         "FCATB001_20260417_180840",
         "FCATB001_20260417_165515",
@@ -73,10 +73,26 @@
         "FCATB001_20260417_151648"
       ],
       "date": "2026-04-17",
-      "analysis": "角雷达目标跟踪不稳定导致预警标志 (fctb_obj_flag) 高频抖动 (同帧 on/off)，叠加自车车速在 0.5km/h 激活阈值边缘震荡，致使 FCTB 状态机无法维持在 Active(3) 态超过 3 秒。",
-      "confidence": 0.98,
-      "status": "Newly Consolidated from 4 sessions"
+      "analysis": "角雷达目标跟踪不稳定导致预警标志 (fctb_obj_flag) 高频抖动，叠加自车车速在激活阈值 (0.5km/h) 边缘震荡，致使状态机无法维持 Active 态；同时可能伴随 AEB 协同信号链路失效或抑制条件误触发。",
+      "confidence": 0.93,
+      "status": "Newly Added from recent sessions"
+    },
+    {
+      "problem": "FCTB没有发生",
+      "session": "FCTBNOoccur_20260420_150326",
+      "date": "2026-04-20"
+    },
+    {
+      "problem": "测试CCCscp near side 60kph,FCTB没有触发功能",
+      "session": "FCTB0413-60kphnok_20260423_171104",
+      "date": "2026-04-23"
     }
   ],
-  "function": "FCTB"
+  "function": "FCTB",
+  "output_chain_items": 9,
+  "calculation_chain_items": 15,
+  "alarm_logic_items": 18,
+  "latest_update": "2026-04-20T14:00:00.000000",
+  "known_issues_updated": "FCTB002, FCTB003, FCTB004 root causes validated by L6 code analysis (output_chain/calculation_chain)",
+  "state_machine_items": 18
 }

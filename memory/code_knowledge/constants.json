@@ -1,0 +1,559 @@
+{
+  "vehicle_config": {
+    "EGOCARWIDTH": {
+      "value": 1.976,
+      "unit": "m",
+      "description": "自车宽度",
+      "source": "dotCalibDefine.h:8"
+    },
+    "DISTANCEREAR": {
+      "value": 1.143,
+      "unit": "m",
+      "description": "后保险杠距离雷达中心",
+      "source": "dotCalibDefine.h:9"
+    },
+    "DISTANCEFRONT": {
+      "value": 3.775,
+      "unit": "m",
+      "description": "前保险杠距离雷达中心",
+      "source": "dotCalibDefine.h:10"
+    },
+    "DISTANCEDRIVER": {
+      "value": 1.41,
+      "unit": "m",
+      "description": "驾驶员位置距离雷达中心",
+      "source": "dotCalibDefine.h:11"
+    }
+  },
+  "function_thresholds": {
+    "System_PI": {
+      "value": 3.141592653,
+      "unit": "rad",
+      "used_by": [
+        "System"
+      ],
+      "role": "数学常数 Pi",
+      "source": "paraDefine.h:42"
+    },
+    "System_LaneWidth": {
+      "value": 3.5,
+      "unit": "m",
+      "used_by": [
+        "System",
+        "TGU"
+      ],
+      "role": "预设车道宽度",
+      "source": "paraDefine.h:49"
+    },
+    "System_Kmh2ms": {
+      "value": 0.277777778,
+      "unit": "km/h to m/s",
+      "used_by": [
+        "System"
+      ],
+      "role": "速度单位换算系数 km/h->m/s",
+      "source": "paraDefine.h:45"
+    },
+    "fBsdActiveSpd": {
+      "value": 12.0,
+      "unit": "km/h",
+      "used_by": [
+        "BSD"
+      ],
+      "role": "BSD 系统激活速度",
+      "source": "adasFunc.c:52"
+    },
+    "fBsdDeactiveSpd": {
+      "value": 10.0,
+      "unit": "km/h",
+      "used_by": [
+        "BSD"
+      ],
+      "role": "BSD 系统去激活速度",
+      "source": "adasFunc.c:55"
+    },
+    "fBsdObjWarningSpd": {
+      "value": 7.2,
+      "unit": "km/h",
+      "used_by": [
+        "BSD"
+      ],
+      "role": "BSD 目标预警相对速度",
+      "source": "adasFunc.c:70"
+    },
+    "fLcaActiveSpd": {
+      "value": 12.0,
+      "unit": "km/h",
+      "used_by": [
+        "LCA"
+      ],
+      "role": "LCA 系统激活速度",
+      "source": "adasFunc.c:109"
+    },
+    "fLcaObjWarningTTC": {
+      "value": 4.0,
+      "unit": "s",
+      "used_by": [
+        "LCA"
+      ],
+      "role": "LCA 目标预警 TTC 阈值",
+      "source": "adasFunc.c:157"
+    },
+    "fDowActiveSpd": {
+      "value": 0.7,
+      "unit": "km/h",
+      "used_by": [
+        "DOW"
+      ],
+      "role": "DOW 系统激活速度",
+      "source": "adasFunc.c:188"
+    },
+    "fDowObjWarningYawAngle": {
+      "value": 45.0,
+      "unit": "degree",
+      "used_by": [
+        "DOW"
+      ],
+      "role": "DOW 目标预警偏航角",
+      "source": "adasFunc.c:206"
+    },
+    "fRcwActiveSpd": {
+      "value": 120.0,
+      "unit": "km/h",
+      "used_by": [
+        "RCW"
+      ],
+      "role": "RCW 系统激活速度",
+      "source": "adasFunc.c:254"
+    },
+    "fRcwObjWarningTTC": {
+      "value": 1.4,
+      "unit": "s",
+      "used_by": [
+        "RCW"
+      ],
+      "role": "RCW 目标预警 TTC 阈值",
+      "source": "adasFunc.c:305"
+    },
+    "fRctaActiveUpSpd": {
+      "value": 15.0,
+      "unit": "km/h",
+      "used_by": [
+        "RCTA"
+      ],
+      "role": "RCTA 系统激活上限速度",
+      "source": "adasFunc.c:328"
+    },
+    "fRctaObjWarningTTM": {
+      "value": 4.2,
+      "unit": "s",
+      "used_by": [
+        "RCTA"
+      ],
+      "role": "RCTA 目标预警 TTM 阈值",
+      "source": "adasFunc.c:406"
+    },
+    "fRctbActiveUpSpd": {
+      "value": 9.0,
+      "unit": "km/h",
+      "used_by": [
+        "RCTB"
+      ],
+      "role": "RCTB 系统激活上限速度",
+      "source": "adasFunc.c:414"
+    },
+    "fRctbBrakeValue": {
+      "value": -4.0,
+      "unit": "m/s^2",
+      "used_by": [
+        "RCTB"
+      ],
+      "role": "RCTB 制动请求值",
+      "source": "adasFunc.c:448"
+    },
+    "fFctaActiveUpSpd": {
+      "value": 21.0,
+      "unit": "km/h",
+      "used_by": [
+        "FCTA"
+      ],
+      "role": "FCTA 系统激活上限速度",
+      "source": "adasFunc.c:460"
+    },
+    "fFctaObjWarningBaseTTMX": {
+      "value": 2.0,
+      "unit": "s",
+      "used_by": [
+        "FCTA"
+      ],
+      "role": "FCTA 目标预警基础 TTM(X 轴)",
+      "source": "adasFunc.c:535"
+    },
+    "fFctbActiveUpSpd": {
+      "value": 21.0,
+      "unit": "km/h",
+      "used_by": [
+        "FCTB"
+      ],
+      "role": "FCTB 系统激活上限速度",
+      "source": "adasFunc.c:558"
+    },
+    "fFctbBrakeValue": {
+      "value": -4.0,
+      "unit": "m/s^2",
+      "used_by": [
+        "FCTB"
+      ],
+      "role": "FCTB 制动请求值",
+      "source": "adasFunc.c:600"
+    },
+    "fTguActiveSpd": {
+      "value": 60.0,
+      "unit": "km/h",
+      "used_by": [
+        "TGU"
+      ],
+      "role": "TGU 系统激活速度",
+      "source": "adasFunc.c:617"
+    },
+    "MAX_CNT_POINTS": {
+      "value": 400,
+      "unit": "count",
+      "used_by": [
+        "TI_Radar"
+      ],
+      "role": "TI 雷达最大点数",
+      "source": "paraDefine.h:30"
+    },
+    "KEEPWARNINGFRM": {
+      "value": 3,
+      "unit": "frame",
+      "used_by": [
+        "BSD",
+        "LCA",
+        "DOW"
+      ],
+      "role": "警告保持帧数",
+      "source": "paraDefine.h:135"
+    }
+  },
+  "roi_derived": {
+    "LineBSDC": {
+      "formula": "DISTANCEDRIVER",
+      "computed_value": 1.41,
+      "unit": "m",
+      "used_by": [
+        "BSD",
+        "LCA"
+      ],
+      "description": "BSD/LCA 纵向 ROI 起点（前），基于驾驶员位置",
+      "source": "adasFunc.c:7"
+    },
+    "LineBSDB": {
+      "formula": "-5.0 - DISTANCEREAR",
+      "computed_value": -6.143,
+      "unit": "m",
+      "used_by": [
+        "BSD",
+        "LCA"
+      ],
+      "description": "BSD/LCA 纵向 ROI 终点（后）",
+      "source": "adasFunc.c:10"
+    },
+    "LineLCAC": {
+      "formula": "-4.0 - DISTANCEREAR",
+      "computed_value": -5.143,
+      "unit": "m",
+      "used_by": [
+        "LCA"
+      ],
+      "description": "LCA 纵向 ROI 近点（后保险杠后方）",
+      "source": "adasFunc.c:18"
+    },
+    "LineLCAA": {
+      "formula": "-80.0 - DISTANCEREAR",
+      "computed_value": -81.143,
+      "unit": "m",
+      "used_by": [
+        "LCA"
+      ],
+      "description": "LCA 纵向 ROI 远点",
+      "source": "adasFunc.c:21"
+    },
+    "LineBSDLCAG": {
+      "formula": "3.3 + EGOCARWIDTH/2.0",
+      "computed_value": 4.288,
+      "unit": "m",
+      "used_by": [
+        "BSD",
+        "LCA"
+      ],
+      "description": "BSD/LCA 左侧横向 ROI 边界（外车道侧）",
+      "source": "adasFunc.c:24"
+    },
+    "LineBSDLCAF": {
+      "formula": "0.0 + EGOCARWIDTH/2.0",
+      "computed_value": 0.988,
+      "unit": "m",
+      "used_by": [
+        "BSD",
+        "LCA"
+      ],
+      "description": "BSD/LCA 左侧横向 ROI 边界（本车宽侧）",
+      "source": "adasFunc.c:27"
+    },
+    "LineBSDLCAK": {
+      "formula": "-0.0 - EGOCARWIDTH/2.0",
+      "computed_value": -0.988,
+      "unit": "m",
+      "used_by": [
+        "BSD",
+        "LCA"
+      ],
+      "description": "BSD/LCA 右侧横向 ROI 边界（本车宽侧）",
+      "source": "adasFunc.c:30"
+    },
+    "LineBSDLCAL": {
+      "formula": "-3.3 - EGOCARWIDTH/2.0",
+      "computed_value": -4.288,
+      "unit": "m",
+      "used_by": [
+        "BSD",
+        "LCA"
+      ],
+      "description": "BSD/LCA 右侧横向 ROI 边界（外车道侧）",
+      "source": "adasFunc.c:33"
+    },
+    "LineDOWA": {
+      "formula": "1.0 + DISTANCEDRIVER",
+      "computed_value": 2.41,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 纵向 ROI 起点（前）",
+      "source": "adasFunc.c:166"
+    },
+    "LineDOWB": {
+      "formula": "-DISTANCEREAR",
+      "computed_value": -1.143,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 纵向 ROI 中点（后保险杠）",
+      "source": "adasFunc.c:167"
+    },
+    "LineDOWC": {
+      "formula": "-2.0 - DISTANCEREAR",
+      "computed_value": -3.143,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 纵向 ROI 远点",
+      "source": "adasFunc.c:168"
+    },
+    "LineDOWD": {
+      "formula": "-30.0 - DISTANCEREAR",
+      "computed_value": -31.143,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 纵向 ROI 最远点",
+      "source": "adasFunc.c:169"
+    },
+    "LineDOWE": {
+      "formula": "2.0 + EGOCARWIDTH/2.0",
+      "computed_value": 2.988,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 左侧横向 ROI 边界（外）",
+      "source": "adasFunc.c:172"
+    },
+    "LineDOWF": {
+      "formula": "-0.5 + EGOCARWIDTH/2.0",
+      "computed_value": 0.488,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 左侧横向 ROI 边界（内）",
+      "source": "adasFunc.c:173"
+    },
+    "LineDOWG": {
+      "formula": "2.1 + EGOCARWIDTH/2.0",
+      "computed_value": 3.088,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 左侧横向 ROI 边界（更远）",
+      "source": "adasFunc.c:174"
+    },
+    "LineDOWH": {
+      "formula": "-0.5 + EGOCARWIDTH/2.0",
+      "computed_value": 0.488,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 左侧横向 ROI 边界（另一内）",
+      "source": "adasFunc.c:175"
+    },
+    "LineDOWI": {
+      "formula": "0.5 - EGOCARWIDTH/2.0",
+      "computed_value": -0.488,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 右侧横向 ROI 边界（内）",
+      "source": "adasFunc.c:178"
+    },
+    "LineDOWJ": {
+      "formula": "-2.0 - EGOCARWIDTH/2.0",
+      "computed_value": -2.988,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 右侧横向 ROI 边界（外）",
+      "source": "adasFunc.c:179"
+    },
+    "LineDOWK": {
+      "formula": "0.5 - EGOCARWIDTH/2.0",
+      "computed_value": -0.488,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 右侧横向 ROI 边界（另一内）",
+      "source": "adasFunc.c:180"
+    },
+    "LineDOWL": {
+      "formula": "-2.1 - EGOCARWIDTH/2.0",
+      "computed_value": -3.088,
+      "unit": "m",
+      "used_by": [
+        "DOW"
+      ],
+      "description": "DOW 右侧横向 ROI 边界（更远）",
+      "source": "adasFunc.c:181"
+    },
+    "LineRCWB": {
+      "formula": "-DISTANCEREAR",
+      "computed_value": -1.143,
+      "unit": "m",
+      "used_by": [
+        "RCW"
+      ],
+      "description": "RCW 纵向 ROI 起点（后保险杠）",
+      "source": "adasFunc.c:244"
+    },
+    "LineRCWA": {
+      "formula": "-40.0 - DISTANCEREAR",
+      "computed_value": -41.143,
+      "unit": "m",
+      "used_by": [
+        "RCW"
+      ],
+      "description": "RCW 纵向 ROI 终点（后远处）",
+      "source": "adasFunc.c:246"
+    },
+    "LineRCWC": {
+      "formula": "EGOCARWIDTH/2.0",
+      "computed_value": 0.988,
+      "unit": "m",
+      "used_by": [
+        "RCW"
+      ],
+      "description": "RCW 横向 ROI 右边界（车身宽一半）",
+      "source": "adasFunc.c:248"
+    },
+    "LineRCWD": {
+      "formula": "-EGOCARWIDTH/2.0",
+      "computed_value": -0.988,
+      "unit": "m",
+      "used_by": [
+        "RCW"
+      ],
+      "description": "RCW 横向 ROI 左边界（车身宽一半）",
+      "source": "adasFunc.c:250"
+    },
+    "fTGULeftNearY": {
+      "formula": "0.5 * System_LaneWidth",
+      "computed_value": 1.75,
+      "unit": "m",
+      "used_by": [
+        "TGU"
+      ],
+      "description": "TGU 左近横向 ROI 边界",
+      "source": "adasFunc.c:610"
+    },
+    "fTGULeftFarY": {
+      "formula": "0.5 * System_LaneWidth + System_LaneWidth",
+      "computed_value": 5.25,
+      "unit": "m",
+      "used_by": [
+        "TGU"
+      ],
+      "description": "TGU 左远横向 ROI 边界",
+      "source": "adasFunc.c:611"
+    },
+    "fTGURightNearY": {
+      "formula": "-0.5 * System_LaneWidth",
+      "computed_value": -1.75,
+      "unit": "m",
+      "used_by": [
+        "TGU"
+      ],
+      "description": "TGU 右近横向 ROI 边界",
+      "source": "adasFunc.c:612"
+    },
+    "fTGURightFarY": {
+      "formula": "-0.5 * System_LaneWidth - System_LaneWidth",
+      "computed_value": -5.25,
+      "unit": "m",
+      "used_by": [
+        "TGU"
+      ],
+      "description": "TGU 右远横向 ROI 边界",
+      "source": "adasFunc.c:613"
+    },
+    "fRctbStopSpd": {
+      "formula": "1.0 * System_Kmh2ms",
+      "computed_value": 0.277777778,
+      "unit": "m/s",
+      "used_by": [
+        "RCTB"
+      ],
+      "description": "RCTB 停车速度阈值 (km/h 转 m/s)",
+      "source": "adasFunc.c:452"
+    },
+    "fFctbStopSpd": {
+      "formula": "1.0 * System_Kmh2ms",
+      "computed_value": 0.277777778,
+      "unit": "m/s",
+      "used_by": [
+        "FCTB"
+      ],
+      "description": "FCTB 停车速度阈值 (km/h 转 m/s)",
+      "source": "adasFunc.c:604"
+    }
+  },
+  "_meta": {
+    "last_updated": "2026-04-18T19:39:17.392636",
+    "aggregate_hash": "9f5d904d1b7d7b04",
+    "source_files": [
+      "adas\\symmetry\\perception\\include\\globalVarDefine.h",
+      "adas\\symmetry\\perception\\include\\paraDefine.h",
+      "adas\\symmetry\\perception\\include\\perception_public_def.h",
+      "coem\\GWM_B26\\components\\AswPerception\\calib\\dotCalibDefine.h",
+      "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
+    ]
+  }
+}

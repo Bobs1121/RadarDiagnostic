@@ -218,8 +218,22 @@ class ExpertPanel:
 
     @staticmethod
     def select_experts(fail_type: str = "OTHER") -> dict[str, dict]:
-        """Select a subset of experts based on fail_type."""
-        expert_ids = _FAIL_TYPE_EXPERTS.get(fail_type.upper(), _FAIL_TYPE_EXPERTS["OTHER"])
+        """Select a subset of experts based on fail_type.
+
+        ``fail_type`` may arrive in a few flavors because the orchestrator
+        prompt lists options as "误报FP/漏报FN/延迟DELAY/状态异常STATE/其他OTHER"
+        and the LLM often returns the full phrase (e.g. ``"漏报FN"``).
+        Normalize to the trailing English token so ``_FAIL_TYPE_EXPERTS``
+        actually gets hit instead of silently falling back to ``OTHER`` on
+        every run.
+        """
+        raw = (fail_type or "OTHER").upper().strip()
+        key = "OTHER"
+        for tok in ("DELAY", "STATE", "OTHER", "FP", "FN"):
+            if tok in raw:
+                key = tok
+                break
+        expert_ids = _FAIL_TYPE_EXPERTS.get(key, _FAIL_TYPE_EXPERTS["OTHER"])
         return {eid: EXPERTS[eid] for eid in expert_ids if eid in EXPERTS}
 
     def run_panel(
@@ -258,13 +272,21 @@ class ExpertPanel:
         # ── Round 2: Cross-Review + Moderator Challenge ─────────────────
         status("Round 2/3: 交叉审查与质疑...")
         all_opinions_text = self._format_all_opinions(opinions)
-        challenges = self._moderator_challenge(case_context, all_opinions_text)
+        challenges = self._moderator_challenge(
+            case_context, all_opinions_text,
+            expert_ids=list(opinions.keys()),
+        )
 
-        # Experts respond to challenges (parallel)
+        # Experts respond to challenges (parallel).
+        # IMPORTANT: gate by ``opinions`` (= R1 actually ran), not the global
+        # ``EXPERTS`` registry.  fail_type-based panels run a subset; the LLM
+        # occasionally still names a non-participating expert (e.g. FCTA/FCTB
+        # panels without ``system_state``).  Without this gate a KeyError
+        # fires at ``opinions[eid] += ...`` below.
         questioned = {
-            eid: challenges["questions"][eid]
+            eid: (challenges["questions"][eid] or "").strip()
             for eid in challenges.get("questions", {})
-            if eid in EXPERTS
+            if eid in opinions and (challenges["questions"].get(eid) or "").strip()
         }
         if questioned:
             status(f"Round 2/3: {len(questioned)}位专家并发回应质疑...")
@@ -441,11 +463,25 @@ class ExpertPanel:
 
     # ── Moderator Operations ────────────────────────────────────────────
 
-    def _moderator_challenge(self, case_context: str, all_opinions: str) -> dict:
+    def _moderator_challenge(
+        self,
+        case_context: str,
+        all_opinions: str,
+        expert_ids: list[str] | None = None,
+    ) -> dict:
+        # Build the ``questions`` JSON template from the experts that actually
+        # ran this round.  Hard-coding all 5 IDs used to lure the LLM into
+        # addressing experts that fail_type had filtered out, which then blew
+        # up at opinions[eid] in run_panel().
+        ids = list(expert_ids) if expert_ids else list(EXPERTS.keys())
+        questions_template = ",\n    ".join(
+            f'"{eid}": "追问内容(空字符串表示无追问)"' for eid in ids
+        )
+        panel_hint = "、".join(ids) if ids else "各"
         prompt = f"""## 问题
 {case_context[:8000]}
 
-## 5位专家的独立分析
+## 本轮参与的专家（{len(ids)}位）的独立分析
 {all_opinions}
 
 ---
@@ -454,18 +490,14 @@ class ExpertPanel:
 
 1. 找出各专家分析中的**矛盾点**
 2. 找出**遗漏的分析角度**（特别是: 是否有专家忽略了「条件检查表」中的某个条件?）
-3. 对需要深入分析的专家提出**具体追问**
+3. 对需要深入分析的专家提出**具体追问**（只针对本轮在场的专家: {panel_hint}）
 
 输出JSON:
 {{
   "contradictions": ["矛盾1描述", ...],
   "gaps": ["遗漏1描述", ...],
   "questions": {{
-    "signal_chain": "追问内容(空字符串表示无追问)",
-    "algorithm": "...",
-    "system_state": "...",
-    "perception": "...",
-    "architecture": "..."
+    {questions_template}
   }},
   "preliminary_consensus": "目前各专家的共识点",
   "key_dispute": "最关键的争议点"
@@ -473,13 +505,43 @@ class ExpertPanel:
 
         think = self._thinking == "full"
         result = self.router.complex(prompt, system=MODERATOR_SYSTEM, thinking=think)
-        parsed = parse_json_from_llm(result.get("content", ""), fallback={
+        fallback_payload = {
             "contradictions": [],
             "gaps": ["Parsing failed"],
             "questions": {},
             "preliminary_consensus": "",
             "key_dispute": "",
-        })
+        }
+        parsed = parse_json_from_llm(
+            result.get("content", ""),
+            fallback=fallback_payload,
+            context="moderator_challenge",
+        )
+
+        # Retry once if the first parse collapsed to fallback.  Two known
+        # triggers: (a) thinking content leaks into ``content`` and throws off
+        # the brace heuristic, (b) the LLM wrapped JSON in markdown that the
+        # cleaner couldn't reach.  Retry strictly: thinking off + explicit
+        # "JSON only" prefix.
+        if parsed.get("gaps") == ["Parsing failed"]:
+            strict_prompt = (
+                "【CRITICAL】你的整个回复必须是一个合法 JSON 对象。"
+                "禁止输出任何解释文字、Markdown 代码块或 <think> 标签。"
+                "回复以 `{` 开头、以 `}` 结尾，中间严格为合法 JSON。\n\n"
+                + prompt
+            )
+            result = self.router.complex(
+                strict_prompt, system=MODERATOR_SYSTEM, thinking=False,
+            )
+            parsed = parse_json_from_llm(
+                result.get("content", ""),
+                fallback={
+                    **fallback_payload,
+                    "gaps": ["Parsing failed (after retry)"],
+                },
+                context="moderator_challenge_retry",
+            )
+
         questions = parsed.get("questions", {})
         parsed["questions"] = {k: v for k, v in questions.items() if v and v.strip()}
         return parsed

@@ -1,12 +1,16 @@
 {
   "_meta": {
     "function": "RCTA",
-    "last_updated": "2026-04-18T17:26:58.849505",
+    "last_updated": "2026-04-20T10:23:58.257276",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7"
     }
   },
   "alarm_logic": {
@@ -305,6 +309,240 @@
         },
         "id": "item-e2fbe4f7",
         "_learned_at": "2026-04-18T17:26:58.850497"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "rctaSystemState": {
+        "description": "RCTA 系统状态机（0-None, 1-Init, 2-Standby, 3-Active, 4-Off, 5-Failure, 6-Passive）",
+        "formula": "基于自车速度 g_egoCarAddInfo.carSpd 与激活阈值比较的状态转换逻辑",
+        "inputs": [
+          "g_egoCarAddInfo.carSpd",
+          "fRctaActiveUpSpd",
+          "fRctaActiveLowSpd"
+        ],
+        "data_source": "车辆总线信号 (Ego Info)",
+        "output_usage": "控制 RCTA 功能是否进入可用或警告状态",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 749,
+          "function": "Global Variable Declaration"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      "objRctaWarningFlag": {
+        "description": "单个目标的 RCTA 警告标识",
+        "formula": "条件判断：(Target_Yaw Within [45°, 135°] AND Target_TTM <= fRctaObjWarningTTM AND Target_In_RCTA_ROI)",
+        "inputs": [
+          "pMthObj[objLoc].angleMeas",
+          "calculated_TTM",
+          "objInRctaRoi"
+        ],
+        "data_source": "感知层跟踪目标 (objOutStruct/MthObj)",
+        "output_usage": "累积触发左右侧警告标志 bRctaLeftWarningFlg/bRctaRightWarningFlg",
+        "code_ref": {
+          "file": "adas\\symmetry\\perception\\include\\structDefine.h",
+          "line": 671,
+          "function": "Structure Definition"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      "bRctaLeftWarningFlg": {
+        "description": "左侧 RCTA 系统级警告输出标志",
+        "formula": "ANY(objRctaWarningFlag == Warning IN LeftRoi) AND rctaSystemState == Active",
+        "inputs": [
+          "objRctaWarningFlag (Left Side)",
+          "rctaSystemState",
+          "KEEPWARNINGFRM"
+        ],
+        "data_source": "ADAS Func Logic (adasFunc.c)",
+        "output_usage": "HMI 报警提示、声光反馈",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 766,
+          "function": "Global Variable Declaration"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Radar/Cluter Raw Points",
+        "to": "Track Targets (dynFlg, vel, pos)",
+        "in_file": "track.c",
+        "transform": "卡尔曼滤波及关联，过滤非 RCTA 场景目标 (carSpd < TRACK_MaxRCTAEgoCarV)",
+        "id": "item-87e84c7a",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "step": 2,
+        "from": "Track Targets",
+        "to": "Corrected Object Attributes (dynFlg, isFOVCrossing)",
+        "in_file": "objAttribCal.c",
+        "transform": "低速穿越场景动态属性修正 (Line 3265-3276)，确保横穿物体不被误判为静止物",
+        "id": "item-d90cb882",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "step": 3,
+        "from": "Corrected Objects",
+        "to": "rctaSystemState & objRctaWarningFlag",
+        "in_file": "adasFunc.c",
+        "transform": "检查自车速度 (fRctaActiveUpSpd)、目标航向角 (fRctaObjWarningLowYawAngle) 及碰撞时间 (fRctaObjWarningTTM)",
+        "id": "item-43d37df8",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "step": 4,
+        "from": "objRctaWarningFlag",
+        "to": "bRctaLeft/RightWarningFlg",
+        "in_file": "adasFunc.c",
+        "transform": "左右侧 ROI 聚合及保持帧计数 (KEEPWARNINGFRM) 最终输出报警",
+        "id": "item-227eb2db",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fRctaActiveUpSpd",
+        "value": "15.0 km/h",
+        "role": "系统激活上限速度阈值",
+        "id": "frctaactiveupspd-e1b5b806",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "name": "fRctaObjWarningTTM",
+        "value": "4.2 s",
+        "role": "警告触发碰撞时间阈值",
+        "id": "frctaobjwarningttm-3cd306d1",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "name": "fRctaObjDeWarningTTM",
+        "value": "5.2 s",
+        "role": "取消警告去抖碰撞时间阈值",
+        "id": "frctaobjdewarningttm-8c8d4c2c",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "name": "fRctaObjWarningLowYawAngle",
+        "value": "45.0 degree",
+        "role": "目标航向角下限（识别侧方来车）",
+        "id": "frctaobjwarninglowyawang-342318ff",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "name": "fRctaObjWarningUpYawAngle",
+        "value": "135.0 degree",
+        "role": "目标航向角上限（识别侧方来车）",
+        "id": "frctaobjwarningupyawangl-4658ee7f",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "name": "TRACK_MaxRCTAEgoCarV",
+        "value": "6.0 m/s",
+        "role": "跟踪层 RCTA 场景车速上限（约 21.6 km/h）",
+        "id": "track-maxrctaegocarv-c3d2088e",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      },
+      {
+        "name": "KEEPWARNINGFRM",
+        "value": "3",
+        "role": "警告保持帧数（去抖）",
+        "id": "keepwarningfrm-791ceceb",
+        "_learned_at": "2026-04-18T19:05:46.687177"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-rcta-right",
+        "internal_var": "PEROutput.adasWarning.bRightRctaWarning",
+        "description": "右后横穿交通告警标志",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 1097,
+          "function": "ADAS 初始化及检测逻辑 (未完全展示，变量定义于 1105)"
+        },
+        "merge_logic": "系统状态门控：仅当系统处于 Active 状态时传递警告标志，否则清零",
+        "merge_location": {
+          "file": "ASWOUT_OutCalc.c",
+          "line": 186
+        },
+        "can_signal": "RCTA_warningReqRight",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1182
+        },
+        "transform": "uint8 电平转换 (内部 2->CAN 1, 其他->0)",
+        "message_id": "Public CAN (具体 DID 未在当前片段明确)",
+        "downstream": [
+          "HMI (仪表声音/视觉提示)",
+          "BCM (侧灯指示)"
+        ],
+        "gating_conditions": [
+          "rctaSystemState == 3 (Active)",
+          "adasEnable.bRCTAEnable == TRUE"
+        ],
+        "_learned_at": "2026-04-20T10:23:58.257276"
+      },
+      {
+        "id": "out-rcta-left",
+        "internal_var": "g_RteComMapping_RLWarnSig.RCTA_warningReqLeft (源自私有 CAN)",
+        "description": "左后横穿交通告警标志 (由 RL 雷达经私有 CAN 转发)",
+        "set_location": {
+          "file": "RteComMapping.c",
+          "line": 1086,
+          "function": "RteComMapping_RxRunnable_RLWarnSignal (读取 0x338)"
+        },
+        "merge_logic": "RR 主控制器读取 RL 私有 CAN 数据后合并至公共结构体",
+        "merge_location": {
+          "file": "ASWOUT_OutCalc.c",
+          "line": 204
+        },
+        "can_signal": "RCTA_warningReqLeft (推断对称信号)",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": "TX 部分被截断，逻辑同 Right 路径"
+        },
+        "transform": "透传或电平转换",
+        "message_id": "Public CAN",
+        "downstream": [
+          "HMI (仪表声音/视觉提示)",
+          "BCM (侧灯指示)"
+        ],
+        "gating_conditions": [
+          "rctaSystemState == 3 (Active)",
+          "adasEnable.bRCTAEnable == TRUE"
+        ],
+        "_learned_at": "2026-04-20T10:23:58.257276"
+      }
+    ],
+    "merge_strategy": "RR 雷达作为主发送节点。右侧警告由本地算法直接生成；左侧警告通过私有 CAN (0x338) 从 RL 雷达获取。在 ASWOUT_OutCalc 中进行系统状态检查（State==3），满足条件才赋值给中间结构体，最终由 RTE 写入公共 CAN 信号。",
+    "external_gating": [
+      {
+        "source": "RCTASwtReq (用户开关)",
+        "effect": "控制 PERInputUpdate.adasEnable.bRCTAEnable，影响功能激活",
+        "id": "item-93d0ca6b",
+        "_learned_at": "2026-04-20T10:23:58.257276"
+      },
+      {
+        "source": "Vehicle Gear / Speed (adasFunc)",
+        "effect": "影响 rctaSystemState 状态机 (需倒挡且车速<阈值)，只有 State=3 才能外发 Warning",
+        "id": "item-46c02079",
+        "_learned_at": "2026-04-20T10:23:58.257276"
+      },
+      {
+        "source": "Sensor Status (Blind/Fault)",
+        "effect": "故障状态下可能强制关闭警告 (参考 RCTB 逻辑 Line 813)",
+        "id": "item-78f167a5",
+        "_learned_at": "2026-04-20T10:23:58.257276"
       }
     ]
   }

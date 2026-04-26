@@ -1,12 +1,16 @@
 {
   "_meta": {
     "function": "BSD",
-    "last_updated": "2026-04-18T17:29:16.314108",
+    "last_updated": "2026-04-20T10:27:26.191984",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7"
     }
   },
   "alarm_logic": {
@@ -246,6 +250,238 @@
         },
         "id": "item-80a8adc2",
         "_learned_at": "2026-04-18T17:29:16.314108"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "LineBSDLCAG": {
+        "description": "BSD 左侧水平区域起始点（左边界）",
+        "formula": "3.3f + (float)EGOCARWIDTH / 2.0f",
+        "inputs": [
+          "EGOCARWIDTH"
+        ],
+        "data_source": "自车参数配置 (ADAS Config)",
+        "output_usage": "与目标横向位置 (distY/distX) 比较，判断是否在盲区内",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 24,
+          "function": "Global Init"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      "isMoveFlg": {
+        "description": "目标运动状态标志（静止/运动）",
+        "formula": "基于 distY, radialVelMeas, angleMeas 的多条件逻辑判断 (condition1~6)",
+        "inputs": [
+          "pTemp->distY",
+          "pTemp->radialVelMeas",
+          "pTemp->angleMeas",
+          "pTemp->distX",
+          "System_LaneWidth"
+        ],
+        "data_source": "感知层 objStruct (来自 track.c 跟踪结果)",
+        "output_usage": "输入给 BSD 判断逻辑，通常运动物体才触发 BSD 报警",
+        "code_ref": {
+          "file": "adas\\symmetry\\perception\\src\\objAttribCal.c",
+          "line": 2990,
+          "function": "ObjAttribCalc"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      "bBsdLeftWarningFlg": {
+        "description": "BSD 左侧最终报警标志",
+        "formula": "Buffer[useLoc] 历史状态 + 当前帧满足 BSD 判定条件 (ROI+Speed+RelVel)",
+        "inputs": [
+          "bBsdLeftBuffer[MAXWARNINGSTATEBUFFERSIZE]",
+          "nBsdLeftWarnDelayFrm",
+          "fBsdObjWarningRelVx",
+          "LineBSDLCAG",
+          "isMoveFlg"
+        ],
+        "data_source": "ADAS Func 模块全局状态变量",
+        "output_usage": "点亮仪表盘 BSD 指示灯或触发声音警报",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 665,
+          "function": "Global Variable Definition"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Radar Raw Clusters (distance, velocity, angle)",
+        "to": "Track State (distX, distY, velX, velY)",
+        "in_file": "track.c",
+        "transform": "数据关联、滤波、航迹管理 (SetTrcGateVel, cluster association)",
+        "id": "item-4007d216",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "step": 2,
+        "from": "Track State",
+        "to": "Object Attributes (isMoveFlg, dynFlg, distFltY)",
+        "in_file": "objAttribCal.c",
+        "transform": "静止/运动分类、路边障碍物过滤、动态属性更新",
+        "id": "item-b800def0",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "step": 3,
+        "from": "Object Attributes + Ego Info (Speed)",
+        "to": "BSD ROI Check & Threshold Compare",
+        "in_file": "adasFunc.c",
+        "transform": "几何区域判断 (LineBSD...) + 速度阈值判断 (fBsdObjWarningSpd)",
+        "id": "item-2d8930ce",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "step": 4,
+        "from": "Threshold Compare Result",
+        "to": "bBsdLeftWarningFlg / bBsdRightWarningFlg",
+        "in_file": "adasFunc.c",
+        "transform": "迟滞处理 (KEEPWARNINGFRM) + 延迟计数 (nBsdLeftWarnDelayFrm)",
+        "id": "item-304c28b1",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fBsdActiveSpd",
+        "value": "12.0 km/h",
+        "role": "系统激活车速阈值（滞后：10.0 km/h）",
+        "id": "fbsdactivespd-4279c9b0",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "name": "fBsdObjWarningSpd",
+        "value": "7.2 km/h",
+        "role": "目标触发警告的绝对速度阈值",
+        "id": "fbsdobjwarningspd-d11b6f80",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "name": "fBsdObjWarningRelVx",
+        "value": "-15.0 km/h",
+        "role": "相对纵速阈值（用于判断切入风险）",
+        "id": "fbsdobjwarningrelvx-3995bb52",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "name": "LineBSDLCAG",
+        "value": "3.3 + Width/2 m",
+        "role": "BSD 探测区左侧横向宽度",
+        "id": "linebsdlcag-ea5840a5",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "name": "LineBSDB",
+        "value": "-5.0 - RearDist m",
+        "role": "BSD 探测区后方纵向起始距离",
+        "id": "linebsdb-b2a9ffc5",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "name": "KEEPWARNINGFRM",
+        "value": "3 Frames",
+        "role": "报警保持帧数（去抖动）",
+        "id": "keepwarningfrm-2f300524",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      },
+      {
+        "name": "fBsdWarnDelay",
+        "value": "0.0 s",
+        "role": "报警延迟时间",
+        "id": "fbsdwarndelay-273607c6",
+        "_learned_at": "2026-04-20T10:15:50.090171"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-bld-01",
+        "internal_var": "PEROutput.adasWarning.bRightBsdWarning",
+        "description": "BSD 右侧障碍物警告等级（源自内部标志 bBsdRightWarningFlg）",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 665,
+          "function": "Variable Declaration (Used by UpdateObjAdasWarningFlg)"
+        },
+        "merge_logic": "ASWOUT_OutCalc.c 对 BSD/LCA 警告取最大值，非激活状态清零",
+        "merge_location": {
+          "file": "ASWOUT_OutCalc.c",
+          "line": 162
+        },
+        "can_signal": "BSD_LCA_warningReqRight",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1175
+        },
+        "transform": "uint8 透传 (0:Normal, 1:Low, 2:High)",
+        "message_id": "0x301 (推测，基于信号名 BSD_LCA_...) / RTE 抽象化",
+        "downstream": [
+          "HMI (仪表盘 BSD 图标/报警灯)",
+          "DMS (声光报警触发)"
+        ],
+        "gating_conditions": [
+          "bsdSystemState == 3 (Active) 或 lcaSystemState == 3",
+          "bBSDEnable == TRUE (由开关位控制)"
+        ],
+        "_learned_at": "2026-04-20T10:27:26.191984"
+      },
+      {
+        "id": "out-bld-02",
+        "internal_var": "PEROutput.adasWarning.bsdSystemState",
+        "description": "BSD 功能系统状态机状态",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 638,
+          "function": "Global Definition (Updated by State Machine)"
+        },
+        "merge_logic": "左右雷达状态取最大值 (Max(RR_State, RL_State))",
+        "merge_location": {
+          "file": "RteComMapping.c",
+          "line": 1219
+        },
+        "can_signal": "BSD_State",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1224
+        },
+        "transform": "uint8 映射 (0-6 状态码)",
+        "message_id": "0x301 (Public Can)",
+        "downstream": [
+          "VCU (记录日志)",
+          "T-Box (OTA 状态上报)",
+          "HMI (功能可用性指示)"
+        ],
+        "gating_conditions": [
+          "车速 > fBsdActiveSpd (12km/h)",
+          "曲率半径 > fBsdActiveCurbRadius (125m)",
+          "无传感器故障"
+        ],
+        "_learned_at": "2026-04-20T10:27:26.191984"
+      }
+    ],
+    "merge_strategy": "BSD 与 LCA 共享警告信号通道。在 ASWOUT 层，若 BSD 或 LCA 任一功能为 Active(3)，则比较双方警告级别，输出较高级别（Max）。若两者均非 Active，强制输出 0。系统状态（State）采用左右雷达的最大值进行外发，确保任意一侧雷达就绪即显示功能可用。",
+    "external_gating": [
+      {
+        "source": "LCASwtReq / BSD_LcaSwitch_RightL_RX",
+        "effect": "用户开关关闭时，adasEnable.bBSDEnable 置 FALSE，导致内部变量清零",
+        "id": "item-d4f9994b",
+        "_learned_at": "2026-04-20T10:27:26.191984"
+      },
+      {
+        "source": "ErrSts()",
+        "effect": "系统故障时 Fault_Err 信号置 1，可能抑制警告信号有效性",
+        "id": "item-5eeeca19",
+        "_learned_at": "2026-04-20T10:27:26.191984"
       }
     ]
   }

@@ -32,9 +32,14 @@
       "status": "Newly Added from recent session"
     }
   ],
-  "_updated": "2026-04-18T17:37:14.421870",
+  "_updated": "2026-04-20T15:03:25.825902",
   "description": "前方交叉交通警报，低速向前行驶时检测前方横向穿越目标。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / FctaUpdateSystemStatus",
-  "status": "Doc integrated & Patterns Merged & New Issue Added"
+  "status": "State Machine Added & Validated",
+  "output_chain_items": 5,
+  "calculation_chain_items": 14,
+  "alarm_logic_items": 20,
+  "latest_update": "2026-04-20T14:00:00.000000",
+  "state_machine_items": 29
 }

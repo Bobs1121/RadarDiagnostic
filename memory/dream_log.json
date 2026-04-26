@@ -64,5 +64,83 @@
     "code_pairs_learned": 8,
     "code_pairs_skipped": 0,
     "code_warmup_done": true
+  },
+  {
+    "timestamp": "2026-04-18T19:02:00.528678",
+    "summary": "整合了 FCTB 和 LCA 的最新诊断结论，合并了重复的故障模式，更新了代码知识库状态以反映 FCTA/FCTB 计算链知识的完成，并修正了 FCTB 退出逻辑的根因描述。",
+    "conflicts": 1,
+    "patterns_added": 2,
+    "patterns_removed": 2,
+    "code_pairs_learned": 2,
+    "code_pairs_skipped": 0,
+    "code_warmup_done": true
+  },
+  {
+    "timestamp": "2026-04-18T19:07:37.407054",
+    "summary": "完成 RCTA/RCTB 计算链知识整合，合并 FCTB 重复故障模式，新增 LCA 信号抖动导致报警中断的根因分析，并更新项目知识库状态至 v8。",
+    "conflicts": 1,
+    "patterns_added": 1,
+    "patterns_removed": 1,
+    "code_pairs_learned": 2,
+    "code_pairs_skipped": 0,
+    "code_warmup_done": true
+  },
+  {
+    "timestamp": "2026-04-18T19:16:59.118084",
+    "summary": "完成 LCA 报警中断根因固化与模式去重，整合 FCTB 多会话诊断结论形成 FCTB005 新条目，更新项目记忆 v9 以反映最新代码知识库状态。",
+    "conflicts": 2,
+    "patterns_added": 2,
+    "patterns_removed": 2
+  },
+  {
+    "timestamp": "2026-04-18T19:27:03.844861",
+    "summary": "完成 L6 代码知识 (FCTB output_chain, RCW calculation_chain) 整合，统一 FCTB 与 LCA 故障模式描述，移除重复条目，更新项目记忆以反映最新知识闭环状态。",
+    "conflicts": 2,
+    "patterns_added": 1,
+    "patterns_removed": 1,
+    "code_pairs_learned": 2,
+    "code_pairs_skipped": 0,
+    "code_warmup_done": true
+  },
+  {
+    "timestamp": "2026-04-18T19:33:44.535756",
+    "summary": "本次整理完成了 FCTA 和 RCTB 的输出链知识补充，合并了 LCA 重复模式，更新了项目记忆中的代码知识库进度，并确认了 L6 代码知识对 L2/L3 问题的闭环支撑。",
+    "conflicts": 1,
+    "patterns_added": 2,
+    "patterns_removed": 1,
+    "code_pairs_learned": 2,
+    "code_pairs_skipped": 0,
+    "code_warmup_done": true
+  },
+  {
+    "timestamp": "2026-04-20T10:09:02.144841",
+    "summary": "完成 v12 架构升级记忆整合，统一 FCTB/LCA 根因描述，移除重复模式，更新 L6 代码知识覆盖状态，并固化动态变量探测与常量学习等新能力。",
+    "conflicts": 2,
+    "patterns_added": 2,
+    "patterns_removed": 2
+  },
+  {
+    "timestamp": "2026-04-20T10:18:37.432595",
+    "summary": "完成 v13 记忆整理：将 LCA 信号抖动根因与 FCTB 时序问题根因从案例层提升至功能知识层，清理重复模式库条目，更新代码学习进度至 19 对，并固化动态变量探测为系统核心原则。",
+    "conflicts": 2,
+    "patterns_added": 3,
+    "patterns_removed": 4
+  },
+  {
+    "timestamp": "2026-04-20T10:37:56.230563",
+    "summary": "完成 v14 记忆整合：移除 LCA 重复模式，补全 FCTB 截断根因，确认 L6 代码知识 (24 对) 与 L2/L3 故障模式完全闭环，特别是 LCA 信号抖动与 FCTB 时序竞争机制。",
+    "conflicts": 2,
+    "patterns_added": 0,
+    "patterns_removed": 2
+  },
+  {
+    "timestamp": "2026-04-20T15:03:25.848437",
+    "summary": "完成 L6 代码知识中 FCTA/FCTB 状态机逻辑补全，确认 LCA 信号抖动根因，新增 FCTA 报警晚与 FCTB 阈值调优模式，系统知识闭环度提升至 v15。",
+    "conflicts": 1,
+    "patterns_added": 2,
+    "patterns_removed": 2,
+    "code_pairs_learned": 2,
+    "code_pairs_skipped": 0,
+    "code_warmup_done": true
   }
 ]

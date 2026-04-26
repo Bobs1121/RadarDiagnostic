@@ -3,6 +3,9 @@
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / RCWUpdateSystemStatus",
   "code_alias": "RRCW",
-  "status": "Doc integrated",
-  "_updated": "2026-04-12T15:26:03.685379"
+  "status": "Calculation Chain Added",
+  "_updated": "2026-04-20T10:09:02.117508",
+  "calculation_chain_items": 12,
+  "alarm_logic_items": 17,
+  "latest_update": "2026-04-18T19:27:03.831731"
 }

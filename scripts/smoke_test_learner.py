@@ -217,6 +217,160 @@ def main() -> int:
         return 1
     print(f"    [OK] _understand_problem now uses keyword prefilter (matched_funcs)")
 
+    # ── [16]–[18] Variable Query Probe stack ──────────────────────────────
+    print(f"\n[16] DataProbe (SQL+asteval query executor):")
+    from parsers.frame_store import FrameStore
+    from ai.data_probe import DataProbe, _rewrite_bool_ops
+    # 16a: AST bool-op rewriting (avoids numpy ambiguous-truth error)
+    rewrite_cases = [
+        ("in_window and abs(dist_y) < 3.0", "in_window & (abs(dist_y) < 3.0)"),
+        ("dist_y > 0 or dist_y < -2",       "(dist_y > 0) | (dist_y < -2)"),
+        ("not in_window",                   "~in_window"),
+    ]
+    for src_expr, expected in rewrite_cases:
+        got = _rewrite_bool_ops(src_expr)
+        if got != expected:
+            print(f"    [FAIL] rewrite {src_expr!r} -> {got!r} (expected {expected!r})")
+            return 1
+    print(f"    [OK] AST bool-rewrite handles and/or/not correctly")
+
+    # 16b: probe execution on synthetic radar_objects
+    store = FrameStore(":memory:")
+    T0 = 1_700_000_000_000_000_000
+    synth = [
+        dict(
+            timestamp_ns=T0 + i * 1_000_000, radar_id=0, obj_id=i,
+            dist_x=-5.0 + i, dist_y=-4.0 + i * 0.8,
+            vel_x=1.0, vel_y=0, vel_abs_x=0, vel_abs_y=0,
+            ttc=5.0 - i * 0.3, ddci=0,
+        )
+        for i in range(10)
+    ]
+    store.bulk_insert_radar_objects(synth)
+    probe = DataProbe(store, windows=[(T0, T0 + 20_000_000)])
+
+    r_simple = probe.query(field="dist_y", table="radar_objects",
+                           stats=["count", "min", "max"])
+    if r_simple.get("row_count") != 10 or r_simple.get("global", {}).get("count") != 10:
+        print(f"    [FAIL] simple probe: {r_simple}")
+        return 1
+    r_grouped = probe.query(
+        field="dist_y + 0.25 * 2.0", table="radar_objects",
+        group_by="side", filter="in_window",
+        stats=["count", "min", "max", "p50", "p90"],
+    )
+    if "groups" not in r_grouped or set(r_grouped["groups"].keys()) != {"left", "right"}:
+        print(f"    [FAIL] grouped probe: {r_grouped}")
+        return 1
+    r_bad = probe.query(field="not_a_column", table="radar_objects", stats=["count"])
+    if "error" not in r_bad:
+        print(f"    [FAIL] expected error for unknown column, got {r_bad}")
+        return 1
+    print(f"    [OK] DataProbe simple / grouped / error paths all work")
+
+    # [17] VariableQueryPlanner with FakeRouter producing valid JSON
+    print(f"\n[17] VariableQueryPlanner (mock router returns JSON):")
+    from ai.variable_query_planner import (
+        VariableQueryPlanner, QueryPlan, render_probe_results_for_prompt,
+    )
+
+    class _PlannerRouter:
+        last_prompt = None
+        def chat(self, **kwargs):
+            _PlannerRouter.last_prompt = kwargs.get("messages", [])
+            import json as _j
+            return {"content": _j.dumps({
+                "queries": [
+                    {
+                        "field": "dist_y + 0.25 * 2.0",
+                        "table": "radar_objects",
+                        "group_by": "side",
+                        "filter": "in_window",
+                        "stats": ["count", "min", "max", "p50", "p90"],
+                        "reasoning": "LCA lateral ROI check",
+                    },
+                    {
+                        "field": "ttc",
+                        "table": "radar_objects",
+                        "filter": "in_window & (ttc > 0)",
+                        "stats": ["count", "min", "p10", "p50"],
+                        "reasoning": "TTC distribution",
+                    },
+                    # malformed entries should be silently dropped
+                    {"field": "", "table": "radar_objects"},
+                    {"field": "ttc", "table": "not_a_real_table"},
+                ],
+            })}
+
+    class _PlannerMemory:
+        def render_code_knowledge_for_context(self, func_name, max_chars=4000):
+            return f"(stub knowledge for {func_name})"
+
+    planner = VariableQueryPlanner(_PlannerRouter(), _PlannerMemory(), PROJECT_ROOT)
+    plans = planner.plan(
+        problem="BSD/LCA 报警晚", expected="LCA 先报",
+        func_name="LCA", fail_type="LATE_ALARM",
+        focus_params=["ROI", "TTC"], store=store,
+    )
+    if len(plans) != 2:
+        print(f"    [FAIL] expected 2 valid plans (invalid ones dropped), got {len(plans)}")
+        return 1
+    if not all(isinstance(p, QueryPlan) and p.is_valid() for p in plans):
+        print(f"    [FAIL] invalid plan objects: {plans}")
+        return 1
+    # The prompt should mention both the focus params and the stub knowledge
+    last_user_prompt = _PlannerRouter.last_prompt[-1]["content"]
+    required_markers = ["ROI", "TTC", "stub knowledge for LCA", "radar_objects"]
+    for m in required_markers:
+        if m not in last_user_prompt:
+            print(f"    [FAIL] planner prompt missing {m!r}")
+            return 1
+    print(f"    [OK] planner produced {len(plans)} valid plans, prompt contains focus+L6+inventory")
+
+    # [17b] Fallback path when router returns garbage
+    class _BadRouter:
+        def chat(self, **kwargs):
+            return {"content": "not json at all"}
+    bad_planner = VariableQueryPlanner(_BadRouter(), _PlannerMemory(), PROJECT_ROOT)
+    fb = bad_planner.plan(
+        problem="x", expected="y", func_name="LCA", fail_type="OTHER",
+        focus_params=["ROI", "TTC"], store=store,
+    )
+    if not fb or not all(qp.reasoning.startswith("[fallback]") for qp in fb):
+        print(f"    [FAIL] fallback plan not produced: {fb}")
+        return 1
+    print(f"    [OK] fallback plan triggered on malformed router response")
+
+    # [18] End-to-end rendered Expert Panel section
+    print(f"\n[18] Planner+Probe end-to-end + ContextBudget integration:")
+    results = [probe.query(**qp.to_query_args()) for qp in plans]
+    section = render_probe_results_for_prompt(plans, results, max_chars=4000)
+    required_in_section = [
+        "Variable Probe",
+        "dist_y + 0.25 * 2.0",
+        "side",
+        "left",
+        "right",
+        "ttc",
+        "LCA lateral ROI check",
+    ]
+    for m in required_in_section:
+        if m not in section:
+            print(f"    [FAIL] rendered section missing {m!r}")
+            return 1
+
+    # Orchestrator should import cleanly and mention Phase 3.57
+    orch_src = inspect.getsource(Orchestrator.run_diagnosis)
+    if "Phase 3.57" not in orch_src or "VariableQueryPlanner" not in orch_src:
+        print(f"    [FAIL] Orchestrator.run_diagnosis missing Phase 3.57 wiring")
+        return 1
+    # Budget wiring
+    full_orch_src = inspect.getsource(Orchestrator)
+    if 'budget.add("probe"' not in full_orch_src:
+        print(f"    [FAIL] ContextBudget missing 'probe' section")
+        return 1
+    print(f"    [OK] rendered section + orchestrator wiring + budget integration all intact")
+
     print("\n" + "=" * 60)
     print("Smoke test PASSED (no runtime errors).")
     print("=" * 60)

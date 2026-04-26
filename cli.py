@@ -97,10 +97,22 @@ Examples:
 
     parser.add_argument("--expected", "-e", help="Expected behavior (diagnosis mode)")
     parser.add_argument("--dream", action="store_true", help="Force memory consolidation")
+    parser.add_argument(
+        "--learn-constants",
+        action="store_true",
+        help="Re-learn the global numeric constants table (paraDefine.h / dotCalibDefine.h / "
+             "adasFunc.c). Fast (1 AI call) and skipped automatically if source is unchanged.",
+    )
     args = parser.parse_args()
 
     if args.query and args.expected:
         parser.error("-e/--expected is only used with -p/--problem (diagnosis mode)")
+
+    # ── Learn-constants only mode ───────────────────────────────────────
+    if args.learn_constants:
+        _run_learn_constants()
+        if not args.case_dir:
+            return
 
     # ── Dream-only mode ─────────────────────────────────────────────────
     if args.dream:
@@ -114,6 +126,7 @@ Examples:
         console.print("  [cyan]python cli.py <case_dir> -q \"your question\"[/cyan]  (data query)")
         console.print("  [cyan]python cli.py <case_dir> -p \"problem\" -e \"expected\"[/cyan]  (diagnosis)")
         console.print("  [cyan]python cli.py --dream[/cyan]  (memory consolidation)")
+        console.print("  [cyan]python cli.py --learn-constants[/cyan]  (re-learn numeric constants table)")
         return
 
     # ── Validate case_dir ───────────────────────────────────────────────
@@ -215,6 +228,19 @@ def _run_dream(force: bool = False):
                 f"  [magenta]Code learning: +{learned} pairs  "
                 f"(skipped {skipped})  warmup={warmup}[/magenta]"
             )
+            constants_delta = code_delta.get("constants") or {}
+            if constants_delta and not constants_delta.get("skipped"):
+                cc = constants_delta.get("counts", {})
+                console.print(
+                    "  [magenta]Constants learned:[/magenta]  "
+                    f"vehicle={cc.get('vehicle_config', 0)}, "
+                    f"thresholds={cc.get('function_thresholds', 0)}, "
+                    f"roi_derived={cc.get('roi_derived', 0)}"
+                )
+            elif constants_delta.get("skipped"):
+                reason = constants_delta.get("reason", "?")
+                if reason != "source_unchanged":
+                    console.print(f"  [yellow]Constants skipped: {reason}[/yellow]")
         overview = (code_delta or {}).get("overview") or {}
         if overview.get("generated"):
             console.print(
@@ -223,6 +249,51 @@ def _run_dream(force: bool = False):
             )
         if conflicts:
             console.print(f"  [yellow]Conflicts resolved: {len(conflicts)}[/yellow]")
+
+
+def _run_learn_constants():
+    """Re-learn the global numeric-constants table.
+
+    This is the fast, standalone path (1 AI call, ~15s on a warm remote).
+    It bypasses the full dream gate/lock so users can update the table
+    immediately after a source change without waiting for the next dream.
+    Hash-driven skip still applies: if the source files haven't changed
+    since the last learn, no LLM call is made.
+    """
+    from ai.code_learner import CodeLearner
+
+    console.print(Panel(
+        "[bold]Numeric Constants Learning[/bold]\n"
+        "[dim]Reading paraDefine.h / dotCalibDefine.h / globalVarDefine.h /"
+        " adasFunc.c …[/dim]",
+        border_style="magenta",
+    ))
+
+    config = load_config()
+    try:
+        learner = CodeLearner(get_router(), config, PROJECT_ROOT)
+    except Exception as e:
+        console.print(f"[red]CodeLearner init failed: {e}[/red]")
+        return
+
+    def status(msg: str) -> None:
+        console.print(f"  [dim magenta]{msg}[/dim magenta]")
+
+    result = learner._learn_constants_if_needed(status, force=True)
+
+    if result.get("skipped"):
+        console.print(f"[yellow]Skipped: {result.get('reason', '?')}[/yellow]")
+    else:
+        counts = result.get("counts", {})
+        console.print(
+            "[green]Constants learned:[/green]  "
+            f"vehicle_config={counts.get('vehicle_config', 0)}  "
+            f"function_thresholds={counts.get('function_thresholds', 0)}  "
+            f"roi_derived={counts.get('roi_derived', 0)}"
+        )
+        console.print(
+            f"  [dim]→ saved to memory/code_knowledge/constants.json[/dim]"
+        )
 
 
 # ── Query Mode ──────────────────────────────────────────────────────────
@@ -293,6 +364,7 @@ def _run_diagnosis(case_dir: Path, problem: str, expected: str):
         "analyze": "Analyzing frames",
         "conditions": "Extracting conditions",
         "tpe": "Temporal Pattern Engine",
+        "probe": "Variable probe (dynamic query planner)",
         "suppression": "Checking suppression signals",
         "output_signals": "Analyzing output signals",
         "diagnose": "Expert panel diagnosis",

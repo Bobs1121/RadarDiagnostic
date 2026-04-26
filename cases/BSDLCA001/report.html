@@ -4312,7 +4312,7 @@ a:hover { text-decoration: underline; }
       <div class="hero-badges">
         <span class="badge badge--diagnose">诊断 (diagnose)</span>
         <span class="badge badge--func">LCA</span>
-        <span class="badge badge--soft">生成时间 2026-04-18 18:29:14</span>
+        <span class="badge badge--soft">生成时间 2026-04-20 10:50:38</span>
         <span class="badge badge--soft">0 张图表</span>
       </div>
     </div>
@@ -4364,11 +4364,11 @@ a:hover { text-decoration: underline; }
         <div class="kv-stack">
           <div class="kv kv--wide">
             <div class="kv__label">问题现象</div>
-            <div class="kv__value kv__value--prose"><p>BSD和LCA报警晚或中断，LCA在目标车辆侧后方接近时没有报警，一直等到目标进入BSD盲区才开始报警</p></div>
+            <div class="kv__value kv__value--prose"><p>GAO SU1 16:35:50 左侧LCA报警晚；16:36左侧LCA报警晚；16:37 左侧报警晚 456帧，790帧，目标检测到的dy一直较大导致LCA就没有触发，进入到BSD报警区域才报警</p></div>
           </div>
           <div class="kv kv--wide">
             <div class="kv__label">预期结果</div>
-            <div class="kv__value kv__value--prose"><p>LCA应该在目标处于侧后方接近相邻车道时就先触发报警（BSD之前就该报），而不是等目标进入BSD区才报</p></div>
+            <div class="kv__value kv__value--prose"><p>左侧LCA应正常触发，不应被BSD兜底或延迟</p></div>
           </div>
         </div>
       </div>
@@ -4395,7 +4395,7 @@ a:hover { text-decoration: underline; }
       </header>
       <div class="card__body markdown-body">
         <h3>根因</h3>
-<p>L1 输入信号 <code>LCASwtReq</code> 疑似不稳定（推测），导致 L2 内部变量 <code>bLCAEnable</code> 在窗口内频繁跳变 <code>[0, 1]</code>（来源：配置层·ADAS 使能），强制重置 L2.5 代码逻辑 <code>adasFunc.c:3998~4002</code> 的 <code>HoldRelease</code> 警告保持状态，致使 L3 雷达端观测到 <code>warning_flag</code> 反复清零（来源：观测层·告警事件），宏观表现为 LCA 报警中断或迟滞至目标进入 BSD 区才重新触发。</p>
+<p>外部开关信号 <code>LCASwtReq</code> 不稳定导致内部使能变量 <code>bLCAEnable</code> 在 [0, 1] 间震荡（来源：信号链路专家 lca_enable 统计） → 触发 <code>adasFunc.c:3998</code> HoldRelease 逻辑清零警告计数器并复位状态机至 Off 态 → 需反复满足激活条件（Speed&gt;12km/h）才能恢复计数 → 连续有效帧数不足 <code>KEEPWARNINGFRM=3</code> 导致 LCA 未触发，直至目标进入 BSD ROI 兜底报警。</p>
 <h3>时序耦合(TPE 触发清单)</h3>
 <table>
 <thead>
@@ -4410,16 +4410,15 @@ a:hover { text-decoration: underline; }
 </thead>
 <tbody>
 <tr>
-<td>无</td>
-<td>全部 7 个 HoldRelease 模式均为“无法判定”</td>
+<td>无 TPE 触发</td>
+<td>adasFunc.c:3998~4060</td>
 <td>-</td>
 <td>-</td>
-<td>-</td>
-<td>TPE 未能解析内部变量到 CAN 信号映射</td>
+<td>LCASwtReq(推断)</td>
+<td>bLCAEnable 震荡致计数器清零</td>
 </tr>
 </tbody>
 </table>
-<p><em>(注：TPE 检测到相关代码行 <code>adasFunc.c:3998</code> 等但 verdict 均为无法判定，佐证了状态未被稳定建立)</em></p>
 <h3>条件检查汇总</h3>
 <table>
 <thead>
@@ -4434,68 +4433,58 @@ a:hover { text-decoration: underline; }
 </thead>
 <tbody>
 <tr>
-<td>LCA 功能使能 (<code>bLCAEnable</code>)</td>
-<td>=1 (持续)</td>
-<td>混合 [0, 1]</td>
-<td>❌ 不满足</td>
-<td>配置层·ADAS 使能</td>
-<td>HoldRelease@adasFunc.c:3998</td>
+<td><strong>LCA 功能使能</strong></td>
+<td>持续为 TRUE (1)</td>
+<td><strong>混合 [0, 1]</strong> (Radar ID=2)</td>
+<td><strong>N</strong></td>
+<td>Variable Probe lca_enable</td>
+<td>adasFunc.c:3998 (HoldRelease)</td>
 </tr>
 <tr>
-<td>相对速度 (预警维持)</td>
-<td><code>velAbsX &gt;= 3.6 km/h</code></td>
-<td>≈2.0 m/s (推算)</td>
-<td>✅ 临界满足</td>
-<td>感知专家分析</td>
-<td>-</td>
+<td><strong>自车速度</strong></td>
+<td>≥ 12.0 km/h</td>
+<td>21.2 ~ 26.9 km/h</td>
+<td>Y</td>
+<td>Variable Probe actual_spd</td>
+<td>adasFunc.c:109</td>
 </tr>
 <tr>
-<td>碰撞时间 (TTC)</td>
-<td><code>TTC &lt; 4.0 s</code></td>
-<td>3.68s ~ 3.95s</td>
-<td>✅ 满足</td>
-<td>观测层·目标告警</td>
-<td>-</td>
+<td><strong>横向 ROI</strong></td>
+<td>≤ 4.288 m</td>
+<td>p50=1.65m, Max=3.92m</td>
+<td>Y</td>
+<td>Variable Probe dist_y (R2 修正)</td>
+<td>adasFunc.c:18 (ROI)</td>
 </tr>
 <tr>
-<td>警告保持帧数</td>
-<td><code>KEEPWARNINGFRM</code> (未定)</td>
-<td>报警仅持续 8ms-3.8s</td>
-<td>⚠️ 疑似失效</td>
-<td>测试窗口数据</td>
-<td>-</td>
-</tr>
-<tr>
-<td>自车车速范围</td>
-<td>12.0 ~ 146.0 km/h</td>
-<td>未知</td>
-<td>❓ 未知</td>
-<td>缺失</td>
-<td>-</td>
+<td><strong>TTC 预警</strong></td>
+<td>&lt; 4.0 s</td>
+<td>3.68 ~ 3.95 s</td>
+<td>Y</td>
+<td>观测层·告警事件</td>
+<td>fLcaObjWarningTTC</td>
 </tr>
 </tbody>
 </table>
 <h3>关键证据链 (结构化)</h3>
-<ol>
-<li><strong>信号</strong>: <code>bLCAEnable</code> | <strong>时间</strong>: 全窗口 | <strong>值</strong>: 混合 [0, 1] | <strong>来源</strong>: 配置层·ADAS 使能 | <strong>TPE 模式</strong>: <code>HoldRelease@adasFunc.c:3998</code></li>
-<li><strong>信号</strong>: <code>warning_edge</code> | <strong>时间</strong>: 1776242124.833s | <strong>值</strong>: LCA obj_flag on → off (8ms) | <strong>来源</strong>: 窗口 1 告警事件 | <strong>TPE 模式</strong>: 无 (无法映射)</li>
-<li><strong>信号</strong>: <code>object_approach</code> | <strong>时间</strong>: 1776242139.44s | <strong>值</strong>: dist 27.4m → 7.35m | <strong>来源</strong>: 窗口 2 告警事件 | <strong>TPE 模式</strong>: -</li>
-<li><strong>信号</strong>: <code>radar_objects</code> | <strong>时间</strong>: 1776242141.39s | <strong>值</strong>: 距离极近 (2.54m) 才触发 | <strong>来源</strong>: 窗口 2 告警事件 | <strong>TPE 模式</strong>: -</li>
-</ol>
+<ul>
+<li><strong>信号</strong>: <code>lca_enable</code> | <strong>时间</strong>: 1776242122~1776242285s | <strong>值</strong>: min=0.0, max=1.0 | <strong>来源</strong>: Variable Probe | <strong>TPE 模式</strong>: adasFunc.c:3998 (疑似 HoldRelease)</li>
+<li><strong>目标</strong>: <code>dist_y</code> (左侧) | <strong>时间</strong>: 报警延迟窗口 | <strong>值</strong>: Max=3.92m | <strong>来源</strong>: Variable Probe R2 修正 | <strong>TPE 模式</strong>: N/A (排除感知过滤)</li>
+<li><strong>阈值</strong>: <code>KEEPWARNINGFRM</code> | <strong>配置</strong>: 3 frames | <strong>值</strong>: 实际累积中断 | <strong>来源</strong>: function_thresholds | <strong>TPE 模式</strong>: adasFunc.c:3998 (KeepTimer 清零)</li>
+</ul>
 <h3>数据链路</h3>
-<p><code>CAN LCASwtReq</code> (疑似跳变) → <code>RteComMapping</code> → <code>adasEnable.bLCAEnable</code> (0↔1) → <code>ASWIN_SystemState.c</code> (状态机 Reset) → <code>adasFunc.c:3998</code> (HoldRelease 失效) → <code>outputData</code> (Warning Off)</p>
+<p>CAN <code>LCASwtReq</code> → RteComMapping → <code>bLCAEnable</code> (震荡) → <code>adasFunc.c:3998</code> (HoldRelease/CloseLcaFunc) → <code>lcaLeftFrmCount</code>=0 / State=Off → LCA 报警不输出</p>
 <h3>测试窗口分析</h3>
-<p>窗口 2 (137.44s~145.27s) 显示目标从 27.4m 接近至 7.3m，期间 <code>bLCAEnable</code> 处于 [0,1] 混合态。仅在目标极度接近 (7.35m) 且假设使能恢复瞬间触发短暂报警 (3829ms)，随后又中断。这印证了远距离时功能被禁用，导致“晚报”。</p>
+<p>窗口 2-7 (约 120s) 内，Radar ID=2 的 <code>lca_enable</code> 出现多次 <code>1→0→1</code> 跳变；每次 <code>0</code> 状态触发代码逻辑复位警告累积；由于复位频繁且含状态机重启耗时，导致累计有效帧数始终低于 3 帧阈值，最终延迟至 BSD 区域触发。</p>
 <h3>场景差异分析</h3>
-<p>预期场景要求 LCA 在侧后方 (距离&gt;8m) 即报警。实测报警点集中在 7-8m (BSD 盲区边缘)。差异原因在于：当使能位为 0 时，无论目标是否满足 TTC&lt;4s，算法均退出计算；待使能位为 1 时，目标已进入短距离区间，故表现为“晚于预期”。</p>
+<p>BSD 与 LCA 共用部分横向 ROI (LineBSDLCAG=4.288m)，但 BSD 纵向起点更近 (-5.143m)；当 LCA 因使能抖动失效时，目标继续行驶进入 BSD 区，BSD 独立逻辑不受 LCA 计数器影响而正常报警，表现为"LCA 晚报、BSD 兜底”。</p>
 <h3>修复建议</h3>
 <ol>
-<li><strong>排查物理信号</strong>：抓取 CAN 总线波形确认 <code>LCASwtReq</code> 是否存在毛刺或 BCM 发送异常（优先级高）。</li>
-<li><strong>增加滤波逻辑</strong>：在 <code>RteComMapping</code> 对 <code>bLCAEnable</code> 赋值前增加去抖宏（如持续 N 帧才置 1），防止单帧干扰。</li>
-<li><strong>验证参数</strong>：确认 <code>KEEPWARNINGFRM</code> 宏定义值，若为 1 则改为≥3（约 24ms 以上）以抵抗临界波动。</li>
+<li><strong>硬件/信号层</strong>: 排查 <code>LCASwtReq</code> 物理线路或网关映射，确保开关节点电平稳定，增加硬件滤波电阻。</li>
+<li><strong>软件层</strong>: 在 <code>RteComMapping</code> 或 <code>AdasState</code> 入口处增加 <code>LCASwtReq</code> 软件去抖逻辑 (如 50ms 低通滤波)，避免单次毛刺触发状态机复位。</li>
 </ol>
-<h3>置信度：75/100</h3>
-<p>不确定因素在于缺少 <code>LCASwtReq</code> 和 <code>VehicularSpeed</code> 的实际 CAN 报文波形，无法 100% 排除车速低于 12km/h 导致使能关闭的可能性，但 <code>bLCAEnable</code> 混合态是确定事实。</p>
+<h3>置信度：85/100</h3>
+<p>不确定因素：缺乏原始 CAN 波形验证 <code>Enable=0</code> 的具体持续时间与 8 秒延迟的精确数学拟合，但结合变量探针统计与逻辑推导已排除感知干扰。</p>
       </div>
     </article>
 

@@ -1,12 +1,18 @@
 {
   "_meta": {
     "function": "FCTA",
-    "last_updated": "2026-04-18T17:22:09.796117",
+    "last_updated": "2026-04-20T15:01:36.513020",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain",
+      "state_machine"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7",
+      "state_machine": "18a6ebe36eb76711"
     }
   },
   "alarm_logic": {
@@ -299,6 +305,540 @@
         },
         "id": "item-c2fe60bd",
         "_learned_at": "2026-04-18T17:22:09.796117"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "fctaSystemState": {
+        "description": "FCTA 系统运行状态机（Inactive/Standby/Active）",
+        "formula": "根据自车速度 egoSpeed 与激活/退出阈值比较 (Hysteresis)",
+        "inputs": [
+          "EgoVehicleSpeed"
+        ],
+        "data_source": "底盘车速信号",
+        "output_usage": "决定 FCTA 功能是否进入检测或警告阶段",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 802,
+          "function": "Global Variable Definition (Logic Implied)"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      "objFctaWarningFlag": {
+        "description": "单个目标对象的 FCTA 警告标记",
+        "formula": "IF (YawAngle in Range && TTM < Threshold && DDCI in Range) THEN 1 ELSE 0",
+        "inputs": [
+          "pMthObj[objLoc].angleMeas",
+          "pMthObj[objLoc].distX/distY",
+          "pMthObj[objLoc].velX/velY"
+        ],
+        "data_source": "感知层跟踪对象 (track.c / objAttribCal.c)",
+        "output_usage": "用于生成最终左侧/右侧报警标志",
+        "code_ref": {
+          "file": "adas\\symmetry\\perception\\src\\track.c",
+          "line": 1914,
+          "function": "ADASFlagMerge (Warning Flag Propagation)"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      "bFctaLeftWarningFlg": {
+        "description": "FCTA 左侧综合报警标志",
+        "formula": "OR aggregation of all valid left-side objFctaWarningFlags within KeepWindow",
+        "inputs": [
+          "objFctaWarningFlag (Left Side Objects)",
+          "KeepWarningCount"
+        ],
+        "data_source": "adasFunc.c Local Logic",
+        "output_usage": "触发 HUD/HMI 警告显示",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 815,
+          "function": "Local Static Variable"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Radar/Camera Fusion Data (Raw Targets)",
+        "to": "Track Object Properties (distX, velX, angleMeas)",
+        "in_file": "track.c",
+        "transform": "Kalman Filter + Multi-Object Tracking + Coordinate Transformation",
+        "id": "item-0a07aa07",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "step": 2,
+        "from": "Track Object Properties",
+        "to": "objFctaWarningFlag",
+        "in_file": "adasFunc.c (Implied Logic)",
+        "transform": "ROI Check + Yaw Angle Filter + TTM/DDCI Risk Calculation",
+        "id": "item-15e43fc2",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "step": 3,
+        "from": "objFctaWarningFlag Array",
+        "to": "bFctaLeftWarningFlg / bFctaRightWarningFlg",
+        "in_file": "adasFunc.c",
+        "transform": "Temporal Filtering (KEEPWARNINGFRM) + Spatial Aggregation",
+        "id": "item-6c4261f1",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "step": 4,
+        "from": "Warning Flags",
+        "to": "Final UI Output",
+        "in_file": "objAttribCal.c",
+        "transform": "Score Calculation & Merging (Lines 4489-4502)",
+        "id": "item-e575ef12",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fFctaActiveUpSpd",
+        "value": "21.0 km/h",
+        "role": "系统激活最高车速阈值",
+        "id": "ffctaactiveupspd-584baac0",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "name": "fFctaDetectLowSpd",
+        "value": "0.5 km/h",
+        "role": "系统检测启动最低车速阈值",
+        "id": "ffctadetectlowspd-4fa8ecd0",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "name": "fFctaObjWarningBaseTTMX",
+        "value": "2.0 s",
+        "role": "X 轴碰撞时间基础警告阈值",
+        "id": "ffctaobjwarningbasettmx-b43ee2a3",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "name": "fFctaObjWarningLowYawAngle",
+        "value": "38.0 degree",
+        "role": "交叉目标最小偏航角阈值",
+        "id": "ffctaobjwarninglowyawang-4504245e",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "name": "fFctaObjWarningUpYawAngle",
+        "value": "127.0 degree",
+        "role": "交叉目标最大偏航角阈值",
+        "id": "ffctaobjwarningupyawangl-2c36a5cb",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "name": "fFctaRoiOffSetY",
+        "value": "0.3 m",
+        "role": "前方探测区域 ROI Y 轴偏移量",
+        "id": "ffctaroioffsety-915c0f60",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      },
+      {
+        "name": "KEEPWARNINGFRM",
+        "value": "3U",
+        "role": "警告保持帧数过滤",
+        "id": "keepwarningfrm-4fa06950",
+        "_learned_at": "2026-04-18T18:59:59.114966"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-1",
+        "internal_var": "PEROutput.adasWarning.bRightFctaWarning",
+        "description": "FCTA 右侧警告标志（FR 雷达本地计算）",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 816,
+          "function": "Local Static Flag / UpdateObjAdasWarningFlg"
+        },
+        "merge_logic": "FR 与 FL 侧警告信号逻辑或合并，映射为单比特警告请求",
+        "merge_location": {
+          "file": "ASWOUT_OutCalc.c",
+          "line": 1162,
+          "function": "GetFctaWarningSignal"
+        },
+        "can_signal": "FCTA_Warn",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1265,
+          "function": "RteComMapping_TxRunnable"
+        },
+        "transform": "uint8 内部枚举值 (0/1/2) → uint8 CAN 信号 (0/1)",
+        "message_id": "N/A (Public CAN Signal Name Only)",
+        "downstream": [
+          "HMI (仪表/音响报警)",
+          "BCM (灯光提示)"
+        ],
+        "gating_conditions": [
+          "fctaSystemState == 3 (Active)",
+          "bFCTAEnable == TRUE (开关使能)",
+          "无系统故障 (ErrSts == FALSE)"
+        ],
+        "_learned_at": "2026-04-18T19:29:47.391308"
+      },
+      {
+        "id": "out-2",
+        "internal_var": "PEROutput.adasWarning.bLeftFctaWarning",
+        "description": "FCTA 左侧警告标志（FL 雷达通过私有 CAN 转发）",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 815,
+          "function": "Local Static Flag / UpdateObjAdasWarningFlg"
+        },
+        "merge_logic": "FL 雷达直接写入私有 CAN，或由 FR 雷达聚合后写入公共 CAN",
+        "merge_location": {
+          "file": "RteComMapping.c",
+          "line": 1368,
+          "function": "RteComMapping_TxRunnable"
+        },
+        "can_signal": "Front_FCTAWarn_LeftR_0x339_TX",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1368,
+          "function": "RteComMapping_TxRunnable"
+        },
+        "transform": "uint8 透传",
+        "message_id": "0x339 (Private CAN)",
+        "downstream": [
+          "FR 雷达控制器 (用于聚合)"
+        ],
+        "gating_conditions": [
+          "fctaSystemState == 3 (Active)",
+          "ENM_POS_FRONT_LEFT (硬件配置)"
+        ],
+        "_learned_at": "2026-04-18T19:29:47.391308"
+      }
+    ],
+    "merge_strategy": "FR 雷达作为主节点，在发送公共 CAN 前，通过 RteComMapping 读取 FL 雷达私有 CAN 的 FCTA 警告信号。最终输出信号 FCTA_Warn 由左右两侧警告状态取 OR 运算（任一侧值为 2 则输出 1）。若任一侧雷达未检测到目标或系统非激活状态，该侧贡献值为 0。",
+    "external_gating": [
+      {
+        "source": "FCTASwtReq (Switch Input)",
+        "effect": "功能开关关闭时 (bFCTAEnable = FALSE)，不触发警告，但 RteComMapping 仍可能发送状态 0",
+        "id": "item-ef231a7d",
+        "_learned_at": "2026-04-18T19:29:47.391308"
+      },
+      {
+        "source": "fctaSystemState (Internal)",
+        "effect": "仅当 SystemState == 3 (Active) 时，ASWOUT 才将内部警告标志复制到待发送结构体，否则强制置 0 (ASWOUT_OutCalc.c L107, L113)",
+        "id": "item-644d020f",
+        "_learned_at": "2026-04-18T19:29:47.391308"
+      },
+      {
+        "source": "ErrSts (Fault Status)",
+        "effect": "系统故障时，相关警告信号可能被抑制或伴随 Fault_Err 信号一同发出",
+        "id": "item-ed4025f9",
+        "_learned_at": "2026-04-18T19:29:47.391308"
+      }
+    ]
+  },
+  "state_machine": {
+    "states": {
+      "0": {
+        "name": "None",
+        "meaning": "未初始化",
+        "typical_entry": "上电初期、自检未完成",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      "1": {
+        "name": "Init",
+        "meaning": "初始化",
+        "typical_entry": "自检完成(GWM_Adas_SelfInspFinish)",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      "2": {
+        "name": "Standby",
+        "meaning": "待机准备",
+        "typical_entry": "功能使能+车速在激活范围[0.5,21.0]km/h+无故障+非校准中",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      "3": {
+        "name": "Active",
+        "meaning": "功能激活",
+        "typical_entry": "Standby状态下检测到障碍物警告(bLeftFctaWarning/bRightFctaWarning)",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      "4": {
+        "name": "Off",
+        "meaning": "功能关闭",
+        "typical_entry": "功能使能条件不满足或在标定中(CalFlagEna)",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      "5": {
+        "name": "Failure",
+        "meaning": "故障状态",
+        "typical_entry": "检测到DTC故障事件(GWM_FCTA_FaultEna)",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      "6": {
+        "name": "Passive",
+        "meaning": "被动/降级",
+        "typical_entry": "超出激活车速范围(>22km/h或<0km/h)或Standby2Active条件不满足",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      }
+    },
+    "transitions": [
+      {
+        "id": "tr-01",
+        "from": 0,
+        "to": 1,
+        "condition": "GWM_Adas_SelfInspFinish() == true",
+        "action": "fctaSystemState = 1; 进入初始化阶段",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1554
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-14",
+        "from": 1,
+        "to": 4,
+        "condition": "!GWM_FCTA_AdasEnableCond() || GWM_Adas_CalFlagEna()",
+        "action": "fctaSystemState = 4; 关闭功能",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1612
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-15",
+        "from": 1,
+        "to": 5,
+        "condition": "GWM_FCTA_AdasEnableCond() && !CalFlag && GWM_FCTA_FaultEna() == true",
+        "action": "fctaSystemState = 5; 记录故障状态",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1568
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-12",
+        "from": 1,
+        "to": 2,
+        "condition": "GWM_FCTA_AdasEnableCond() && !Fault && FCTA_Standby2Active() && 车速∈[0.5,21.0]km/h",
+        "action": "fctaSystemState = 2; 清空警告标志，进入待机",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1576
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-16",
+        "from": 1,
+        "to": 6,
+        "condition": "GWM_FCTA_AdasEnableCond() && !Fault && (!FCTA_Standby2Active() || 车速∉激活范围)",
+        "action": "fctaSystemState = 6; 进入被动模式",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1601
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-23",
+        "from": 2,
+        "to": 3,
+        "condition": "(bLeftFctaWarning != 0) || (bRightFctaWarning != 0)",
+        "action": "fctaSystemState = 3; 开始发出声音/视觉警告",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 728
+        },
+        "confidence": 0.98,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-24",
+        "from": 2,
+        "to": 4,
+        "condition": "!GWM_FCTA_AdasEnableCond() || CalFlag || Fault",
+        "action": "CloseFctaFunc(); fctaSystemState = 4;",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1612
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-26",
+        "from": 2,
+        "to": 6,
+        "condition": "车速≥22km/h 或 车速<0km/h 或 !FCTA_Standby2Active()",
+        "action": "fctaSystemState = 6; 保持待机能力但暂停激活",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1584
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-32",
+        "from": 3,
+        "to": 2,
+        "condition": "警告消失(bLeftFctaWarning==0 && bRightFctaWarning==0)",
+        "action": "fctaSystemState = 2; 返回待机状态",
+        "code_ref": {
+          "file": "ADAS_FunctionLogic",
+          "line": "N/A"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-34",
+        "from": 3,
+        "to": 4,
+        "condition": "!GWM_FCTA_AdasEnableCond() || CalFlag || Fault",
+        "action": "CloseFctaFunc(); fctaSystemState = 4;",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1612
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-36",
+        "from": 3,
+        "to": 6,
+        "condition": "车速≥22km/h 或 车速<0km/h",
+        "action": "fctaSystemState = 6; 退至被动状态",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1584
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-40",
+        "from": 4,
+        "to": 0,
+        "condition": "!GWM_Adas_SelfInspFinish()",
+        "action": "fctaSystemState = 0; 复位至未初始化",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1669
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-50",
+        "from": 5,
+        "to": 4,
+        "condition": "故障清除后",
+        "action": "fctaSystemState = 4; 退出故障状态",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": "N/A"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-62",
+        "from": 6,
+        "to": 2,
+        "condition": "车速回到激活范围[0.5,21.0]km/h && FCTA_Standby2Active()",
+        "action": "fctaSystemState = 2; 重新进入待机",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1590
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "id": "tr-64",
+        "from": 6,
+        "to": 4,
+        "condition": "!GWM_FCTA_AdasEnableCond() || CalFlag",
+        "action": "CloseFctaFunc(); fctaSystemState = 4;",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 1612
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      }
+    ],
+    "entry_functions": [
+      {
+        "name": "ASWIN_SystemState_UpdateFctaAndFctbSystemStatus",
+        "file": "ASWIN_SystemState.c",
+        "line": 1550,
+        "caller": "AdasFunctionCalc周期任务",
+        "id": "aswin-systemstate-update-7ebc942b",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "name": "CloseFctaFunc",
+        "file": "adasFunc.c",
+        "line": 2483,
+        "caller": "状态转换Exit动作(转Off/Failure/None时)",
+        "id": "closefctafunc-9b12ba4a",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "name": "ResetAdasVars",
+        "file": "adasFunc.c",
+        "line": 1100,
+        "caller": "系统初始化/复位时",
+        "id": "resetadasvars-d28b99ae",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      }
+    ],
+    "dual_state_interaction": [
+      {
+        "aspect": "共享状态变量",
+        "description": "fctaSystemState由adasFunc.c声明(uint8_t类型)，但主要由ASWIN_SystemState.c的Update函数驱动更新",
+        "risk": "若两模块同帧内同时写入可能产生竞争条件",
+        "id": "fctasystemstate-adasfunc-884c7947",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "aspect": "平台侧控制逻辑",
+        "description": "ASWIN_SystemState.c根据车辆速度、故障状态、开关使能决定状态流转；adasFunc.c基于此状态判断是否触发警告",
+        "risk": "状态不一致导致adasFunc误判或漏检警告",
+        "id": "aswin-systemstate-c-adas-235f8209",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "aspect": "Enable标志同步",
+        "description": "ASWIN_SystemState.c通过fctaSystemState值(2或3)设置PERInputCapture.adasEnable.bFCTAEnable标志，供感知层使用",
+        "risk": "标志位不同步可能导致感知层提前/延迟处理警告逻辑(L1190)",
+        "id": "aswin-systemstate-c-fcta-7c4b8465",
+        "_learned_at": "2026-04-20T15:01:36.513020"
+      },
+      {
+        "aspect": "警告清除机制",
+        "description": "adasFunc.c中L1190行根据fctaSystemState≠2且≠3强制清除objFctaWarningFlag，防止状态异常残留警告",
+        "risk": "依赖单一状态源，若状态错误将导致警告过早清除",
+        "id": "adasfunc-c-l1190-fctasys-3035b453",
+        "_learned_at": "2026-04-20T15:01:36.513020"
       }
     ]
   }

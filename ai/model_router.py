@@ -162,10 +162,36 @@ class ModelRouter:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        return self.chat(
+        result = self.chat(
             messages, complexity="complex", tools=tools,
             max_tokens=max_tokens, thinking=thinking,
         )
+
+        if (
+            thinking
+            and not (result.get("content") or "").strip()
+            and not result.get("error")
+        ):
+            # Qwen3 thinking mode occasionally emits the full response into
+            # ``reasoning_content`` / ``<think>...</think>`` and leaves the
+            # assistant ``content`` field empty.  Every downstream parser
+            # (parse_json_from_llm, expert R2, code_learner extraction…) then
+            # sees an empty string and gives up.  Retry once without thinking
+            # so the model falls back to plain answer generation.
+            import sys
+            print(
+                f"[model_router] thinking returned empty content "
+                f"(finish={result.get('finish_reason')}, "
+                f"tokens={result.get('usage', {}).get('completion_tokens')})"
+                f"; retrying with thinking=False",
+                file=sys.stderr,
+            )
+            result = self.chat(
+                messages, complexity="complex", tools=tools,
+                max_tokens=max_tokens, thinking=False,
+            )
+
+        return result
 
     @staticmethod
     def _print_usage(response, model: str, complexity: str, elapsed: float):

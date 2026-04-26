@@ -45,6 +45,94 @@ FOCUSES: list[str] = [
     "state_machine",
 ]
 
+# ── Constants learning (global, cross-function) ─────────────────────────
+# 常量学习是一个**全局**的、一次性的任务，不按 function × focus 轮转。
+# 学一次结果写到 ``memory/code_knowledge/constants.json``，所有功能共享。
+# 源头：paraDefine.h / dotCalibDefine.h / globalVarDefine.h /
+# perception_public_def.h —— 这些文件里定义了自车宽度、ROI 横向边界等
+# 真正的数值常量。Hash 未变 → 零 token 跳过；变了才重新学。
+_CONSTANTS_SOURCE_FILES: list[str] = [
+    r"adas\symmetry\perception\include\paraDefine.h",
+    r"coem\GWM_B26\components\AswPerception\calib\dotCalibDefine.h",
+    r"adas\symmetry\perception\include\globalVarDefine.h",
+    r"adas\symmetry\perception\include\perception_public_def.h",
+    r"coem\GWM_B26\components\AswPerception\func\adasFunc.c",
+]
+
+_CONSTANTS_SYSTEM_PROMPT = """你是汽车 ADAS 源码的**数值常量抽取专家**。
+你的唯一任务：从给定的 C 源码中**把所有能确定数值的常量解析出来**，
+并把带符号变量的推导式**代入数值**得到最终数字。
+
+严格要求：
+1. 只抽**数值**常量 —— 忽略布尔宏、字符串宏、无值的 enum、类型定义
+2. 对 `#define A 1.976f` 这种直接赋值 → 输出 `value=1.976`
+3. 对 `float LineBSDLCAL = -3.3f - (float)EGOCARWIDTH/2.0f;` 这种派生式：
+   - 在 `vehicle_config` 中找到 `EGOCARWIDTH` 的数值
+   - **自己计算**出 `computed_value`（如 -4.288）
+   - 把原始式放到 `formula` 字段，不要省略
+4. 如果源码里某个符号找不到数值定义（比如只是声明而没赋值）→ **不要瞎猜**
+5. 对条件编译 `#ifdef`：选择看起来是"默认/主打"的分支（通常是 `#if 0` 外的那个），
+   并在 `notes` 里标注"依赖编译开关 XXX"
+6. 严格输出 JSON，不要带任何解释文字；禁止 Markdown 代码块包裹"""
+
+_CONSTANTS_USER_PROMPT = """请把下列源码中的所有**数值**常量抽取成 JSON。
+
+源码片段（含 `#define` 和 `float LineXxx = ...` 等全局变量赋值）：
+{snippets}
+
+输出格式（严格 JSON）：
+{{
+  "vehicle_config": {{
+    "EGOCARWIDTH": {{
+      "value": 1.976,
+      "unit": "m",
+      "description": "自车宽度",
+      "source": "dotCalibDefine.h:8"
+    }}
+  }},
+  "function_thresholds": {{
+    "fLcaObjWarningTTC": {{
+      "value": 4.0,
+      "unit": "s",
+      "used_by": ["LCA"],
+      "role": "LCA 预警 TTC 阈值",
+      "source": "adasFunc.c:157"
+    }}
+  }},
+  "roi_derived": {{
+    "LineBSDLCAL": {{
+      "formula": "-3.3 - EGOCARWIDTH/2",
+      "computed_value": -4.288,
+      "unit": "m",
+      "used_by": ["LCA", "BSD"],
+      "description": "LCA/BSD 左侧横向 ROI 边界（近车道侧）",
+      "source": "adasFunc.c:33"
+    }},
+    "LineLCAC": {{
+      "formula": "-4.0 - DISTANCEREAR",
+      "computed_value": -5.143,
+      "unit": "m",
+      "used_by": ["LCA"],
+      "description": "LCA 纵向 ROI 近点（后保险杠后方）",
+      "source": "adasFunc.c:18"
+    }}
+  }}
+}}
+
+重要提示：
+- `vehicle_config`：**基础物理常量**（Width、DistanceRear、DistanceFront、DistanceDriver 等）
+- `function_thresholds`：带 `f` 前缀的**按功能命名**的单值阈值（如 `fLcaObjWarningTTC`、`fFctbBrakeTime`）
+- `roi_derived`：用 `vehicle_config` 推导出的**ROI 边界数值**（如 `LineBSDLCAL`、`LineDOWG`、`LineRCWC`）
+  必须同时给 `formula`（原始 C 表达式）和 `computed_value`（**你自己算出的数字**）
+- `used_by` 数组：根据命名前缀推断功能（Bsd→BSD, Lca→LCA, Dow→DOW, Rcw→RCW,
+  Rcta→RCTA, Rctb→RCTB, Fcta→FCTA, Fctb→FCTB；`LineBSDLCAx` 类同时归 BSD 和 LCA）
+- 如果某个类别没有内容，该字段给空对象 `{{}}`（不要省略 key）
+
+请只输出 JSON（不要 ``` 包裹）。"""
+
+
+
+
 # 每个焦点关心的源码文件（相对 source_root，顺序 = 权重）
 FOCUS_FILES: dict[str, list[str]] = {
     "alarm_logic": [
@@ -335,12 +423,14 @@ class CodeLearner:
         self,
         status_cb: Optional[Callable[[str, str], None]] = None,
         force_pairs: Optional[int] = None,
+        force_constants: bool = False,
     ) -> dict:
         """执行一次代码学习。
 
         Args:
             status_cb: 进度回调 (step, detail)
             force_pairs: 强制学习的对数（覆盖 warmup/pairs_per_dream）
+            force_constants: 强制重新学习数值常量（忽略 hash 短路）
 
         Returns:
             delta 摘要 dict
@@ -358,6 +448,9 @@ class CodeLearner:
             return {"skipped": True, "reason": "source_root_missing"}
 
         state = self._read_state()
+
+        constants_delta = self._learn_constants_if_needed(status, force=force_constants)
+
         is_warmup = state.get("warmup_done", False) is False
         pair_budget = force_pairs if force_pairs is not None else (
             self.warmup_pairs if is_warmup else self.pairs_per_dream
@@ -428,6 +521,7 @@ class CodeLearner:
             "errors": errors,
             "warmup_done": state.get("warmup_done", False),
             "cursor": cursor,
+            "constants": constants_delta,
         }
 
     def ensure_overview_docs(
@@ -566,6 +660,183 @@ class CodeLearner:
         )
         content = result.get("content", "") if isinstance(result, dict) else ""
         return content or f"# {func}\n\n(Analysis failed)\n"
+
+    # ── 数值常量学习（全局、一次性、hash 驱动） ──────────────────────────
+
+    def _learn_constants_if_needed(
+        self,
+        status_cb: Callable[[str], None],
+        force: bool = False,
+    ) -> dict:
+        """读 ``_CONSTANTS_SOURCE_FILES``，抽取数值常量到
+        ``memory/code_knowledge/constants.json``。
+
+        流程：
+          1. 读取所有源文件，计算聚合 hash
+          2. 与 ``constants.json._meta.aggregate_hash`` 对比 → 未变则跳过
+          3. 构造截取过的 snippets（仅保留 `#define` 行和 `float LineXxx = ...`
+             全局变量赋值）——降低 token 开销
+          4. 一次 LLM 调用拿 JSON，写入 ``constants.json``
+
+        参数 ``force``：忽略 hash 对比强制重学（CLI ``--learn-constants`` 场景）。
+        """
+        out_path = self.knowledge_dir / "constants.json"
+
+        file_contents: dict[str, str] = {}
+        hash_inputs: list[str] = []
+        for rel in _CONSTANTS_SOURCE_FILES:
+            full = self.source_root / rel
+            if not full.exists():
+                continue
+            try:
+                txt = full.read_text(encoding="utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                continue
+            file_contents[rel] = txt
+            hash_inputs.append(hashlib.sha256(txt.encode()).hexdigest()[:16])
+
+        if not file_contents:
+            status_cb("[constants] 常量源文件都读不到，跳过")
+            return {"skipped": True, "reason": "no_source_files"}
+
+        aggregate_hash = hashlib.sha256(
+            "|".join(sorted(hash_inputs)).encode()
+        ).hexdigest()[:16]
+
+        if not force and out_path.exists():
+            try:
+                prev = json.loads(out_path.read_text(encoding="utf-8"))
+                prev_hash = (prev.get("_meta") or {}).get("aggregate_hash")
+                if prev_hash == aggregate_hash:
+                    return {
+                        "skipped": True,
+                        "reason": "source_unchanged",
+                        "aggregate_hash": aggregate_hash,
+                    }
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        status_cb("[constants] 抽取数值常量（全局，一次性）...")
+        snippets = self._extract_constant_snippets(file_contents)
+        if not snippets.strip():
+            status_cb("[constants] 没抽到有效片段，跳过")
+            return {"skipped": True, "reason": "empty_snippets"}
+
+        if len(snippets) > self.max_snippet_chars:
+            snippets = snippets[: self.max_snippet_chars] + "\n... [TRUNCATED] ..."
+
+        status_cb(f"[constants] 向 AI 发送 {len(snippets):,} 字符片段...")
+        try:
+            result = self.router.complex(
+                _CONSTANTS_USER_PROMPT.format(snippets=snippets),
+                system=_CONSTANTS_SYSTEM_PROMPT,
+                max_tokens=12000,
+                thinking=self.use_thinking,
+            )
+        except Exception as e:  # noqa: BLE001
+            status_cb(f"[constants] AI 调用失败: {e}")
+            return {"skipped": True, "reason": f"router_error: {e}"}
+
+        content = result.get("content", "") if isinstance(result, dict) else ""
+        parsed = parse_json_from_llm(content) if content else None
+        if not parsed or not isinstance(parsed, dict):
+            status_cb("[constants] 解析 AI 输出失败")
+            return {"skipped": True, "reason": "parse_failed"}
+
+        # 规整化：确保三个一级 key 存在
+        for k in ("vehicle_config", "function_thresholds", "roi_derived"):
+            if not isinstance(parsed.get(k), dict):
+                parsed[k] = {}
+
+        parsed["_meta"] = {
+            "last_updated": datetime.datetime.now().isoformat(),
+            "aggregate_hash": aggregate_hash,
+            "source_files": sorted(file_contents.keys()),
+        }
+
+        out_path.write_text(
+            json.dumps(parsed, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        counts = {
+            k: len(parsed.get(k, {}))
+            for k in ("vehicle_config", "function_thresholds", "roi_derived")
+        }
+        status_cb(
+            f"[constants] 新学 "
+            f"vehicle={counts['vehicle_config']}, "
+            f"thresholds={counts['function_thresholds']}, "
+            f"roi_derived={counts['roi_derived']}"
+        )
+        return {
+            "skipped": False,
+            "counts": counts,
+            "aggregate_hash": aggregate_hash,
+        }
+
+    def _extract_constant_snippets(self, file_contents: dict[str, str]) -> str:
+        """抽取与"数值常量"相关的行：``#define``、``float Xxx = ...``、
+        ``const ... = ...``。附带 2 行上下文以便 LLM 理解作用域。
+
+        这样可以把 paraDefine.h (~400 行) + dotCalibDefine.h (~150 行) +
+        adasFunc.c 开头的全局变量赋值块 (~250 行) 压缩到 ~30KB。
+        """
+        parts: list[str] = []
+        for rel, text in file_contents.items():
+            lines = text.splitlines()
+            kept: set[int] = set()
+            for i, ln in enumerate(lines):
+                stripped = ln.strip()
+                # 直接命中的行：#define + 数值、float 全局赋值、const 赋值
+                if (
+                    stripped.startswith("#define ")
+                    and any(ch.isdigit() for ch in stripped[7:])
+                ) or (
+                    "= " in stripped
+                    and any(stripped.startswith(p) for p in (
+                        "float ", "double ", "const float ",
+                        "const double ", "static float ", "static const float ",
+                        "static const double ", "int ", "const int ",
+                        "uint8_t ", "uint16_t ", "uint32_t ",
+                        "static uint8_t ", "static uint16_t ", "static uint32_t ",
+                    ))
+                ):
+                    kept.add(i)
+                # LineBSDxxx / LineLCAxxx / LineDOWxxx / LineRCWxxx 模式
+                elif "Line" in stripped and "=" in stripped and ";" in stripped:
+                    if any(tok in stripped for tok in (
+                        "LineBSD", "LineLCA", "LineDOW", "LineRCW",
+                        "LineFCT", "LineRCT",
+                    )):
+                        kept.add(i)
+
+            if not kept:
+                continue
+
+            # 为每个命中行附带 1 行上下文（前 1 后 1），有助于 LLM
+            # 识别注释里的单位/用途
+            expanded = set()
+            for i in kept:
+                expanded.update(range(max(0, i - 1), min(len(lines), i + 2)))
+
+            ordered = sorted(expanded)
+            # 按连续段组织，不连续处用 "..." 占位
+            grouped: list[str] = []
+            prev = -2
+            buf: list[str] = []
+            for i in ordered:
+                if i != prev + 1 and buf:
+                    grouped.append("\n".join(buf))
+                    buf = []
+                buf.append(f"{i + 1:5d}| {lines[i]}")
+                prev = i
+            if buf:
+                grouped.append("\n".join(buf))
+
+            section = "\n    ...\n".join(grouped)
+            parts.append(f"### File: {rel}\n```c\n{section}\n```")
+        return "\n\n".join(parts)
 
     # ── 单次学习 ────────────────────────────────────────────────────────
 

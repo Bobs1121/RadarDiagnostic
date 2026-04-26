@@ -1,6 +1,6 @@
 # Project Memory
 
-## [2026-04-18 记忆整理 & 知识更新 v6]
+## [2026-04-20 记忆整理 & 知识更新 v15]
 角雷达问题分析系统，目标平台：TI AWR2E44P, 项目代码：cr60_light (GWM_B26 COEM)。
 
 ### 系统架构
@@ -72,9 +72,10 @@
 - 重视代码级别的精确分析，不接受泛泛而谈
 - 希望定位到具体帧和变量值
 - **核心偏好**: 必须包含“条件检查汇总”表格（阈值 vs 实际值 vs 满足状态）
-- **新增偏好**: 对 FCTB 等制动功能，需重点分析“保压时间”与“风险消除（TTC=Inf）”的时序关系
-- **新增偏好**: 针对“退出晚”或“退出早”类问题，需区分是“保压计时器逻辑”还是“外部抑制信号（如 AEBBAActv）”导致的时序差异
-- **新增偏好**: 针对“触发即退出”类问题，需重点排查目标跟踪稳定性（fctb_obj_flag 抖动）及车速阈值边缘震荡
+- **制动功能偏好**: 对 FCTB 等制动功能，需重点分析“保压时间”与“风险消除（TTC=Inf）”的时序关系
+- **时序问题偏好**: 针对“退出晚”或“退出早”类问题，需区分是“保压计时器逻辑”还是“外部抑制信号（如 AEBBAActv）”导致的时序差异
+- **抖动问题偏好**: 针对“触发即退出”类问题，需重点排查目标跟踪稳定性（fctb_obj_flag 抖动）及车速阈值边缘震荡
+- **系统原则**: 反对单点硬编码统计，必须使用动态变量探测 (Dynamic Variable Probing)；禁止绕过 ContextBudget 直接拼接 Prompt。
 
 ### 知识库状态
 - [2026-04-12] 已完成 8 大功能源码状态机文档的结构化整合
@@ -87,5 +88,28 @@
 - [2026-04-17] **最新更新**: 修正 FCTB 退出逻辑认知，明确“退出晚”源于内部保压计时器（~2.8s）与外部 AEB 抑制信号的时序竞争；“退出早”源于 TTC=Inf 导致状态机提前回退。统一 FCTB 故障根因描述，移除重复模式。
 - [2026-04-17] **新增**: 识别 FCTB“触发即退出”新根因：目标跟踪不稳定导致 fctb_obj_flag 高频抖动，叠加车速在阈值边缘震荡，导致状态机无法维持 Active 态。
 - [2026-04-18] **代码知识库完成**: 8 大功能 (BSD, DOW, FCTA, FCTB, LCA, RCTA, RCTB, RCW) 的 `alarm_logic` 源码分析已全部完成 (共 137 条逻辑规则)，L6 代码知识已完全覆盖 L2 功能知识中的状态机定义。
+- [2026-04-18] **计算链知识更新**: FCTA 和 FCTB 新增 `calculation_chain` 知识 (共 29 条)，覆盖 TTM/TTM 计算、目标筛选及阈值判断逻辑，与 L2 已知问题 (如 FCTB003, FCTB004) 形成闭环验证。
+- [2026-04-18] **计算链知识扩展**: RCTA 和 RCTB 新增 `calculation_chain` 知识 (共 31 条)，覆盖倒车场景下的 TTM 计算、目标筛选及制动逻辑，与 L2 功能定义形成闭环。
+- [2026-04-18] **LCA 新发现**: 确认 LCA 报警中断与输入信号 `LCASwtReq` 抖动直接相关，导致内部 `HoldRelease` 计时器重置。
+- [2026-04-18] **模式库优化**: 合并 LCA 重复模式，统一 FCTB 根因描述，移除冗余条目。
+- [2026-04-18] **输出链知识补充**: FCTB 新增 `output_chain` 知识 (9 条)，RCW 新增 `calculation_chain` 知识 (12 条)，完善制动请求输出与后方预警计算路径。
+- [2026-04-18] **知识闭环**: L6 代码知识 (alarm_logic, calculation_chain, output_chain) 已完全支撑 L2 功能知识中的已知问题 (Known Issues) 根因分析，特别是 FCTB 的时序竞争与 LCA 的信号抖动问题。
+- [2026-04-18] **最新增量**: FCTA 和 RCTB 的 `output_chain` 知识已补充完整，进一步覆盖报警输出与制动请求的底层实现细节。
+- [2026-04-18] **v12 架构升级**: 完成代码学习系统归一化 (CodeLearner 唯一入口)，引入 Context Budget 管理，实现动态变量探测 (Dynamic Variable Probing) 替代硬编码统计，完成常量学习 (Constants Learning) 消除符号阈值问题，增强 TPE 变量映射 (WriteSignal 反查) 并区分内部变量与 CAN 信号。
+- [2026-04-20] **v13 知识固化**: 
+  - **LCA 根因确认**: 将 LCA001 根因（LCASwtReq 信号抖动导致 HoldRelease 重置）从 L5 案例记忆提升至 L2 功能知识 `known_issues`，并标记为 `Consolidated`。
+  - **FCTB 模式库精简**: 移除重复的 FCTB 模式条目，统一“触发即退出”与“退出早”的描述逻辑。
+  - **代码学习进度**: L6 代码学习已完成 19 对 (total_pairs=19)，覆盖 8 大功能的 alarm_logic/calculation_chain/output_chain，仅剩 BSD/LCA/DOW/RCW/RCTA 的 output_chain 待自动轮转学习。
+  - **架构原则**: 正式确立“动态变量探测”为唯一数据查询方式，禁止在 FrameAnalyzer 中硬编码统计逻辑。
+- [2026-04-20] **v14 深度整合**:
+  - **L6 与 L2/L3 闭环验证**: 确认 L6 代码知识中的 `calculation_chain` (FCTB/RCTA/RCTB) 与 `output_chain` (FCTB/FCTA/RCTB) 已完全解释 L2 中的 `known_issues` (FCTB002-004, LCA001) 及 L3 模式库中的根因。例如，FCTB003 的“保压不足”直接对应 `output_chain` 中的 `HoldRelease` 计时器逻辑与 `TTC=Inf` 判定条件。
+  - **LCA 信号抖动机制固化**: L6 源码分析证实 `adasFunc.c:3998~4002` 中 `HoldRelease` 计时器在 `bLCAEnable` 翻转时强制清零，完美解释 LCA001 现象。
+  - **FCTB 抖动根因确认**: L6 代码确认 `fctb_obj_flag` 依赖 `objAttribCal` 输出，其高频翻转结合车速阈值边缘效应是“触发即退出”的核心原因。
+  - **代码学习进度更新**: L6 代码学习已完成 24 对 (total_pairs=24)，覆盖 8 大功能的 alarm_logic/calculation_chain/output_chain，所有核心功能链路知识已闭环。
+- [2026-04-20] **v15 最新增量**:
+  - **状态机知识补全**: L6 代码学习新增 FCTA (+29 条) 和 FCTB (+18 条) 的 `state_machine` 详细逻辑，总计完成 26 对代码知识对 (total_pairs=26)。
+  - **LCA 根因二次确认**: 结合最新会话 (BSDLCA001_20260420_104016)，进一步确认 `LCASwtReq` 抖动是 LCA 报警晚/中断的唯一根因，L6 代码逻辑与 L2 已知问题完全匹配。
+  - **FCTB 阈值调优案例**: 记录 FCTB 阈值 `fFctbObjWarningBaseTTMX` (1.0s -> 1.5s) 调优测试案例，用于后续灵敏度分析参考。
+  - **知识体系成熟度**: 系统已具备从 L1 信号 -> L2 逻辑 -> L3 模式 -> L6 源码的全链路闭环分析能力，L6 代码知识成为根因分析的“黄金标准”。
 
 注意：各功能的个案诊断结论存储在 memory/functions/<FUNC>.json 中，不在此处记录。

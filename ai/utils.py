@@ -9,26 +9,117 @@ Shared utilities for the AI analysis pipeline.
 from __future__ import annotations
 
 import json
+import re
+import sys
 from typing import Optional
 
 
 # ── JSON Parsing ─────────────────────────────────────────────────────
 
-def parse_json_from_llm(content: str, fallback: Optional[dict] = None) -> dict:
-    """
-    Extract and parse a JSON object from an LLM response that may contain
-    surrounding markdown, explanation text, or code fences.
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_FENCE_JSON_RE = re.compile(
+    r"```(?:json|JSON)?\s*(\{.*?\})\s*```",
+    re.DOTALL,
+)
+_TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
-    Returns the parsed dict, or `fallback` if parsing fails.
+
+def _strip_wrappers(content: str) -> str:
+    """Remove ``<think>`` blocks and markdown code fences.
+
+    LLMs (Qwen3 especially) often emit reasoning inside ``<think>...</think>``
+    tags, or wrap the answer in ``` fences.  Both break the
+    *first-brace / last-brace* slicing heuristic because a stray ``{`` in the
+    thinking block would become the slice start.
+    """
+    s = content.strip()
+    s = _THINK_BLOCK_RE.sub("", s).strip()
+    if s.startswith("```"):
+        lines = s.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        while lines and lines[-1].strip().startswith("```"):
+            lines.pop()
+        s = "\n".join(lines).strip()
+    return s
+
+
+def _log_parse_failure(content: str, context: str, err: Exception) -> None:
+    """Print a compact diagnostic line to stderr.
+
+    Only called when *every* parse strategy has failed, so noise is minimal.
+    """
+    tag = f"[{context}] " if context else ""
+    head = content[:300].replace("\n", " ⏎ ")
+    tail_part = ""
+    if len(content) > 600:
+        tail = content[-300:].replace("\n", " ⏎ ")
+        tail_part = f" tail={tail!r}"
+    msg = (
+        f"[parse_json_from_llm] {tag}FAILED: {type(err).__name__}: {err} "
+        f"(len={len(content)}, head={head!r}{tail_part})"
+    )
+    print(msg, file=sys.stderr)
+
+
+def parse_json_from_llm(
+    content: str,
+    fallback: Optional[dict] = None,
+    context: str = "",
+) -> dict:
+    """Robustly extract a JSON object from an LLM response.
+
+    Tries, in order:
+      1. ``json.loads`` on the cleaned content (strips ``<think>`` blocks and
+         leading/trailing code fences).
+      2. Match a fenced ``\`\`\`json {...} \`\`\`\`` block.
+      3. Slice from first ``{`` to last ``}`` and parse.
+      4. Same slice, but remove trailing commas before ``}``/``]``.
+
+    On total failure, logs a diagnostic line to stderr (only if every strategy
+    fails) and returns ``fallback`` (or ``{}``).
+
+    The ``context`` argument is a short label (e.g. ``"moderator_challenge"``)
+    that gets included in the diagnostic log so operators can tell which call
+    site tripped.
     """
     if not content or not content.strip():
         return fallback or {}
+
+    cleaned = _strip_wrappers(content)
+    last_err: Optional[Exception] = None
+
     try:
-        start = content.index("{")
-        end = content.rindex("}") + 1
-        return json.loads(content[start:end])
-    except (ValueError, json.JSONDecodeError):
-        return fallback or {}
+        return json.loads(cleaned)
+    except (ValueError, json.JSONDecodeError) as e:
+        last_err = e
+
+    fence_match = _FENCE_JSON_RE.search(cleaned)
+    if fence_match:
+        try:
+            return json.loads(fence_match.group(1))
+        except (ValueError, json.JSONDecodeError) as e:
+            last_err = e
+
+    if "{" in cleaned and "}" in cleaned:
+        start = cleaned.index("{")
+        end = cleaned.rindex("}") + 1
+        snippet = cleaned[start:end]
+        try:
+            return json.loads(snippet)
+        except (ValueError, json.JSONDecodeError) as e:
+            last_err = e
+
+        repaired = _TRAILING_COMMA_RE.sub(r"\1", snippet)
+        if repaired != snippet:
+            try:
+                return json.loads(repaired)
+            except (ValueError, json.JSONDecodeError) as e:
+                last_err = e
+
+    if last_err is not None:
+        _log_parse_failure(content, context, last_err)
+    return fallback or {}
 
 
 # ── Source Code Section Extraction ───────────────────────────────────

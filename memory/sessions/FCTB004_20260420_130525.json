@@ -1,0 +1,253 @@
+{
+  "session_id": "FCTB004_20260420_130525",
+  "case_id": "FCTB004",
+  "problem": "FCTA报警晚，FCTB制动触发距离过近",
+  "expected": "FCTA报警时间提前，FCTB触发制动的时间以及刹停的时间提前",
+  "created_at": "2026-04-20T13:05:25.701663",
+  "status": "started",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-04-20T13:05:35.965244",
+      "detail": {
+        "function": "FCTA, FCTB",
+        "confidence": 0.95,
+        "reasoning": "用户明确报告 FCTA 报警晚（Warning Late）和 FCTB 制动触发距离过近（Braking Trigger Distance Too Close）。这直接对应 FCTA 和 FCTB 功能的时序和阈值逻辑问题。根据架构知识，FCTA 负责预警，FCTB 负责制动，两者共享感知输入（TTM, Yaw, Speed）但使用不同的触发阈值（Warning Threshold vs Braking Threshold）。问题表现为‘晚’和‘近’，属于典型的时序延迟或阈值设定过于保守导致的漏报/延迟类问题。",
+        "fail_type": "DELAY",
+        "key_variables": [
+          "fFctaObjWarningBaseTTM",
+          "fFctaObjWarningUpTTM",
+          "fFctbAEBActiveThresh",
+          "fFctbObjWarningBaseTTMX",
+          "fFctbObjWarningUpTTMY",
+          "fFctaActiveLowSpd",
+          "fFctaActiveUpSpd",
+          "bLeftFctaWarning",
+          "bRightFctaWarning",
+          "bFctbLeftWarningFlg",
+          "bFctbRightWarningFlg",
+          "fctbSystemState",
+          "fctaSystemState",
+          "g_DTCCode",
+          "PERInputUpdate.adasEnable"
+        ],
+        "related_functions": [
+          "FCTA",
+          "FCTB"
+        ]
+      }
+    },
+    {
+      "step": "classify",
+      "timestamp": "2026-04-20T13:06:18.111036",
+      "detail": {
+        "task_type": "diagnose",
+        "confidence": 0.95,
+        "target_function": "FCTA",
+        "focus_parameters": [
+          "TTC",
+          "TTM",
+          "RATIO",
+          "ANGLE"
+        ],
+        "focus_signals": [
+          "car_spd",
+          "trc_0_vel_x",
+          "trc_0_rel_x",
+          "trc_0_rel_y"
+        ],
+        "reasoning": "FCTA报警延迟和FCTB制动触发过近可能涉及TTC/TTM阈值计算异常或目标角度判断偏差"
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-04-20T13:06:28.021743",
+      "detail": {
+        "bag_frames": 27337,
+        "can_frames": 176469
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-04-20T13:06:28.294325",
+      "detail": {
+        "count": 4,
+        "windows": [
+          {
+            "t_start": 1776490596.7638474,
+            "t_end": 1776490602.970654,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776490614.534753,
+            "t_end": 1776490618.5354671,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776490619.249547,
+            "t_end": 1776490626.2690942,
+            "reason": "报警变化"
+          },
+          {
+            "t_start": 1776490636.0594735,
+            "t_end": 1776490644.2188563,
+            "reason": "报警变化"
+          }
+        ]
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-04-20T13:06:53.052802",
+      "detail": {
+        "keys": [
+          "test_windows",
+          "warning_states",
+          "timeline",
+          "state_transitions",
+          "radar_objects_warned",
+          "radar_objects_summary",
+          "adas_enable_states",
+          "bld_summary",
+          "warning_events",
+          "can_summary",
+          "KEY_FACTS",
+          "tpe_report",
+          "tpe_block"
+        ],
+        "key_facts": "[窗口1] 1776490596.76s ~ 1776490602.97s (6.2s) — 报警变化\n[窗口2] 1776490614.53s ~ 1776490618.54s (4.0s) — 报警变化\n[窗口3] 1776490619.25s ~ 1776490626.27s (7.0s) — 报警变化\n[窗口4] 1776490636.06s ~ 1776490644.22s (8.2s) — 报警变化\n\n[状态跳变] 无\n\n==================================================\n[因果层次说明] 以下数据分为「观测层」和「配置层」，根因分析必须沿因果链向上追溯：\n  观测层(雷达端) → 仅说明「发生了什么」\n  配置层(ECU端)  → 说明「为什么发生」→ 需追溯到代码逻辑\n\n[观测层·雷达目标告警] FCTA 共116帧有告警\n  ⚠ 这是雷达输出的观测结果，不是ECU决策的原因\n  涉及雷达: [1, 2]\n  TTC范围: [0.61, 655.35]s\n  距离范围: [0.0, 99.63]m\n\n[观测层·告警事件]",
+        "window_count": 4,
+        "transition_count": 0
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-04-20T13:06:53.083888",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### FCTA 激活条件\n\n**自车速度范围:**\n  active: [fFctaActiveLowSpd=0.5, fFctaActiveUpSpd=21.0] km/h\n  deactive: [fFctaDeactiveLowSpd=0.0, fFctaDeactiveUpSpd=22.0] km/h\n  detect: [fFctaDetectLowSpd=0.5, fFctaDetectUpSpd=22.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fFctaObjWarningSpd=4.0, fFctaObjWarningUpSpd=70.0)"
+      }
+    },
+    {
+      "step": "tpe",
+      "timestamp": "2026-04-20T13:06:53.694810",
+      "detail": {
+        "pattern_count": 4,
+        "triggered_count": 0,
+        "unresolved_variables": 7,
+        "missing_can_signals": 0,
+        "has_triggers": false
+      }
+    },
+    {
+      "step": "variable_probe",
+      "timestamp": "2026-04-20T13:07:14.212265",
+      "detail": {
+        "plan_count": 6,
+        "plans": [
+          {
+            "field": "ttm",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50",
+              "p90"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (fcta_flag == 1) & (ttm < 2.0)",
+            "reasoning": "验证 FCTA 报警触发时的 TTM 分布：代码逻辑要求 TTM_X < 2.0s 才触发，若报警晚，需确认实际触发时 TTM 是否已接近或低于阈值下限，或是否存在大量 TTM 略大于 2.0s 的目标未被捕获。"
+          },
+          {
+            "field": "dist_y",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50",
+              "p90"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (fcta_flag == 1) & (dist_y >= 0)",
+            "reasoning": "检查左侧（dist_y >= 0）报警目标的横向位置分布：代码逻辑要求偏航角在预警范围内，若报警晚，需确认目标是否因横向位置（dist_y）导致偏航角计算未满足触发条件，或目标过早进入/过晚进入预警角范围。"
+          },
+          {
+            "field": "vel_x",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50",
+              "p90"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (fcta_flag == 1) & (vel_x < 0)",
+            "reasoning": "分析触发 FCTA 报警时的目标相对速度：代码逻辑包含相对速度低于警告阈值的条件，若报警晚，需确认目标速度是否因过快或过慢导致未满足速度约束条件。"
+          },
+          {
+            "field": "ttc",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50",
+              "p90"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (fcta_flag == 1)",
+            "reasoning": "统计 FCTA 报警触发时的 TTC 分布：虽然代码主要依赖 TTM，但 TTC 与 TTM 强相关，若报警晚，TTC 分布可能显示触发时刻已非常接近碰撞，揭示预警时间不足。"
+          },
+          {
+            "field": "actual_spd",
+            "table": "radar_debug",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50",
+              "p90"
+            ],
+            "group_by": "radar_id",
+            "filter": "in_window & (fcta_enable == 1) & (actual_spd > 21.0)",
+            "reasoning": "检查自车速度是否超过 FCTA 激活上限（21.0 km/h）：代码逻辑要求自车车速在激活区间内，若速度过高导致功能未激活或抑制，将直接导致报警缺失或延迟。"
+          },
+          {
+            "field": "duration_ms",
+            "table": "warning_events",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50",
+              "p90"
+            ],
+            "group_by": "direction",
+            "filter": "func_name == 'FCTA' & in_window",
+            "reasoning": "分析 FCTA 报警持续时间分布：结合代码中的 hysteresis 和 timer 逻辑（如 fctaKeepWarningCount），若报警持续时间过短或频繁中断，可能揭示去报警逻辑过早触发或保持计数不足。"
+          }
+        ],
+        "result_preview": "## 按问题动态探查 (Variable Probe)\n> 由 VariableQueryPlanner 根据问题+L6代码知识自动生成的查询结果\n\n### ttm  (group_by=side)  [filter: in_window & is_stable_target & (fcta_flag == 1) & (ttm < 2.0)]\n_规划理由_: 验证 FCTA 报警触发时的 TTM 分布：代码逻辑要求 TTM_X < 2.0s 才触发，若报警晚，需确认实际触发时 TTM 是否已接近或低于阈值下限，或是否存在大量 TTM 略大于 2.0s 的目标未被捕获。\n- 参与行数: 75744\n- **错误**: Expression error in 'in_window & is_stable_target & (fcta_flag == 1) & (ttm < 2.0)': name 'ttm' is not defined\n\n### dist_y  (group_by=side)  [filter: in_window & is_stable_target & (fcta_f"
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-04-20T13:07:14.715613",
+      "detail": {
+        "signal_count": 5,
+        "result_preview": "### [驾驶员操作] 加速踏板位置过高 → 禁止从待机进入激活状态\n  变量: AdasStM.AccPedPosDiag, 阈值: >= 80\n  **VCU_FD1.VCU_ActAccrPedlRat**: ✅ 抑制条件不满足\n    判定: 阈值>=80.0: 0.0%帧满足 (0/8903), max=36.6141\n    原始统计: min=0.0000, max=36.6141, mean=0.2687, 非零帧=1.4%\n    帧数: 8903, 变化: 88次\n      t=1776519397.317s: 0.0 → 4.3307\n      t=1776519397.327s: 4.3307 → 10.6299\n      t=1776519397.337s: 10.6299 → 17.3228\n      t=1776519397.348s: 17.3228 → 22.4409\n      t=1776519397.357s: 22.4409 → 25.5905\n      t=1776519397.367s: 25.5905 → 27.559\n    "
+      }
+    },
+    {
+      "step": "output_signal_analysis",
+      "timestamp": "2026-04-20T13:07:15.567725",
+      "detail": {
+        "result_preview": "### FCTA_Warn (CR_FD1)\n  源表达式: `GetFctaWarningSignal()`\n  统计: min=0, max=1, mean=0.0195, 非零帧=87/4452 (2.0%)\n  **激活段 (2个)**:\n    1776519401.61s ~ 1776519402.51s (持续 900ms)\n    1776519443.79s ~ 1776519444.63s (持续 840ms)\n  跳变 (4次, 前4条):\n    t=1776519401.61s: 0→1\n    t=1776519402.51s: 1→0\n    t=1776519443.79s: 0→1\n    t=1776519444.63s: 1→0\n\n### FCTA_B_FuncSts (CR_FD1)\n  源表达式: `(FCTABErrorSts == TRUE) ? 1u : 0U`\n  统计: min=0, max=0, mean=0.0000, 非零帧=0/4452 (0.0%)\n  跳变: 无 (恒定值=0)\n\n### CR_FCTA_Resp (CR_"
+      }
+    }
+  ],
+  "findings": []
+}

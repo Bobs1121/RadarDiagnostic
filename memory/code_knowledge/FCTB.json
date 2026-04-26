@@ -1,12 +1,18 @@
 {
   "_meta": {
     "function": "FCTB",
-    "last_updated": "2026-04-18T17:19:40.826292",
+    "last_updated": "2026-04-20T15:00:19.836753",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain",
+      "state_machine"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7",
+      "state_machine": "18a6ebe36eb76711"
     }
   },
   "alarm_logic": {
@@ -273,6 +279,500 @@
         },
         "id": "item-69ec45d1",
         "_learned_at": "2026-04-18T17:19:40.826292"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "fctbSystemState": {
+        "description": "FCTB 系统状态机状态",
+        "formula": "Hysteresis(speed): if (spd > DeactiveUp) Off else if (spd > ActiveUp) Active...",
+        "inputs": [
+          "g_egoCarAddInfo.carSpd (Vehicle Speed)",
+          "fFctbActiveUpSpd",
+          "fFctbActiveLowSpd",
+          "fFctbDeactiveUpSpd",
+          "fFctbDeactiveLowSpd"
+        ],
+        "data_source": "adasFunc.c (System Control Logic)",
+        "output_usage": "Gatekeeper for enabling object warning logic (L1196 check)",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 834,
+          "function": "Global Static Declaration"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      "objFctbWarningFlag": {
+        "description": "障碍物 FCTB 警告标志",
+        "formula": "(TTM_X < fFctbObjWarningBaseTTMX && TTM_Y within Range) ? Warning : Normal",
+        "inputs": [
+          "objOutStruct[i].distXRefer",
+          "objOutStruct[i].velX",
+          "objOutStruct[i].distY",
+          "objOutStruct[i].velY",
+          "fctbSystemState"
+        ],
+        "data_source": "感知层 objOutStruct (经 track.c 合并)",
+        "output_usage": "驱动仪表盘/扬声器报警及刹车执行器请求",
+        "code_ref": {
+          "file": "adas\\symmetry\\perception\\include\\structDefine.h",
+          "line": 676,
+          "function": "Struct Definition"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      "fFctbTTMX": {
+        "description": "FCTB X 轴融合时间 (推测)",
+        "formula": "|distXRefer| / |velXRel| (带符号保护与最小值限制)",
+        "inputs": [
+          "objOutStruct[i].distXRefer",
+          "objOutStruct[i].velX"
+        ],
+        "data_source": "感知层 objOutStruct (来自 postProcess 滤波后数据)",
+        "output_usage": "与 fFctbObjWarningBaseTTMX 比较触发报警阈值判断",
+        "code_ref": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 579,
+          "function": "Parameter Reference (fFctbObjWarningBaseTTMX)"
+        },
+        "confidence": 0.8,
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Radar/Camera Raw Targets",
+        "to": "pMthObj[objLoc] / objInfo->trcOutData[i]",
+        "in_file": "track.c / objAttribCal.c",
+        "transform": "跟踪过滤、多目标关联、属性分类 (dynFlg, distMeas, lost)",
+        "details": "L1903-L1915 标志位合并 (ADASFlagMerge)，L15387 对象类型复制",
+        "id": "item-5060ba79",
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      {
+        "step": 2,
+        "from": "Ego Vehicle Status (Speed)",
+        "to": "fctbSystemState (0-6)",
+        "in_file": "adasFunc.c",
+        "transform": "速度迟滞逻辑判断 (ActiveUpSpd vs DetectUpSpd)",
+        "details": "L558-L576 定义速度阈值，L834 定义状态枚举",
+        "id": "item-73e130be",
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      {
+        "step": 3,
+        "from": "objOutStruct (Dist/Vel) + fctbSystemState",
+        "to": "objFctbWarningFlag",
+        "in_file": "adasFunc.c",
+        "transform": "计算 TTM 并与阈值比较 (Implicit)",
+        "details": "L1196-L1200 在非激活状态下强制清除 WarningFlag，暗示存在正向置位逻辑",
+        "id": "item-268fcebd",
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      {
+        "step": 4,
+        "from": "objFctbWarningFlag",
+        "to": "lastAdasWarning.bLeftFctbWarning/bRightFctbWarning",
+        "in_file": "adasFunc.c",
+        "transform": "左右侧车道聚合与输出",
+        "details": "L1159-L1160 映射到最终警告结构体",
+        "id": "item-8cf84875",
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fFctbObjWarningBaseTTMX",
+        "value": "1.0s",
+        "role": "X 轴基础警告阈值，低于此时间视为高风险",
+        "id": "ffctbobjwarningbasettmx-f9935c96",
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      {
+        "name": "fFctbObjWarningTTMXOffSet",
+        "value": "0.0s",
+        "role": "X 轴警告偏置量",
+        "id": "ffctbobjwarningttmxoffse-13933fe8",
+        "_learned_at": "2026-04-18T18:58:33.315692"
+      },
+      {
+        "name": "fFctbObjWarningUpTTMY",
+        "value": "1.5s",
+        "role": "Y 轴上方警告阈值",
+        "id": "ffctbobjwarningupttmy-997416cf",
+        "_learned_at": "2026-04-18T18:58:33.316693"
+      },
+      {
+        "name": "fFctbObjWarningLowTTMY",
+        "value": "0.4s",
+        "role": "Y 轴下方警告阈值",
+        "id": "ffctbobjwarninglowttmy-5bfee3b4",
+        "_learned_at": "2026-04-18T18:58:33.316693"
+      },
+      {
+        "name": "fFctbActiveUpSpd",
+        "value": "21.0 km/h",
+        "role": "系统激活上限速度",
+        "id": "ffctbactiveupspd-e907b09e",
+        "_learned_at": "2026-04-18T18:58:33.316693"
+      },
+      {
+        "name": "fFctbActiveLowSpd",
+        "value": "0.5 km/h",
+        "role": "系统激活下限速度",
+        "id": "ffctbactivelowspd-4696a59c",
+        "_learned_at": "2026-04-18T18:58:33.316693"
+      },
+      {
+        "name": "fFctbBrakeValue",
+        "value": "-4.0 m/s²",
+        "role": "制动干预目标加速度",
+        "id": "ffctbbrakevalue-42425174",
+        "_learned_at": "2026-04-18T18:58:33.316693"
+      },
+      {
+        "name": "fFctbAEBActiveThresh",
+        "value": "1.0 m/s",
+        "role": "AEB 激活速度阈值",
+        "id": "ffctbaebactivethresh-47fa140d",
+        "_learned_at": "2026-04-18T18:58:33.316693"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-1",
+        "internal_var": "adasWarning.bLeftFctbWarning / bRightFctbWarning",
+        "description": "FCTB 左右侧制动警告标志 (内部由 bFctbKeepBrakeFlg 逻辑触发)",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 2533,
+          "function": "CloseFctbFunc / FuncLogicMain"
+        },
+        "merge_logic": "FR 控制器读取本地 (FR) 及私有 CAN 获取的 (FL) 警告，取最大值映射为公共请求",
+        "merge_location": {
+          "file": "RteComMapping.c",
+          "line": 1267,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "can_signal": "CR_BrkgReq (Public CAN)",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1274,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "transform": "uint8 (Level 2 Warning -> 1)",
+        "message_id": "0x??? (Public CAN - ESP Domain)",
+        "downstream": [
+          "ESP (执行制动)",
+          "VCU (扭矩请求协调)"
+        ],
+        "gating_conditions": [
+          "fctbSystemState == 2 (Standby) 或 3 (Active)",
+          "adasEnable.bFCTBEnable == TRUE",
+          "Gear == 4U (R) 或 5U (N)",
+          "车速在 fFctbActiveLowSpd ~ fFctbActiveUpSpd 范围内"
+        ],
+        "_learned_at": "2026-04-18T19:25:05.820329"
+      },
+      {
+        "id": "out-2",
+        "internal_var": "adasWarning.fBrakeValue",
+        "description": "FCTB 目标减速度/制动力值",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 2523,
+          "function": "CloseFctbFunc"
+        },
+        "merge_logic": "基于时间戳的仲裁 (GetFctbBrakeValue)，优先处理先触发的侧边或持续状态",
+        "merge_location": {
+          "file": "ASWOUT_OutCalc.c",
+          "line": 1078,
+          "function": "GetFctbBrakeValue"
+        },
+        "can_signal": "CR_BrkgReqVal (Public CAN)",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1278,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "transform": "float (直接透传或根据标定参数 fFctbBrakeValue/-4.0f)",
+        "message_id": "0x??? (Public CAN - ESP Domain)",
+        "downstream": [
+          "ESP (计算具体液压压力)"
+        ],
+        "gating_conditions": [
+          "fctbSystemState == 2 或 3",
+          "至少一侧 (左/右) 产生有效 FCTB 警告"
+        ],
+        "_learned_at": "2026-04-18T19:25:05.820329"
+      },
+      {
+        "id": "out-3",
+        "internal_var": "adasWarning.bLeftFctbWarning / bRightFctbWarning",
+        "description": "FCTB 驾驶员提示信号",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 1200,
+          "function": "UpdateObjFlags"
+        },
+        "merge_logic": "同制动请求 (FR 聚合后输出)",
+        "merge_location": {
+          "file": "RteComMapping.c",
+          "line": 1275,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "can_signal": "FCTBTrig (Public CAN)",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1275,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "transform": "uint8 (1=Warning Active)",
+        "message_id": "0x??? (Public CAN - Cluster)",
+        "downstream": [
+          "HMI (仪表盘图标)",
+          "Sounder (报警音)"
+        ],
+        "gating_conditions": [
+          "同 out-1"
+        ],
+        "_learned_at": "2026-04-18T19:25:05.820329"
+      },
+      {
+        "id": "out-4",
+        "internal_var": "adasWarning.bLeftFctbWarning",
+        "description": "左侧雷达私有 CAN 输出 (FL 控制节点外发)",
+        "set_location": {
+          "file": "ADASFunc.c",
+          "line": 1159,
+          "function": "ResetFlags"
+        },
+        "merge_logic": "无合并，本地直接输出",
+        "merge_location": {
+          "file": "RteComMapping.c",
+          "line": 1373,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "can_signal": "Front_CtaDeceReq_LeftR_0x339_TX",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1373,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "transform": "uint8 (Warning Status)",
+        "message_id": "0x339 (Private CAN)",
+        "downstream": [
+          "FR Radar (作为输入供主节点融合)"
+        ],
+        "gating_conditions": [
+          "节点上电 ENM_POS_FRONT_LEFT"
+        ],
+        "_learned_at": "2026-04-18T19:25:05.820329"
+      }
+    ],
+    "merge_strategy": "FR 控制器为主节点 (Master)，通过私有 CAN 读取 FL 节点的 FCTB 请求。策略：比较左右侧请求等级 (Warning Level)，取最大值 (Max)。若等级为 2 (紧急) 则置 CR_BrkgReq 为 1。制动数值 (Value) 依据 GetFctbBrakeValue 中的时间戳逻辑进行仲裁，避免冲突。",
+    "external_gating": [
+      {
+        "source": "adasEnable.bFCTBEnable (Switch Input)",
+        "effect": "若为 FALSE，fctbSystemState 置为 Off(4)，所有警告标志清零",
+        "id": "item-92095343",
+        "_learned_at": "2026-04-18T19:25:05.821336"
+      },
+      {
+        "source": "g_DTCCode.failureFlg",
+        "effect": "若为 TRUE，fctbSystemState 置为 Failure(5)，禁止制动请求外发",
+        "id": "item-3baed72c",
+        "_learned_at": "2026-04-18T19:25:05.821336"
+      },
+      {
+        "source": "gear (actual_gear)",
+        "effect": "仅当 Gear == 4 (R) 或 5 (N) 时允许进入 Standby/Active 状态，其他档位抑制功能",
+        "id": "item-e77cfcfd",
+        "_learned_at": "2026-04-18T19:25:05.821336"
+      },
+      {
+        "source": "AEB Active (fFctbAEBActiveThresh)",
+        "effect": "若 AEB 已激活且满足阈值条件，可能接管或抑制 FCTB 请求 (逻辑隐含在 fFctbAEBActiveThresh 参量中)",
+        "id": "item-ab93862f",
+        "_learned_at": "2026-04-18T19:25:05.821336"
+      }
+    ]
+  },
+  "state_machine": {
+    "states": {
+      "0": {
+        "name": "None",
+        "meaning": "未初始化，功能未就绪",
+        "typical_entry": "系统上电复位后",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      "1": {
+        "name": "Init",
+        "meaning": "初始化，自检进行中",
+        "typical_entry": "自检标志 g_DTCCode.selfInspFlg 置位且状态为 0",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      "2": {
+        "name": "Standby",
+        "meaning": "待机，满足激活条件但无碰撞威胁",
+        "typical_entry": "功能使能、自检通过、无故障、车速在 0.5-21km/h、档位合适、制动就绪",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      "3": {
+        "name": "Active",
+        "meaning": "激活，已检测到障碍物并触发警告或制动逻辑",
+        "typical_entry": "待机状态下检测到左/右 FCTB 警告且满足防抖间隙（FCTBFuncGap）",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      "4": {
+        "name": "Off",
+        "meaning": "关闭，功能被禁用或校准中",
+        "typical_entry": "功能开关关闭 或 系统处于校准模式 (calibratingFlg)",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      "5": {
+        "name": "Failure",
+        "meaning": "故障，系统检测到错误",
+        "typical_entry": "DTC 故障标志 g_DTCCode.failureFlg 置位",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      "6": {
+        "name": "Passive",
+        "meaning": "被动，超出工作范围但功能未关断",
+        "typical_entry": "车速超速 (>22km/h) 或 倒车 (<0km/h)",
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      }
+    },
+    "transitions": [
+      {
+        "id": "tr-init",
+        "from": 0,
+        "to": 1,
+        "condition": "g_DTCCode.selfInspFlg == TRUE",
+        "action": "进入初始化阶段，开始加载参数",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2549
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      {
+        "id": "tr-fail",
+        "from": 1,
+        "to": 5,
+        "condition": "g_DTCCode.failureFlg == TRUE",
+        "action": "设置故障状态，可能记录 DTC",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2616
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      {
+        "id": "tr-off",
+        "from": 1,
+        "to": 4,
+        "condition": "g_DTCCode.calibratingFlg == TRUE || bFCTBEnable == FALSE",
+        "action": "关闭功能，复位警告输出",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2603
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      {
+        "id": "tr-standby",
+        "from": "Any",
+        "to": 2,
+        "condition": "bFCTBEnable && !calibratingFlg && !failureFlg && Gear(P/R) && BrakeReady && Speed[0.5, 21]",
+        "action": "清空保压计时器；允许检测逻辑运行",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2628
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      {
+        "id": "tr-passive",
+        "from": "2,3",
+        "to": 6,
+        "condition": "Speed > 22km/h || Speed < 0km/h",
+        "action": "停止主动检测，保持低功耗监听",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 2634
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      },
+      {
+        "id": "tr-active",
+        "from": 2,
+        "to": 3,
+        "condition": "(bLeftFctbWarning != 0 || bRightFctbWarning != 0) && FCTBFuncGap()",
+        "action": "启动 AEB 干预逻辑（若配置），更新报警状态",
+        "code_ref": {
+          "file": "ASWIN_SystemState.c",
+          "line": 733
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-20T15:00:19.836753"
+      }
+    ],
+    "entry_functions": [
+      {
+        "name": "ASWIN_SystemState_UpdateFctaAndFctbSystemStatus",
+        "file": "ASWIN_SystemState.c",
+        "line": 251,
+        "caller": "SystemTaskScheduler",
+        "description": "平台侧主入口，处理 Standby 到 Active 的转换及最终状态同步",
+        "id": "standby-active-b2bd22a7",
+        "_learned_at": "2026-04-20T15:00:19.837753"
+      },
+      {
+        "name": "FctaFctbUpdateStatus",
+        "file": "adasFunc.c",
+        "line": 2545,
+        "caller": "AdasFunctionCalc",
+        "description": "感知侧内部逻辑，根据传感器状态、车速、档位计算基础可用状态 (0-2, 4-6)",
+        "id": "0-2-4-6-53173a1e",
+        "_learned_at": "2026-04-20T15:00:19.837753"
+      }
+    ],
+    "dual_state_interaction": [
+      {
+        "aspect": "共享变量",
+        "variable": "fctbSystemState",
+        "description": "该变量在 adasFunc.c 定义并修改基础状态，同时在 ASWIN_SystemState.c 被读取以进行 Active 状态提升。两者存在写冲突风险。",
+        "risk": "若 ASWIN 将状态设为 3(Active) 后，adasFunc 因速度波动将其重置为 2(Standby)，会导致刹车请求丢失或闪烁。需确保调度顺序：adasFunc 先计算基准状态，ASWIN 再根据警告覆盖为 Active。",
+        "id": "adasfunc-c-aswin-system-87215197",
+        "_learned_at": "2026-04-20T15:00:19.837753"
+      },
+      {
+        "aspect": "状态解耦",
+        "variable": "inAlarmPeriod_fctb",
+        "description": "ASWIN 使用内部计时器和 FCTB_FUNC_GAP (10s) 管理警报持续时间，防止频繁报警。",
+        "risk": "独立于主状态机，仅用于控制 Alarm Output，不影响 fctbSystemState 的逻辑判定，但影响用户感知。",
+        "id": "aswin-fctb-func-gap-10s-941f9660",
+        "_learned_at": "2026-04-20T15:00:19.837753"
+      },
+      {
+        "aspect": "故障注入",
+        "function": "ADAS_GetFCTBFaultErrorStatus",
+        "description": "ASWIN 直接查询 DEM DTC 列表来决定故障态，不依赖 adasFunc 的内部 error flag。",
+        "risk": "双源头故障判断可能导致状态不同步，建议统一故障源或增加仲裁机制。",
+        "id": "aswin-dem-dtc-adasfunc-e-16346832",
+        "_learned_at": "2026-04-20T15:00:19.837753"
       }
     ]
   }

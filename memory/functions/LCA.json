@@ -2,14 +2,35 @@
   "description": "变道辅助，监测侧后方盲区及相邻车道动态目标。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / LcaUpdateSystemStatus",
-  "status": "Doc integrated",
-  "_updated": "2026-04-18T18:29:50.955753",
-  "diagnosis_count": 1,
+  "status": "Fully Consolidated (v14)",
+  "_updated": "2026-04-20T15:03:25.826812",
+  "diagnosis_count": 5,
   "known_issues": [
     {
-      "problem": "BSD和LCA报警晚或中断，LCA在目标车辆侧后方接近时没有报警，一直等到目标进入BSD盲区才开始报警",
-      "session": "BSDLCA001_20260418_181748",
+      "id": "LCA001",
+      "problem": "LCA 报警晚或中断，目标在侧后方接近时无报警，进入 BSD 盲区后才报警",
+      "sessions": [
+        "BSDLCA001_20260418_181748",
+        "BSDLCA001_20260418_190551"
+      ],
+      "date": "2026-04-18",
+      "analysis": "L1 输入信号 `LCASwtReq` 不稳定，导致 L2 内部变量 `bLCAEnable` 在窗口内频繁跳变 `[0, 1]`，强制重置 L2.5 代码逻辑 `adasFunc.c:3998~4002` 的 `HoldRelease` 计时器，导致报警中断。",
+      "confidence": 0.92,
+      "status": "Consolidated from 2 sessions"
+    },
+    {
+      "problem": "高速公路测试 GAO SU1，在 16:35:50、16:36、16:37 三个时刻出现左侧 LCA 报警晚的现象，关键帧在 456 帧和 790 帧附近。本应由 LCA 先报警的场景，LCA 没有及时触发，一直等到目标进入 BSD 区域才开始报警。",
+      "session": "BSDLCA001_20260418_194050",
       "date": "2026-04-18"
+    },
+    {
+      "problem": "GAO SU1 16:35:50 左侧LCA报警晚；16:36左侧LCA报警晚；16:37 左侧报警晚 456帧，790帧，目标检测到的dy一直较大导致LCA就没有触发，进入到BSD报警区域才报警",
+      "session": "BSDLCA001_20260420_104016",
+      "date": "2026-04-20"
     }
-  ]
+  ],
+  "alarm_logic_items": 18,
+  "calculation_chain_items": 12,
+  "latest_update": "2026-04-20T14:00:00.000000",
+  "known_issues_updated": "LCA001 root cause confirmed in latest session (BSDLCA001_20260420_104016). LCASwtReq jitter -> HoldRelease reset mechanism validated."
 }

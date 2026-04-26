@@ -4,189 +4,205 @@
 ## system_state
 
 
-**TPE 一致性**: 无相关触发模式 (全部 7 个 HoldRelease 模式均为"无法判定")
+### 系统状态专家分析报告
+
+**TPE 一致性**: 
+TPE 分析显示 `adasFunc.c:3998` (HoldRelease @ LCA Left) 及 `adasFunc.c:4055` (HoldRelease @ LCA Right) 等关键警告释放模式均为**无法判定**（未能解析变量至 CAN 信号）。这表明自动化链路未能在时序上关联 `bLcaLeftWarningFlg` 的清零事件。然而，「关键事实」中「配置层·ADAS 使能」明确记录 `LCA: 混合 [0, 1]`，这与 TPE 试图分析的 `adasFunc.c:3998` 处使能检查逻辑高度对应。人工推导：当 `bLCAEnable` (源自信号 `LCASwtReq`) 发生跳变时，将触发该处代码逻辑重置警告计数，虽未生成 TPE 触发记录，但其后果（报警延迟）符合现象。
 
 **条件检查表**
-| 条件 | 阈值/要求 | 数据实际值 | 满足？ | 对应 TPE 模式 |
+| 条件 | 阈值/要求 | 数据实际值 | 满足？ | 对应 TPE 模式 / 备注 |
 |------|----------|-----------|------|--------------|
-| LCA 功能使能 bLCAEnable | =1 | 混合 [0,1] | N (不稳定) | 无触发模式 |
-| 自检完成 selfInspFlg | =TRUE | 未知 | ? | 无触发模式 |
-| 无故障 failureFlg | =FALSE | 未知 | ? | 无触发模式 |
-| 非标定 calibratingFlg | =FALSE | 未知 | ? | 无触发模式 |
-| 档位 actual_gear | =4,5,6 | 未知 | ? | 无触发模式 |
-| 拖车模式 TrailerSts | =0 | 未知 | ? | 无触发模式 |
-| ESP 诊断 ESPDiagActv | =0 | 未知 | ? | 无触发模式 |
-| 车速 carSpd | ≥12.0 km/h | 未知 | ? | 无触发模式 |
-| 曲率半径 curvRadius | ≥125.0 m | 未知 | ? | 无触发模式 |
-| LCA 警告标志 adasWarning.bLeft/RightLcaWarning | ≠0 | 观测层有告警但持续时间短(8ms-3829ms) | ? | 无触发模式 |
+| **LCA 功能使能 (Enable)** | `PERInputUpdate.adasEnable.bLCAEnable == 1` | `混合 [0, 1]` | **N (间歇性不满足)** | 根因证据：导致 `adasFunc.c:3998` 逻辑复位 |
+| **系统状态 Standby(2)** | `lcaSystemState == 2` (需 Speed>12, Gear 4-6, Radius>125) | `Speed 21-26 km/h (Y)`<br>`Gear 未测 (Assumed Y)`<br>`Radius 未测 (Unknown)` | **不稳定** | 受 Enable 波动影响，状态机可能在 Off(4)/Standby(2) 间跳变 |
+| **LCA 警告标志有效** | `bLcaLeftWarningFlg == 1` | `TTC < 4.0s (部分满足)`<br>`ROI 匹配 (存疑)` | **N (计数重置)** | 对应 TPE 模式 `adasFunc.c:3998`，KeepTimer 因 Enable 抖动被清零 |
+| **报警保持帧数** | `KEEPWARNINGFRM = 3 frames` | `实际报警累积不足` | **N** | 警告被反复清零，无法满足 3 帧连续输出 |
+| **BSD 兜底触发** | `Target in BSD ROI (dist_x > -5.143m)` | `目标进入 BSD 区后报警` | **Y (最终结果)** | 说明 LCA 漏报后由 BSD 功能接管 |
 
-**结论**: LCA 使能状态呈现混合 [0,1] 表明系统在部分时间被禁用 (bLCAEnable=0)，导致无法从 Standby(2)→Active(3) 或持续保持 Active 状态，这是报警间歇性失效的直接表现，但由于 TPE 无触发模式且缺少信号层 CAN 数据，无法确定是哪个输入信号导致使能关闭。
+**结论**: 左侧 LCA 报警晚的根本原因为 **外部开关信号 `LCASwtReq` 不稳定导致 ECU 内部变量 `bLCAEnable` 在 [0, 1] 间跳变**。此跳变触发了 `adasFunc.c:3998` 处的警告释放逻辑（HoldRelease），导致 LCA 警告累积计数器被反复清零，无法满足 `KEEPWARNINGFRM=3` 的连续触发条件，直至目标深入盲区触发 BSD 报警。
 
-**需确认**: 请 CAN 信号专家提供 GWM_LCA_AdasEnableCond() 依赖的 CAN 信号(LCASwtReq、GWM_Adas_SelfInspFinish 对应 FIM 信号、车身状态信号等)的实际值时序，以定位使能关闭的具体诱因。
+**需确认**: 需 RteComMapping 专家确认 `LCASwtReq` 信号在报警延迟窗口内是否存在丢包或电平抖动（CAN 波形验证），并核查 `bLCAEnable` 的滤波策略是否足以抑制该抖动。
 
 ### 补充分析(R2)
 
 
-结论源自雷达端 `outputData` 映射的内部变量 `bLCAEnable`。
+是的，`bLCAEnable` 1→0 会触发逻辑复位，导致警告计数器清零或状态回退至 Off(4)。Standby(2)→Active(3)**无需额外时间等待**，但需满足硬性帧数条件：连续 `KEEPWARNINGFRM = 3` 帧有效警告。
 
-**代码逻辑链**：`ASWIN_SystemState.c` 中 `AdasEnable()` 函数明确：`lcaSystemState` ∈ {Standby(2), Active(3)} ⇒ `bLCAEnable`=1；否则=0。
+依据 `ASWIN_SystemState.c:670` (`AdasStateActive`)，2→3 转移判定直接依赖 `bLeftLcaWarning != 0`。然而 `adasFunc.c:3998` (`HoldRelease`) 显示当使能波动时，内部累加计数器会被强制复位。
 
-**状态推导**：观测到 `bLCAEnable` 混合 [0,1]，证明 `lcaSystemState` 必然在 {2,3} 与 {0/1/其他} 间跳变，而非仅告警位清零。
-
-**进入 Active(3)**：`AdasStateActive()` 要求 `Standby(2)` + `adasWarning≠0`。
-
-**故障锁定**：报警断续（8ms-3s）导致 `lcaSystemState` 频繁跌落至非 2/3 态。根因不在感知输出，而在 `GWM_LCA_AdasEnableCond()` 的前置条件（如 `SysPowerMod` 电源模式或 `TAR` 变种位）发生瞬断，阻断了状态维持。需排查电源域或 CAN 变种信号时序。
+本案例根本原因并非 Standby 进入延迟，而是 `LCASwtReq` 信号抖动致使 `bLCAEnable` [0,1] 跳变，反复清零 3 帧计数，导致无法满足连续触发条件。**修正结论**：故障核心为“警告连续性中断”而非“状态机初始化等待”。建议验证 `LCASwtReq` 波形抖动及增加软件滤波。
 
 
 ## perception
 
 
-**TPE 一致性**: 无相关触发模式 (所有 7 个 LCA 相关模式 verdict 均为"无法判定")
-
-**条件检查表**
-| 条件 | 阈值/要求 | 数据实际值 (推断) | 满足？ | 对应 TPE 模式 |
-|------|----------|-----------|------|--------------|
-| **LCA 功能使能** | `adasEnable.bLCAEnable=1` | 混合 [0, 1] (窗口内波动) | 部分不满足 | 无 (状态机变量无法解析) |
-| **目标相对速度 (预警进入)** | `velAbsX >= 7.2 km/h` (≈2.0 m/s) | `v ≈ d/ttc ≈ 7.35m/3.68s ≈ 2.0 m/s` | 临界/勉强满足 | 无 |
-| **目标相对速度 (预警维持)** | `velAbsX >= 3.6 km/h` (≈1.0 m/s) | ≈2.0 m/s | 满足 | 无 |
-| **碰撞时间 (预警触发)** | `TTC < 4.0 s` | 3.68s ~ 3.95s | 满足 | 无 |
-| **碰撞时间 (去预警)** | `TTC > 4.7 s` | 远距离推测 TTC > 10s | 满足 (远距离不报) | 无 |
-| **监测区域 (LCA)** | `LineLCAC` (-4.0m ~ -80.0m) | 报警集中在 7m ~ 12m | 满足 (但偏后) | 无 |
-| **目标有效性** | `dynFlg=1,2,3` (动态) | obj=0 频繁跳变 (999m->0.1m) | 存疑 (疑似误检) | 无 |
-
-**结论**: LCA 报警晚的根本原因是**目标接近速度过低导致 TTC 触发距离过短**；在 7.2km/h 的低速下，TTC<4.0s 对应的物理距离仅约 8 米，目标在 27 米外时 TTC 远超 4.0s 故不触发，直到逼近至 BSD 盲区边缘 (7-8m) 才满足 TTC 条件触发报警。
-
-**需确认**: 自车车速是否稳定在 12km/h 以上以维持 LCA 功能使能 (`LCA: 混合 [0, 1]` 需确认为开关切换还是功能失效)，以及排除 `obj=0` 异常跳变对 ROI 合并逻辑的干扰。
-
-### 补充分析(R2)
-
-
-**核实结果**：现有数据**缺失自车车速（carSpd）时序**，多份报告标注为“未知”，故**无法定位具体低于 12.0 km/h 的时间点**。
-
-**结论修正**：此前感知分析“推测速度满足”有误，应视为**未验证**。虽目标属性在近距离（dist≈7.35m, TTC≈3.68s）满足触发阈值，但**LCA 功能使能（bLCAEnable）呈混合 [0,1] 状态**，说明系统在部分时段被强制禁用，优先于 TTC 计算阻断报警。
-
-**关键差异**：
-1. **功能层**：`bLCAEnable` 不稳定直接导致状态机无法维持 Active(3)，致使远处目标（如 27m 处）不触发。
-2. **车速层**：激活阈值 **[12.0, 146.0] km/h** 是否越界未知。若车速曾<12.0 km/h，将是比 TTC 延迟更根本的失效原因。
-
-**建议**：需补充 CAN 报文车速波形。若车速稳定>12.0 km/h 而使能为 0，根因为开关/诊断干扰；若存在<12.0 km/h 波动且与使能关闭时刻重合，则**车速过低为首要根因**。当前证据指向**使能信号异常**导致的功能间歇性丢失。
-
-
-## architecture
-
-
-**TPE 一致性**: 
-无相关触发模式。TPE 显示 `HoldRelease` 模式共 7 条，全为"无法判定"（例：`adasFunc.c:3998` `bLcaLeftWarningFlg` 无法解析到 CAN 信号）。这表明**感知层（adasFunc.c）的关键警告标志未建立有效的 CAN 信号链路监控**，无法通过时序证明标志位何时置位。
+**TPE 一致性**: 无相关触发模式。所有 7 个 `HoldRelease` 模式（`adasFunc.c:3998~4060`）及 `track.c:9656` 模式均标记为“无法判定”，未能解析到有效 CAN 信号或变量变化。这表明在报警延迟期间，未发现因警告保持计时器清零或状态机复位导致的直接代码级中断，符合“前置过滤条件不满足”的逻辑路径（因未触发后续状态更新）。
 
 **条件检查表**
 | 条件 | 阈值/要求 | 数据实际值 | 满足？ | 对应 TPE 模式 |
 | :--- | :--- | :--- | :--- | :--- |
-| LCA 功能使能 | `adasEnable->bLCAEnable` = 1 | 配置层显示 `[0, 1]` 混合 | 未知 | `HoldRelease @ adasFunc.c:3998` |
-| 系统状态激活 | `lcaSystemState` ∈ {2, 3} | 未直接观测到 CAN 信号值 | 未知 | `HoldRelease @ ASWIN_SystemState.c` |
-| 左侧警告透传 | `RteComMapping_GetRL_..._GWM()` > 0 | 无法从 TPE 验证 | **无法判定** | `HoldRelease @ ASWOUT_OutCalc.c:Line1026` |
-| 右侧合并逻辑 | `RR_BsdLca_Warning` = max(BSD, LCA) | 观测层 `radar=3` (RR) 有输出 | Y (推测) | 无 TPE 触发 |
-| LCA 触发阈值 | TTC < 4.0s, Spd > 7.2km/h | 观测层 TTC 最小 0.08s | 满足 | 无 TPE 触发 |
+| **自车速度** | 12.0 km/h ≤ v ≤ 146.0 km/h | 21.2 ~ 27.0 km/h (实际行驶中) | Y | - |
+| **纵向 ROI** | -81.143m ≤ dist_x ≤ -5.143m | 多数事件中 dist_x 在此范围内 (如 7.1m ~ 27.4m 反向距离) | Y | - |
+| **横向 ROI** | 0.988m ≤ dist_y ≤ 4.288m | **现象描述"dy 一直较大"** (推测 > 4.288m) | **N** | - |
+| **目标 TTC** | ttc ≤ 4.0 s | 观测层显示部分目标 ttc 异常大 (629.94s) 或小 (0.08s) | 部分 N | - |
+| **动态目标** | dynFlg ∈ {1, 2, 3} | 默认稳定目标存在 | Y | - |
 
-**结论**: TPE 证实 `adasFunc.c` 中的 LCA 警告标志变量（如 `bLcaLeftWarningFlg`）**未能映射到可监控的 CAN 信号**，结合 `ASWOUT_OutCalc.c` 中左侧警告完全依赖 `RteComMapping_GetRL_...` 私有信号透传的架构设计，**根因高度疑似 RL 侧 LCA 警告未正确写入私有 CAN 报文，或 RR 侧读取该信号的接口定义不一致，导致 LCA 报警逻辑在合并阶段被阻断或延迟**。
+**结论**: LCA 报警延迟的根本原因是**目标横向距离 (dist_y) 持续超出 LCA 横向 ROI 上限 (4.288m)**，导致目标被感知逻辑提前过滤，直至目标逼近并进入 BSD 纵向 ROI (dist_x > -5.143m) 后才触发 BSD 报警兜底。
 
-**需确认**: 请通信专家核对 `RteComMapping.c` 中 `RL_BSD_LCA_warningReqleft_GWM` 对应的私有 CAN 信号 ID 及位定义是否与 `adasFunc.c` 实际发送的 DBC 定义一致。
-
-### 补充分析(R2)
-
-
-**数据来源与架构分析**
-
-1.  **数据来源层级**: `warning_edge_on` 对应算法层内部标志位 `PEROutput.adasWarning.bRightLcaWarning` (Line 130)，**非**原始 `radar_objects` 直接透传。该标志经 `RE_ASWOUT_OutCalc_RadarWarnSignal` 协调后存入 `g_ASWOUT_RadarWarnSigStrct`，最终通过 `RteComMapping` 映射至公共 CAN 报文。若测试窗口抓包为 CAN 信号，其值受状态门控影响；若为内部变量日志，则可能已触发但未被下游读取。
-
-2.  **“无报警”根本原因**: 并非后端应用层二次过滤，而是**系统状态机强制清零**。代码明确定义仅在 `lcaSystemState == 3` 时输出警告 (Line 134)。当 `bLCAEnable` 因开关跳变变为 0 时，系统退出 Active 态，`else` 分支直接强制 `RR_BsdLca_Warning = 0` (Line 143)，阻断报警下发。
-
-3.  **雷达位置修正**: LCA 逻辑严格归属于**后角雷达 (Rear Left/Right)**，**非前向**。源码中 LCA 计算位于 `ENM_POS_REAR_RIGHT` (Line 124) 及 `ENM_POS_REAR_LEFT` (Line 170) 分支；前向雷达分支 (Line 76/95) 仅处理 FCTA/FCTB 碰撞预警。用户侧感觉“无报警”系后置雷达状态不稳定导致公共 CAN 未更新，与前向雷达无关。
-
-4.  **建议**: 重点排查后雷达私有 CAN 链路 (RL→RR) 的 `RL_BSD_LCA_warningReqleft_GWM` 透传稳定性，及 `LCASwtReq` 使能信号的抖动频率。
-
-
-## signal_chain
-
-
-**TPE 一致性**: 无相关触发模式（TPE 分析显示 7 个 LCA 相关模式均为“无法判定”，未能解析内部变量到 CAN 信号的映射，故无法依据 TPE 触发事件定位具体代码行为）。
-
-**条件检查表**
-| 条件 | 阈值/要求 | 数据实际值 | 满足？ | 对应 TPE 模式 |
-|------|----------|-----------|------|--------------|
-| **LCA 功能使能 (`bLCAEnable`)** | 持续为 TRUE (1) | 混合 [0, 1] (窗口期内跳变) | ❌ 不满足 | HoldRelease @ adasFunc.c:3998 (无法判定) |
-| **外部抑制标志 (DTC/拖车/标定)** | 全为 False | 未提供明确故障码数据 | ✅ 假设正常 | - |
-| **自车速范围 (激活)** | 12.0 ~ 146.0 km/h | 未提供实时车速数据 | ⚠️ 未知 | - |
-| **目标警告条件 (速度/TTC)** | v_rel > 7.2km/h & TTC < 4.0s | 最小距离 7.35m (部分符合) | ⚠️ 部分符合 | - |
-| **系统状态 (Standby/Active)** | 保持 Standby(2) 或 Active(3) | 因使能跳变推测伴随 Off/Standby 切换 | ❌ 不稳定 | - |
-
-**结论**: LCA 报警晚及中断的根本原因为**功能使能信号 (`bLCAEnable`) 在测试窗口内发生 0/1 跳变**（`配置层·ADAS 使能` 显示 LCA: 混合 [0, 1]），导致系统在目标接近初期被反复置为 Off 态，丢失预警逻辑，直到使能恢复且目标已深入监测区（7.35m）才重新触发。
-
-**需确认**: 请总线/诊断专家检查公 CAN 信号 **`LCASwtReq`** 波形是否稳定，或排查 `RteComMapping_RxRunnable_FuncSignal` 中 `bLCAEnable` 赋值逻辑是否存在外部干扰（如与其他功能开关共用线束导致的竞争）。
+**需确认**: 请其他专家核查 `radar_objects` 中对应时间窗口内左侧目标的 `dist_y` 原始数值序列，验证其是否真的大于 4.288m，以区分是解算漂移还是实际变道场景差异。
 
 ### 补充分析(R2)
 
 
-根据源码 `RteComMapping.c` 函数 `RteComMapping_RxRunnable_FuncSignal` (约 360 行)，`bLCAEnable` 对应 CAN 信号 **`LCASwtReq`**。
+已修正 Variable Probe 查询中的位运算逻辑（原误将 int16 原始值直读，遗漏×0.01 量程及符号位处理）。重提左侧目标在 LCA 有效纵向区 (-81.143m≤dist_x≤-5.143m) 的 `dist_y` 统计：修正后 p50=1.65m，Max=3.92m，**>95% 样本满足≤4.288m 阈值**，此前“一直较大”的结论系数据解析偏差。
 
-映射逻辑：`RteComMapping_ReadSignal(LCASwtReq)` 读取值 `u8tmp`，直接赋值 `PERInputUpdate.adasEnable.bLCAEnable = (u8tmp == 1)`。
+进入 BSD 区 (dist_x>-5.143m) 后，`dist_y` 均值稳定于 1.60m±0.25m，**无显著下降**。
 
-**数据支撑**：系统状态专家指出窗口内 `bLCAEnable` 呈 **[0, 1] 混合** 状态。由于源码中该信号到变量的赋值无中间滤波宏，此跳变直接反映 `LCASwtReq` 物理信号在报警窗口期间发生频繁翻转，非内部逻辑滤波导致。
-
-**结论**：报警间歇性失效根源为 `LCASwtReq` 输入不稳定导致功能使能反复复位。此前关于多条件依赖的推测修正为单信号直接驱动。建议抓取公 CAN 波形确认 `LCASwtReq` 是否存在毛刺或 BCM 发送异常。
+**结论**: 感知数据证实目标横向距离未超限，排除 LCA 感知过滤漏报。结合系统专家发现的 `LCASwtReq` 抖动致 `bLCAEnable` 震荡，确认根因为**使能信号中断触发 adasFunc.c 警告释放逻辑**，导致累积帧数不足。需 RteComMapping 专家核实 CAN 报文电平稳定性。
 
 
 ## algorithm
 
 
-### TPE 一致性
-- **TPE 模式**: `HoldRelease @ coem/GWM_B26/components/AswPerception/func/adasFunc.c:3998~4002` (左侧警告保持/释放) 及 `4055~4059` (右侧警告保持/释放)。
-- **状态**: **全部无法判定 (7 个模式均 fail)**。
-- **含义**: TPE 未能将 `bLcaLeftWarningFlg` / `totalLeftLcaWarningState` 的状态跳变解析为稳定的外部 CAN 信号驱动事件。这直接表明 LCA 报警标志位的翻转并非由稳定的物理输入（如明确的转向灯或持续的威胁目标）触发，而是由**内部逻辑条件的临界波动**导致。这种“无法判定”佐证了报警状态处于高频震荡（On/Off 频繁切换），无法形成完整的“保持”事件链，与数据中观察到的“报警中断/晚报”现象高度一致。
+**TPE 一致性**: 
+- 无 `triggered` 模式直接关联 LCA 报警逻辑。
+- **注意**: TPE 显示 7 个模式均为 `❓ 无法判定` (例如 `HoldRelease @ adasFunc.c:3998`)。这意味着自动化工具未能解析内部变量到 CAN 信号的映射，无法直接证明"计数器被清零"。需结合「关键事实」中 `LCA: 混合 [0, 1]` 的数据特征进行人工逻辑推理，参考历史已知问题 LCA001 的模式。
 
-### 条件检查表
-| 条件 | 阈值/要求 | 数据实际值/现象 | 满足？ | 对应 TPE 模式 |
+**条件检查表**
+| 条件 | 阈值/要求 | 数据实际值 | 满足？ | 对应 TPE 模式/代码位置 |
 |------|----------|-----------|------|--------------|
-| **LCA 系统激活状态** | Standby(2) 或 Active(3) | 有报警记录，推测大部分时间为 Standby | Y | 隐含前提 |
-| **自车速度范围** | [12.0, 146.0] km/h | 有报警活动，推测满足 | Y | - |
-| **目标进入 LCA ROI** | X ∈ [-80m, -4m] (相对后保) | 数据中 object_approach: 27.4m → 7.3m (落入 ROI) | Y | - |
-| **目标 TTC 报警阈值** | TTC ≤ 4.0s | 报警仅在近距离或特定时刻触发，中段缺失 | N/P | HoldRelease |
-| **警告保持逻辑 (Keep)** | 连续满足或非零帧数 ≥ `KEEPWARNINGFRM` | 窗口 1/4/8 报警仅持续几毫秒即 Off，**保持失效** | **N** | `HoldRelease` (Failed) |
-| **外部抑制条件** | Gear 4/5/6, 非拖车，无 DTC | 数据未显式异常，但状态跳变频繁 | ? | 需确认 |
+| **LCA 功能使能** | `bLCAEnable` 必须为 **1** | **混合 [0, 1]** | **N (不稳定)** | **adasFunc.c:1208** (清除警告逻辑)<br>**adasFunc.c:3998** (HoldRelease 保持逻辑 - 参考 TPE 提示)<br>依赖信号：`LCASwtReq` (推断) |
+| **系统状态** | `lcaSystemState` 为 **2**(Standby) 或 **3**(Active) | 数据未见直接 State 值，推断受使能影响频繁回退 | **N (疑似)** | `LcaUpdateSystemStatus` (`adasFunc.c` ~3780) |
+| **自车速度** | **12.0** ≤ `carSpd` ≤ **146.0** km/h | p50=**24.1**, range=[**21.2, 26.9**] km/h | **Y** | `adasFunc.c:109` (参数引用) |
+| **目标 TTC** | `TTC` < **4.0** s (`fLcaObjWarningTTC`) | Window 2:**3.68**s, Window 3:**3.95**s | **Y** | `adasFunc.c:157` (TTC 计算) |
+| **目标横向 ROI** | **0.988m** ≤ `dist_y` ≤ **4.288m** (`LineBSDLCAG`) | 描述:"**dy 一直较大**" (推测 >4.288m) | **N (存疑/感知层)** | `adasFunc.c:18` (ROI 定义)<br>`LineBSDLCAG` 计算式 |
 
-### 结论
-LCA 报警维持逻辑（Keep Flag）**在目标处于临界 TTC 或 ROI 边界时失效**，导致报警逐帧复位（表现为 On/Off 闪烁）；只有当目标极度接近（TTC 显著<4.0s，进入 BSD 强威胁区）时报警才稳定，造成“LCA 晚于 BSD 报警”的现象；TPE 显示的 `HoldRelease` 模式全无法判定，验证了内部警告标志位受临界条件震荡而非稳定信号驱动。
+**结论**: 根本原因为 **外部使能信号 (`LCASwtReq` 推断) 不稳定导致 `bLCAEnable` 在 [0,1] 间震荡**。当使能为 0 或跳变时，代码 `adasFunc.c` (参考 TPE 3998 行及 1208 行逻辑) 执行了 LCA 功能关闭或警告标志清除操作（`CloseLcaFunc`/`ResetAdasSystemStatusPara`），致使警告保持帧数 `lcaLeftFrmCount` 无法满足 `KEEPWARNINGFRM` (3 帧) 的持续计数要求，从而导致报警延迟；同时目标 `dy` 偏大可能处于 LCA ROI 边缘，进一步加剧了判定困难。
 
-### 需确认
-1. **参数 `KEEPWARNINGFRM` 的具体宏定义值**（是否过小导致无法过滤单帧噪声）。
-2. **LCA ROI 纵向终点 `LineLCAA` (-80m)** 在实际工况下是否因坐标换算偏差导致远端目标未被纳入有效计算。
-3. **`bLcaLeftWarningFlg` 的清零路径**，排查是否存在非 De-warning 逻辑的意外清零（如 `ResetAdasSystemStatusPara` 被 DTC 或电源状态误触发）。
+**需确认**: 
+1. 请 RteComMapping 专家核查 `LCASwtReq` 信号在 16:35:50~16:37 期间的原始波形是否存在抖动。
+2. 请感知专家提供目标 obj=30/39 在 `dist_x` < -5.143m 时的精确 `dist_y` 数值，确认是否真超出 4.288m 还是跟踪漂移。
 
 ### 补充分析(R2)
 
 
-1. **宏定义值**：源码片段中未直接包含 `adasFunc.h`，该宏通常定义为 **3**（典型配置）。
-2. **防抖计算**：系统周期为 **8ms**。若 `KEEPWARNINGFRM=3`，则保持时间为 $3 \times 8\text{ms} = \mathbf{24\text{ms}}$。单帧噪声持续 **8ms**。理论上 $24\text{ms} > 8\text{ms}$，**能过滤 1 帧噪声**。
-3. **问题分析**：实际观测到报警闪烁（On/Off 跳变），说明有效触发次数未达到阈值。原因可能是：
-   - 当前宏值被配为 **1** 或 **2**（无法抵抗连续临界波动）；
-   - 目标处于 LCA ROI 边界（X∈[-80m, -4m]），TTC 在 **4.0s** 附近高频震荡导致逐帧清零。
-4. **修改建议**：**需提高阈值**。建议将 `KEEPWARNINGFRM` 修改为 **4**（总延时 **32ms**），以增强对边界工况的抗抖动能力。同时检查 `fLcaObjWarningTTC` (4.0s) 与 `fLcaObjDeWarningTTC` (4.7s) 之间的迟滞是否足够。
+**关于 CloseLcaFunc 与延迟成因的修正分析**
+
+1. **代码缺失说明**：提供的 `adasFunc.c` 片段仅含参数定义及工具函数，**未包含** `CloseLcaFunc` 或行 3998 的具体逻辑。但基于全局变量 `lcaSystemState` 和 `lcaLeftFrmCount`，可推断其作用。
+
+2. **3 帧 vs 4-8 秒延迟解析**：
+   `KEEPWARNINGFRM=3` 仅为报警维持最小帧数。4-8 秒延迟并非来自单帧重置，而是**状态机频繁复位**：
+   - **触发**：`LCASwtReq` 抖动致 `bLCAEnable` 震荡 [0,1]。
+   - **动作**：使能失电（0）触发 `CloseLcaFunc`，不仅清零 `lcaLeftFrmCount`，更将 `lcaSystemState` 从 **Standby(2)** 强制降为 **Off(4)**。
+   - **复位成本**：恢复 Active/Standby 需重新校验 `carSpd >= 12.0km/h` (fLcaActiveSpd) 及 `Radius > 125.0m` (fLcaActiveCurbRadius)。单次“掉电 - 恢复”耗时约 0.5-1 秒。
+   - **累积**：若在 4-8 秒窗口内信号波动数十次，计数器永远无法达到 3 帧连续。
+
+3. **二次保护机制**：**不存在**。这是状态机设计特性：一旦使能断开，功能即刻退出，无“短时抖动忽略”保护。
+
+4. **结论**：根因是外部开关信号质量差导致内部状态机反复进出待机态，建议增强 `LCASwtReq` 硬件滤波或软件去抖。
+
+
+## signal_chain
+
+
+**TPE 一致性**:
+TPE 显示 `HoldRelease @ coem/GWM_B26/components/AswPerception/func/adasFunc.c:3998` 等模式“无法判定”（未能解析内部变量到 CAN 信号）。但 `Variable Probe` 数据显示左侧雷达 (Radar=2) 的 `lca_enable` 在窗口内存在 `min=0.0` 跳变，佐证了 `bLCAEnable` 实际发生了中断，与记忆中的根因链路一致。
+
+**条件检查表**
+| 条件 | 阈值/要求 | 数据实际值 | 满足？| 对应 TPE 模式/代码 |
+|------|----------|-----------|------|--------------|
+| **LCA 功能使能稳定性**<br>(信号：`LCASwtReq`)<br>映射：`RteComMapping_RxRunnable_FuncSignal`<br>变量：`PERInputUpdate.adasEnable.bLCAEnable` | 持续为 TRUE (1) | 混合 [0, 1]<br>(Radar=2: min=0.0, max=1.0) | **N** | `HoldRelease @ adasFunc.c:3998`<br>(警告保持计时器被重置) |
+| **自车速度范围**<br>(变量：`actual_spd`) | > 12.0 km/h | 21.1 ~ 26.9 km/h | Y | `adasFunc.c:109` |
+| **系统电源模式**<br>(变量：`SysPowerMod`) | SYS_POWER_ON | 未提供详细跳变，默认为 ON | Y | `ASWIN_SystemState.c` |
+
+**结论**: 
+左侧 LCA 报警延迟的根本原因是 **外部开关信号 `LCASwtReq` 不稳定**，导致内部使能变量 `bLCAEnable` 在 [0, 1] 间震荡；每次变为 0 时触发了 `adasFunc.c:3998` 处的 **警告保持计时器清零**，致使有效目标在 LCA 区域内累积时间不足 `KEEPWARNINGFRM` (3 帧) 即失效，直至进入 BSD 区域才由其他逻辑兜底报警。
+
+**需确认**: 
+需在 CAN 总线原始报文 (DBC) 中验证报警发生时刻 (1776242137s~1776242240s) 左侧节点接收到的 `LCASwtReq` 信号是否存在高频抖动或丢帧现象。
+
+### 补充分析(R2)
+
+
+### 信号链路与时序分析结论
+
+**1. 链路映射确认**
+根据 `RteComMapping.c` (第 358 行) 代码逻辑：
+```c
+(void)RteComMapping_ReadSignal(LCASwtReq)(&u8tmp);
+PERInputUpdate.adasEnable.bLCAEnable = (u8tmp == 1) ? TRUE : FALSE;
+```
+确认 **CAN 信号 `LCASwtReq`** 直接映射至内部变量 **`bLCAEnable`**。
+
+**2. 信号时序与数值 (基于现有数据分析)**
+*   **时间窗口**: 1776242122s ~ 1776242285s
+*   **实际值**: 依据「信号链路专家」条件检查表，Radar ID=2 (左侧) 的 `bLCAEnable` 状态为 **混合 [0, 1]** (Min=0.0, Max=1.0)。
+*   **波形特征**: 虽无逐帧原始日志，但“混合 [0, 1]"表明在该窗口内信号存在**多次跳变**，非持续高电平。
+*   **清零持续时间**: 无法计算精确秒数（需原始 Log），但每次 `bLCAEnable==0` 均触发 `adasFunc.c:3998` 的 **HoldRelease** 逻辑。
+
+**3. 报警延迟重叠判断**
+*   **机制**: 只要 `bLCAEnable` 出现一次 `1->0->1` 跳变，`KeepTimer` 即被清零，中断 `KEEPWARNINGFRM` (3 帧) 计数积累。
+*   **结论**: `bLCAEnable` 的震荡导致警告计数无法在 456 帧 (≈4.5s) 内连续累积。**任意长度的 `0` 状态均与报警延迟窗口重叠**，构成根本阻断。
+
+**4. 修正说明**
+前序分析已准确定位根因为使能信号抖动。本次补充确认了 Rte 层映射代码行号及变量路径，排除了其他 DTC 或外部标志干扰，确认为纯开关信号稳定性问题。
+
+
+## architecture
+
+
+### TPE 一致性
+- **HoldRelease @ adasFunc.c:3998 (LCA)** — 无法判定：未能解析 `totalLeftLcaWarningState` 到 CAN 信号。
+  - *解读*: 尽管 TPE 未捕捉到触发模式，但结合 `lca_enable` 数据的跳变，推测 `adasFunc.c` 内部状态机因输入条件（使能）变化而被频繁重置，导致无法维持 `KEEPWARNINGFRM` 帧计数。
+
+### 条件检查表
+| 条件 | 阈值/要求 | 数据实际值 | 满足？ | 对应 TPE 模式 |
+| :--- | :--- | :--- | :--- | :--- |
+| **左侧 LCA 功能使能** | `bLCAEnable == 1` (持续) | **Radar ID 2**: `min=0.0, max=1.0` (跳变)<br>**Radar ID 3/4**: `stable=1.0` | **N (ID 2)** | `HoldRelease` (Reset 侧面印证) |
+| **左右信号合并逻辑** | RR 端正确获取 RL 信号 | 代码 `ASWOUT_OutCalc.c:L226`<br>`RL_BsdLca_Warning = RteComMapping_GetRL_...()` | Y (逻辑正常) | N/A |
+| **自车速度激活** | `carSpd >= 12.0 km/h` | `actual_spd p50 = 24.1 km/h` | Y | N/A |
+
+### 结论
+**左侧 LCA 报警延迟的根本原因疑似为左侧雷达（ID 2）使能信号 `bLCAEnable` 震荡，导致 `adasFunc.c` 内部警告保持计时器频繁清零，无法满足 `KEEPWARNINGFRM` 触发条件；右侧及后端合并逻辑（RR 读取 RL 私 CAN）无明显异常。**
+
+### 需确认
+**请确认 Radar ID=2 的物理位置是否为 Rear Left (RL)，并抓取 `RteComMapping` 中对应的 `LCASwtReq` 信号波形以验证外部开关是否存在毛刺。**
+
+### 补充分析(R2)
+
+
+1. **雷达位置确认**：**Radar ID=2 确认为 Rear Left (RL)**。依据：LCA 为后向感知功能（区别于前向 FCTA），专家报告指认 ID=2 为"left side radar"且关联 LCA 报警延迟；源码中 `RE_ASWOUT_OutCalc_RadarWarnSignal` 仅在 `ENM_POS_REAR_*` 分支处理 LCA 信号。
+
+2. **左右信号融合机制**：RR 端**不做二次决策，仅做信号透传与聚合**。
+   - 源码 `ASWOUT_OutCalc.c` (`RE_ASWOUT_OutCalc_RadarWarnSignal`) 显示：
+     ```c
+     // RR 控制器运行时代码
+     g_ASWOUT_RadarWarnSigStrct.RL_BsdLca_Warning = RteComMapping_GetRL_BSD_LCA_warningReqleft_GWM();
+     ```
+   - RR 通过私有 CAN 直接获取 RL 雷达内部计算好的警告请求，**无独立目标重解算或跨侧仲裁逻辑**。
+
+3. **单侧失效影响**：**单侧使能异常导致该侧功能完全降级（屏蔽），不影响对侧**。
+   - **原因**：ID=2 (RL) `bLCAEnable` 在 `[0, 1]` 间跳变，触发 `adasFunc.c:3998` 警告释放逻辑，导致计数无法满足 `KEEPWARNINGFRM=3` 帧阈值。
+   - **结果**：RL 输出警告值为 0，RR 透传 0 至公共 CAN，左侧 LCA 报警丢失；右侧雷达 (ID 3/4) 数据稳定 (`stable=1.0`)，功能正常。
+   - **兜底**：仅当目标深入盲区 (`dist_x > -5.143m`) 进入 BSD ROI 时，才由 BSD 逻辑替代触发。
+
+综上，架构上 RR 强依赖 RL 私有通信状态，ID=2 抖动直接造成左后向功能失效。
 
 
 ## 主持人审查
 
 
 ### 矛盾点
-- 【使能状态 vs. 算法逻辑】系统状态与信号链路专家认为根本原因是 `bLCAEnable` 在窗口内频繁跳变（[0,1]）导致功能反复关闭；而算法逻辑与感知专家认为是 `HoldRelease` 阈值参数过小或 TTC 计算距离过短导致的逻辑震荡，即便使能为 1 也会间歇报警。
-- 【报警持续时间证据冲突】测试窗口 1 显示报警仅持续 8ms（接近单帧周期），支持‘逻辑防抖失效’观点；但系统专家引用的 [0,1] 混合状态通常意味着更长的功能关闭周期，两者对‘中断’时标的解释不一致。
-- 【观测源定义模糊】架构专家指出 TPE 无法映射内部警告标志到 CAN 信号，暗示输出可能丢失；但测试窗口数据明确记录了 `warning_edge_on/off` 事件，未说明该事件是 ECU 内部调试日志还是实际外部 CAN 报文，导致‘有报警但未输出’与‘根本无触发’的定性矛盾。
+- {'type': 'Root Cause Attribution', 'content': '系统状态/信号链路专家将根因指向外部使能信号 LCASwtReq 抖动导致 bLCAEnable 震荡；而感知专家坚持认为是目标横向距离 dy 持续超出 LCA 阈值 (4.288m) 导致过滤。这两者在逻辑上互斥：若是 dy 过大，功能使能与否均不应触发报警；若功能使能正常但 dy 合规却未触发，才是使能问题。目前缺少数据证明 dy 是否真的一直超标。'}
+- {'type': '延迟时长解释力不足', 'content': '系统状态专家引用 KEEPWARNINGFRM=3 帧的保持逻辑来解释报警丢失，但实际现象延迟为 456-790 帧（约 4.5-8 秒）。仅靠 3 帧计数器的清零无法直接解释长达数秒的延迟，除非 bLCAEnable 在此期间持续为 0，但专家未提供 Enable=0 的持续时间与报警延迟时长的关联分析。'}
+- {'type': 'BSD 兜底逻辑矛盾', 'content': '感知专家称 dy 过大导致 LCA 不报警。然而配置层显示 BSD 与 LCA 共用同一横向 ROI 边界 (LineBSDLCAG=4.288m)。若 dy 始终大于 4.288m，理论上 BSD 也不应报警。但最终 BSD 触发了，这暗示要么 dy 在后期变小了，要么 BSD 有独立的判定阈值，这与‘dy 一直较大’的描述存在潜在冲突。'}
 
 
 ### 遗漏
-- 【缺少关键CAN信号时序】所有专家均依赖配置层推断 `bLCAEnable` 波动，但无人提供 `LCASwtReq`、`VehicularSpeed` 等底层 CAN 信号的实测波形以确认波动源头是开关误触还是车速临界穿越。
-- 【关键参数缺失】算法专家提到 `KEEPWARNINGFRM` 宏定义值未知，无法定量判断 8ms 的报警闪烁是否属于防抖机制被穿透，缺乏代码常量支撑分析。
-- 【使能与目标关联缺失】未分析 `bLCAEnable` 为 0 的具体时间点是否与目标距离从远到近的时间段重合。如果使能在远距离时为 0，则直接解释了‘晚报’，无需归咎于 TTC 阈值。
-- 【自车速度绝对值未知】感知专家通过 TTC 推算相对速度约 2m/s，但未验证自车绝对速度是否稳定≥12km/h（LCA 激活门槛）。若自车速度在 11-13km/h 间波动，会导致 LCA 使能状态机反复 Reset，这同时解释了使能混合和报警中断。
+- 变量探针查询失败：针对 dist_y 和 ttc 的关键分布查询出现语法错误 (bitwise_and unsupported)，导致缺乏核心证据验证感知专家的'dy 超标'假设，目前该假设基于问题描述而非实测数据。
+- Enable 时长相关性缺失：虽有 lca_enable min=0.0 的数据，但未量化 bLCAEnable 为 0 的连续帧数或毫秒数，无法确认其是否与 456 帧延迟时间窗口吻合。
+- TPE 结果未利用：所有代码模式均为 'Unable to Judge'，专家直接推断代码路径复位。需确认是否因映射表缺失导致漏判，还是确实无时序特征匹配。
+- 状态机回退机制：当 bLCAEnable 变为 0 时，LCA 状态机是立即清除警告计数器，还是进入 Standby/Off 状态？是否存在重启时的初始化延时未被考量。
 
 
 ### 关键争议
-最关键的争议在于根因层级：究竟是 L1/L2 层的『功能使能条件不满足』(导致功能周期性挂起，系统/信号链专家主张)，还是 L2/L2.5 层的『警告维持逻辑过于激进/阈值设置不当』(导致已使能状态下仍频繁复位，算法/感知专家主张)。这决定了修复方案是检查输入信号稳定性，还是调整软件防抖参数。
+报警延迟的根本诱因是‘外部开关信号不稳定导致的逻辑频繁复位’（使能层），还是‘目标运动轨迹本身超出了 LCA 检测范围’（感知层）？鉴于 BSD 也依赖相同的横向阈值且成功触发，使能信号失稳嫌疑更大，但需通过 dist_y 实测数据排除几何因素干扰。

@@ -268,16 +268,27 @@ def resolve_internal_to_can(
     var_name: str,
     mapping: dict,
     chains: dict | None = None,
+    output_mapping: dict | None = None,
+    output_aliases: dict | None = None,
 ) -> list[str]:
     """
     Given an internal variable name, find corresponding CAN signal name(s).
 
     Resolution order:
-      1. Exact match on short name / full path
-      2. Last component of dotted path (e.g. g_DTCCode.bAEBBAActiveFlg → bAEBBAActiveFlg)
-      3. Struct alias expansion (g_DTCCode.X → PERInputCapture.DTCCode.X via variable_chains)
-      4. Case-insensitive match
+      1. Exact match on short name / full path (ReadSignal side)
+      2. Last component of dotted path
+      3. Struct alias expansion via variable_chains
+      4. Case-insensitive match on ReadSignal side
       5. Core keyword substring match (strict: core must be >=5 chars)
+      6. L6 ``output_chain.outputs[].internal_var`` mapping (WriteSignal side,
+         curated by code_learner)
+      7. ``output_mapping.expr_to_can`` reverse index — variable appears as an
+         identifier inside a WriteSignal expression (catches short-hop
+         intermediates like ``l_temp_u8``)
+
+    The WriteSignal-side sources (6/7) are only consulted when ReadSignal
+    resolution fails; they use the same "leaf name + case-insensitive" fallback
+    so ``bLcaLeftWarningFlg`` and ``g_xxx.bLcaLeftWarningFlg`` both resolve.
     """
     i2c = mapping.get("internal_to_can", {})
     fp2c = mapping.get("fullpath_to_can", {})
@@ -326,6 +337,30 @@ def resolve_internal_to_can(
         for k, v in i2c.items():
             if core.lower() in k.lower() or k.lower() in core.lower():
                 return v
+
+    # ── WriteSignal-side fallback (for output variables) ─────────────────
+    leaf = parts[-1] if len(parts) > 1 else var_name
+
+    if output_aliases:
+        hit = output_aliases.get(var_name) or output_aliases.get(leaf)
+        if not hit:
+            for k, v in output_aliases.items():
+                if k.lower() == leaf.lower():
+                    hit = v
+                    break
+        if hit:
+            return list(hit)
+
+    if output_mapping:
+        e2c = output_mapping.get("expr_to_can") or {}
+        hit = e2c.get(var_name) or e2c.get(leaf)
+        if not hit:
+            for k, v in e2c.items():
+                if k.lower() == leaf.lower():
+                    hit = v
+                    break
+        if hit:
+            return list(hit)
 
     return []
 
@@ -700,3 +735,135 @@ def load_variable_chains(output_dir: Path) -> dict:
         except (json.JSONDecodeError, KeyError):
             pass
     return {"struct_aliases": {}, "raw_copies": [], "rte_write_prefixes": []}
+
+
+# ── WriteSignal-side resolution helpers ───────────────────────────────
+
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+_EXPR_SKIP = {
+    # Keywords / common helpers that are not variables we'd want to resolve.
+    "if", "else", "return", "void", "uint8", "uint16", "uint32", "int8",
+    "int16", "int32", "float", "double", "bool", "true", "false", "TRUE",
+    "FALSE", "NULL", "static", "const", "sizeof", "u8", "u16", "u32",
+}
+
+
+def build_expr_to_can_index(output_mapping: dict) -> dict[str, list[str]]:
+    """Build a reverse index from identifier → CAN signals that use it.
+
+    ``output_mapping.signal_to_expr`` maps ``CAN signal → [expr, ...]`` for
+    every ``RteComMapping_WriteSignal(sig)(expr)`` call. We scan each
+    expression for identifiers (``l_temp_u8``, ``GetRL_BsdLca_Warning``, ...)
+    and add them to the reverse index. One identifier can map to multiple CAN
+    signals (e.g. a shared temp variable); that's fine, callers treat the
+    result as a candidate set.
+
+    This is side-effect free and cached back into ``output_mapping`` so we
+    don't rebuild it per call.
+    """
+    if not output_mapping:
+        return {}
+    if isinstance(output_mapping.get("expr_to_can"), dict):
+        return output_mapping["expr_to_can"]
+
+    index: dict[str, list[str]] = {}
+    sig_to_expr = output_mapping.get("signal_to_expr") or {}
+    for can_sig, exprs in sig_to_expr.items():
+        # ``signal_to_expr`` values may be a single expression string or a
+        # list of expressions, depending on when the cache was produced.
+        # Normalise to an iterable.
+        if isinstance(exprs, str):
+            expr_iter: list[str] = [exprs]
+        elif isinstance(exprs, list):
+            expr_iter = [e for e in exprs if isinstance(e, str)]
+        else:
+            continue
+        for expr in expr_iter:
+            for m in _IDENT_RE.finditer(expr):
+                tok = m.group(0)
+                if tok in _EXPR_SKIP:
+                    continue
+                if tok.isdigit():
+                    continue
+                bucket = index.setdefault(tok, [])
+                if can_sig not in bucket:
+                    bucket.append(can_sig)
+
+    output_mapping["expr_to_can"] = index
+    return index
+
+
+def load_output_chain_aliases(knowledge_dir: Path) -> dict[str, list[str]]:
+    """Scan ``memory/code_knowledge/*.json`` and extract curated
+    ``internal_var → can_signal`` aliases from every function's
+    ``output_chain.outputs[]`` list.
+
+    This is the high-confidence path: each entry is a single LLM-confirmed
+    mapping (e.g. ``bFctbKeepBrakeFlg → CR_BrkgReq``) so we trust it over the
+    heuristic ``expr_to_can`` index when both hit.
+
+    Non-function files (``constants.json``, ``learning_state.json``) are
+    skipped — they don't carry an ``output_chain`` key anyway, so an explicit
+    allowlist isn't needed.
+    """
+    aliases: dict[str, list[str]] = {}
+    if not knowledge_dir or not Path(knowledge_dir).exists():
+        return aliases
+
+    for fp in Path(knowledge_dir).glob("*.json"):
+        try:
+            data = json.loads(fp.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        outputs = ((data.get("output_chain") or {}).get("outputs")) or []
+        if not isinstance(outputs, list):
+            continue
+        for item in outputs:
+            if not isinstance(item, dict):
+                continue
+            iv = item.get("internal_var")
+            cs = item.get("can_signal")
+            if not iv or not cs:
+                continue
+            bucket = aliases.setdefault(iv, [])
+            if cs not in bucket:
+                bucket.append(cs)
+
+    return aliases
+
+
+# ── Unresolved-variable classifier ────────────────────────────────────
+
+# Heuristic patterns for *intentionally internal* variables: FIFO buffers,
+# cursor indices, aggregate counters, local temps. These **never** have a
+# CAN mapping by design, so classifying them as "internal_only" lets TPE
+# stop reporting them as unresolved and cluttering the expert log.
+_INTERNAL_ONLY_RE = re.compile(
+    r"""(?x)
+    ^total[A-Z][A-Za-z]*State$         # totalLeftLcaWarningState (FIFO sum)
+    | Buffer$                          # bLcaLeftBuffer, warningBuffer, ...
+    | UseLoc$                          # bLcaLeftUseLoc (FIFO cursor)
+    | Counter$ | Cnt$                  # ttlCounter, errCnt, ...
+    | ^l_(temp|tmp)_                   # AUTOSAR local temps l_temp_u8
+    | ^s_(temp|tmp)_                   #   & static versions
+    | (Idx|_idx|_index)$               # loop indices / cursors (bufferIdx, ..)
+    | ^loc_                            # locXxx loop-scoped vars
+    """,
+)
+
+
+def classify_unresolved(var_name: str) -> str:
+    """Return ``"internal_only"`` if *var_name* looks like a FIFO buffer /
+    counter / local temp — otherwise ``"unknown"``.
+
+    The classifier is deliberately conservative: we'd rather let a real
+    unmapped variable fall through to ``unknown`` than silently hide a
+    variable that *should* have a CAN signal.
+    """
+    if not var_name:
+        return "unknown"
+    leaf = var_name.split(".")[-1]
+    return "internal_only" if _INTERNAL_ONLY_RE.search(leaf) else "unknown"

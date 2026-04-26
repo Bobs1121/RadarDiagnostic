@@ -1,12 +1,16 @@
 {
   "_meta": {
     "function": "LCA",
-    "last_updated": "2026-04-18T17:31:09.134850",
+    "last_updated": "2026-04-20T10:31:40.666629",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7"
     }
   },
   "alarm_logic": {
@@ -268,6 +272,238 @@
         },
         "id": "item-e2ef52ea",
         "_learned_at": "2026-04-18T17:31:09.135850"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "bLcaLeftWarningFlg": {
+        "description": "左侧 LCA 系统最终警告标志",
+        "formula": "Logical(ROI_In_Bounds && Speed_Valid && TTC < fLcaObjWarningTTC) && Keep_Warning_Count >= KEEPWARNINGFRM",
+        "inputs": [
+          "objLcaWarningFlag (per target)",
+          "g_egoCarInfo.actual_spd",
+          "lcaLeftFrmCount",
+          "fLcaObjWarningTTC"
+        ],
+        "data_source": "ADAS 功能层 (adasFunc.c)，聚合感知层 objStruct",
+        "output_usage": "控制仪表/Lamp/HMI 的盲区变道报警输出",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 696,
+          "function": "Global Static Var Definition (Logic Implied)"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      "objLcaWarningFlag": {
+        "description": "单目标轨迹 LCA 警告状态",
+        "formula": "SetFlag() if (Target in LCA_ROI && Relative_Speed > fLcaObjWarningSpd && Calculated_TTC < fLcaObjWarningTTC)",
+        "inputs": [
+          "objStruct.distX",
+          "objStruct.distY",
+          "objStruct.velAbsFltX",
+          "objStruct.velAbsFltY",
+          "LineLCAA",
+          "LineLCAC"
+        ],
+        "data_source": "跟踪层 (track.c) 更新至 objStruct",
+        "output_usage": "汇入 bLcaLeftWarningFlg 决策",
+        "code_ref": {
+          "file": "track.c",
+          "line": 1910,
+          "function": "TrackMerge (Flag Merging)"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      "LineLCAC": {
+        "description": "LCA 垂直起始边界点 (后向)",
+        "formula": "-4.0f - (float)DISTANCEREAR",
+        "inputs": [
+          "常数 (-4.0f)",
+          "DISTANCEREAR (雷达安装后距参数)"
+        ],
+        "data_source": "ADAS 配置层 (adasFunc.c) 初始化",
+        "output_usage": "定义 LCA ROI 区域的前边界，用于目标过滤",
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 18,
+          "function": "Initialization"
+        },
+        "confidence": 0.95,
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Radar Raw Points / Cluster",
+        "to": "objStruct (distX/distY/vel/dynFlg)",
+        "in_file": "track.c",
+        "transform": "滤波、航迹关联、属性计算 (包含 objLcaWarningFlag 置位逻辑输入)",
+        "id": "item-73b49217",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "step": 2,
+        "from": "objStruct Attributes & Ego Params",
+        "to": "LineLCAC/LineLCAA (ROI Bounds)",
+        "in_file": "adasFunc.c",
+        "transform": "根据车辆宽度 (EGOCARWIDTH) 和后距 (DISTANCEREAR) 计算静态/半动态 ROI 框",
+        "id": "item-4f021c87",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "step": 3,
+        "from": "ROI Check + TTC Calculation",
+        "to": "objLcaWarningFlag",
+        "in_file": "adasFunc.c (Implied)",
+        "transform": "目标在 ROI 内且相对速度/TTC 满足阈值时置位警告标志",
+        "id": "item-7e3ab2b7",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "step": 4,
+        "from": "objLcaWarningFlag (Multiple Targets)",
+        "to": "bLcaLeftWarningFlg",
+        "in_file": "adasFunc.c",
+        "transform": "多目标投票 + 帧保持计数 (lcaLeftFrmCount >= KEEPWARNINGFRM)",
+        "id": "item-89c31827",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fLcaObjWarningTTC",
+        "value": "4.0s",
+        "role": "LCA 物体警告触发 TTC 阈值 (adasFunc.c L157)",
+        "reference": "adasFunc.c L157",
+        "id": "flcaobjwarningttc-1fb1856b",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "name": "fLcaObjDeWarningTTC",
+        "value": "4.7s",
+        "role": "LCA 物体解除警告 TTC 阈值 (迟滞)(adasFunc.c L160)",
+        "reference": "adasFunc.c L160",
+        "id": "flcaobjdewarningttc-851a1c00",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "name": "KEEPWARNINGFRM",
+        "value": "3U",
+        "role": "警告信号保持最小帧数 (防抖)(paraDefine.h L135)",
+        "reference": "paraDefine.h L135",
+        "id": "keepwarningfrm-a08e50a5",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "name": "LineLCAC",
+        "value": "-4.0m - RearDist",
+        "role": "LCA ROI 近端边界 (adasFunc.c L18)",
+        "reference": "adasFunc.c L18",
+        "id": "linelcac-5ea59fb3",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      },
+      {
+        "name": "fLcaActiveSpd",
+        "value": "12.0 km/h",
+        "role": "LCA 系统激活车速下限 (adasFunc.c L109)",
+        "reference": "adasFunc.c L109",
+        "id": "flcaactivespd-0385ca28",
+        "_learned_at": "2026-04-18T19:12:44.173467"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-lca-warn",
+        "internal_var": "PEROutput.adasWarning.bRightLcaWarning",
+        "description": "LCA 右侧碰撞预警信号（与 BSD 优先级合并）",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 1296,
+          "function": "ResetWarningWhenDisable"
+        },
+        "merge_logic": "若 BSD 或 LCA 功能为 Active (State==3)，取 bRightBsdWarning 与 bRightLcaWarning 的最大值作为输出",
+        "merge_location": {
+          "file": "ASWOUT_OutCalc.c",
+          "line": 162,
+          "function": "ASWOUT_OutCalc_MainLoop"
+        },
+        "can_signal": "BSD_LCA_warningReqRight",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1175,
+          "function": "RteComMapping_TxRunnable_PublicCan"
+        },
+        "transform": "uint8 (Level 0:None, 1:Warning, 2:Alert)",
+        "message_id": "0x??? (Public CAN)",
+        "downstream": [
+          "仪表/HMI (方向盘震动/语音/灯光)",
+          "网关 (转发至车身域)"
+        ],
+        "gating_conditions": [
+          "PERInputUpdate.adasEnable.bLCAEnable == TRUE",
+          "PEROutput.adasWarning.lcaSystemState == 3 (Active) || bsdSystemState == 3"
+        ],
+        "_learned_at": "2026-04-20T10:31:40.666629"
+      },
+      {
+        "id": "out-lca-state",
+        "internal_var": "PerOutput.adasWarning.lcaSystemState",
+        "description": "LCA 系统功能状态机指示",
+        "set_location": {
+          "file": "adasFunc.c",
+          "line": 683,
+          "function": "StaticDef"
+        },
+        "merge_logic": "RR 控制器读取本地状态及 RL 私有 CAN 上传的状态，取最大值后外发至公共 CAN",
+        "merge_location": {
+          "file": "RteComMapping.c",
+          "line": 1225,
+          "function": "RteComMapping_TxRunnable_PublicCan"
+        },
+        "can_signal": "LCA_State",
+        "rte_write_location": {
+          "file": "RteComMapping.c",
+          "line": 1231,
+          "function": "RteComMapping_TxRunnable_PublicCan"
+        },
+        "transform": "uint8 (0-None, 2-Standby, 3-Active, 4-Off, 5-Failure)",
+        "message_id": "0x??? (Public CAN)",
+        "downstream": [
+          "TCU/VCU (功能可用性显示)",
+          "云端日志 (DTC/State)"
+        ],
+        "gating_conditions": [
+          "CornerRadarPosition == REAR_RIGHT (主发节点)",
+          "Radar Power On"
+        ],
+        "_learned_at": "2026-04-20T10:31:40.666629"
+      }
+    ],
+    "merge_strategy": "LCA 警告信号在单侧雷达内部与 BSD 信号进行 Max 比较（BSD 优先或同级），左右雷达的警告由后方右侧 (RR) 雷达控制器通过私有 CAN 接收左侧 (RL) 数据后，统一打包至公共 CAN。系统状态由 RR 控制器对左右状态取 Max 后发布。",
+    "external_gating": [
+      {
+        "source": "LCASwtReq (Public CAN Input)",
+        "effect": "读入该开关位，若为 0 则内部设置 adasEnable.bLCAEnable=FALSE，导致警告信号强制置 0 (adasFunc.c L1296)",
+        "id": "item-f84340df",
+        "_learned_at": "2026-04-20T10:31:40.666629"
+      },
+      {
+        "source": "ADAS_ENABLE_SWITCH",
+        "effect": "整车级功能使能位，若未激活则不计算警告等级",
+        "id": "item-0606c061",
+        "_learned_at": "2026-04-20T10:31:40.666629"
+      },
+      {
+        "source": "lcaSystemState",
+        "effect": "仅在 State==3 (Active) 时，外发非零警告信号；否则即使检测到物体也清零",
+        "id": "item-d19a2a90",
+        "_learned_at": "2026-04-20T10:31:40.666629"
       }
     ]
   }

@@ -55,6 +55,7 @@ class TPEResult:
     features: dict[str, TemporalFeature]
     evidence: list[PatternEvidence]
     unresolved_variables: set[str] = field(default_factory=set)
+    internal_only_variables: set[str] = field(default_factory=set)
     missing_can_signals: set[str] = field(default_factory=set)
     notes: list[str] = field(default_factory=list)
 
@@ -67,7 +68,12 @@ class TPEResult:
         return self.triggered_count > 0
 
     def to_expert_block(self) -> str:
-        """Compact markdown block for injection into expert prompts."""
+        """Compact markdown block for injection into expert prompts.
+
+        ``internal_only_variables`` (FIFO buffers, counters, local temps) are
+        deliberately *not* surfaced here — they're noise for the expert
+        panel. They remain on the result object for diagnostics / logging.
+        """
         parts: list[str] = [
             "## ★★ 代码模式 × 数据时序 因果对齐 (TPE) ★★"
         ]
@@ -98,11 +104,19 @@ class TemporalPatternEngine:
         cache_dir: Optional[Path] = None,
         signal_mapping: Optional[dict] = None,
         variable_chains: Optional[dict] = None,
+        output_mapping: Optional[dict] = None,
+        output_aliases: Optional[dict] = None,
     ):
         self.source_root = Path(source_root)
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.signal_mapping = signal_mapping or {}
         self.variable_chains = variable_chains or {}
+        # WriteSignal-side data: curated aliases from L6 output_chain learner
+        # (``output_aliases``) + heuristic reverse index from RteComMapping
+        # expressions (``output_mapping.expr_to_can``). Both optional — pipeline
+        # still works without them, just with more variables marked unresolved.
+        self.output_mapping = output_mapping or {}
+        self.output_aliases = output_aliases or {}
         self.pattern_extractor = PatternExtractor(
             source_root=self.source_root, cache_dir=self.cache_dir,
         )
@@ -150,7 +164,8 @@ class TemporalPatternEngine:
 
         filtered = self._filter_patterns(patterns, func_name)
         required_vars = self._collect_required_variables(filtered)
-        required_signals, unresolved = self._resolve_required_can_signals(required_vars)
+        required_signals, unresolved, internal_only = \
+            self._resolve_required_can_signals(required_vars)
 
         features, missing = self._load_features(
             store, required_signals, time_window=time_window,
@@ -172,12 +187,15 @@ class TemporalPatternEngine:
             notes.append(f"func_filter={func_name}")
         if time_window:
             notes.append(f"time_window={time_window}")
+        if internal_only:
+            notes.append(f"internal_only_vars={len(internal_only)}")
 
         return TPEResult(
             patterns=filtered,
             features=features,
             evidence=evidence,
             unresolved_variables=unresolved,
+            internal_only_variables=internal_only,
             missing_can_signals=missing,
             notes=notes,
         )
@@ -212,37 +230,51 @@ class TemporalPatternEngine:
 
     def _resolve_required_can_signals(
         self, variables: list[str],
-    ) -> tuple[list[str], set[str]]:
+    ) -> tuple[list[str], set[str], set[str]]:
         """
-        Map internal variables to CAN signal names using the existing
-        ``signal_mapper.resolve_internal_to_can`` helper.
+        Map internal variables to CAN signal names using
+        ``signal_mapper.resolve_internal_to_can``, which now consults both
+        Read and Write directions (plus L6 ``output_chain`` aliases).
+
+        Anything that still comes back empty is then sent through
+        ``classify_unresolved`` to split FIFO-buffer / counter style
+        *intentionally internal* variables from truly unknown ones. The
+        expert prompt only sees the latter.
 
         Returns
         -------
-        (resolved_can_signals, unresolved_variable_names)
+        (resolved_can_signals, unresolved_variable_names, internal_only_variable_names)
         """
         if not variables:
-            return [], set()
+            return [], set(), set()
         try:
-            from .signal_mapper import resolve_internal_to_can
+            from .signal_mapper import (
+                resolve_internal_to_can, classify_unresolved,
+            )
         except Exception:
-            return [], set(variables)
+            return [], set(variables), set()
 
         resolved: list[str] = []
         unresolved: set[str] = set()
+        internal_only: set[str] = set()
         seen: set[str] = set()
         for var in variables:
             cans = resolve_internal_to_can(
                 var, self.signal_mapping, self.variable_chains,
+                output_mapping=self.output_mapping,
+                output_aliases=self.output_aliases,
             )
             if not cans:
-                unresolved.add(var)
+                if classify_unresolved(var) == "internal_only":
+                    internal_only.add(var)
+                else:
+                    unresolved.add(var)
                 continue
             for c in cans:
                 if c not in seen:
                     resolved.append(c)
                     seen.add(c)
-        return resolved, unresolved
+        return resolved, unresolved, internal_only
 
     # ── Feature loading ──────────────────────────────────────────────────
 

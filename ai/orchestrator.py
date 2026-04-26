@@ -218,6 +218,26 @@ class Orchestrator:
                 "has_triggers": tpe_report.get("triggered_count", 0) > 0,
             })
 
+        # ── Phase 3.56: Numeric constants table (global, cross-function) ──
+        # 把 auto-dream 学到的 `EGOCARWIDTH=1.976`、`LineBSDLCAL=-4.288` 这类
+        # 具体数字加进 Expert Panel 的可见上下文，让专家不再用"约 ±3.3m" 这种
+        # 猜测阈值，而是能做真数值对比。Planner 也会用这张表（见 Phase 3.57）。
+        constants_section = ""
+        try:
+            constants_section = self.memory.render_constants_for_context(
+                func_name, max_chars=2000,
+            )
+        except Exception as e:  # noqa: BLE001
+            status("constants", f"Load constants failed: {e}")
+        if not constants_section:
+            # 友好提示：告诉专家"没学过就不给，别乱猜"
+            constants_section = (
+                "## 已学数值常量（全局）\n"
+                "_暂无常量表 — 请运行 `python cli.py --learn-constants`。_\n"
+                "_在此之前，遇到 ROI/阈值相关判定时请明确标注"
+                "'阈值未知、不做数值判断'，不要用经验值猜。_"
+            )
+
         # ── Phase 3.57: Variable Query Probe (dynamic evidence gathering) ──
         # Let the LLM decide which variables/expressions to probe for *this*
         # specific problem, then run those queries over the SQLite store. This
@@ -462,6 +482,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         budget.add("methodology",   methodology_block, priority=100, min_chars=400)
         budget.add("key_facts",     f"## ★ 关键事实(必读) ★\n{key_facts}", priority=100, min_chars=2000)
         budget.add("tpe",           tpe_section,       priority=95,  min_chars=2000)
+        budget.add("constants",     constants_section, priority=94,  min_chars=800)
         budget.add("probe",         probe_section,     priority=93,  min_chars=1500)
         budget.add("suppression",   suppression_section, priority=92, min_chars=1000)
         budget.add("output",        output_section,    priority=90,  min_chars=1500)
@@ -572,7 +593,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             from .tpe import TemporalPatternEngine
             from .signal_mapper import (
                 extract_signal_mapping, trace_variable_chains,
-                load_variable_chains,
+                load_variable_chains, extract_output_signal_mapping,
+                build_expr_to_can_index, load_output_chain_aliases,
             )
         except Exception as exc:
             status("tpe", f"TPE modules unavailable: {exc}")
@@ -580,6 +602,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
         source_root = Path(self.config["paths"]["source_code"])
         docs_dir = self.project_root / "source_docs"
+        knowledge_dir = self.project_root / "memory" / "code_knowledge"
 
         try:
             sig_mapping = extract_signal_mapping(source_root, docs_dir)
@@ -594,12 +617,27 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         except Exception:
             chains = {}
 
+        # WriteSignal-side data for resolving output variables that never
+        # appear in the ReadSignal mapping (e.g. bLcaLeftWarningFlg).
+        try:
+            out_mapping = extract_output_signal_mapping(source_root, docs_dir)
+            build_expr_to_can_index(out_mapping)  # caches into out_mapping
+        except Exception as exc:
+            status("tpe", f"Output mapping failed: {exc}")
+            out_mapping = {}
+        try:
+            out_aliases = load_output_chain_aliases(knowledge_dir)
+        except Exception:
+            out_aliases = {}
+
         try:
             engine = TemporalPatternEngine(
                 source_root=source_root,
                 cache_dir=docs_dir,
                 signal_mapping=sig_mapping,
                 variable_chains=chains,
+                output_mapping=out_mapping,
+                output_aliases=out_aliases,
             )
             result = engine.run(
                 store=store, func_name=func_name,
@@ -615,6 +653,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             "pattern_count": len(result.patterns),
             "triggered_count": result.triggered_count,
             "unresolved_count": len(result.unresolved_variables),
+            "internal_only_count": len(result.internal_only_variables),
             "missing_can_count": len(result.missing_can_signals),
             "notes": result.notes,
             "pattern_summary": [
@@ -652,7 +691,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         status("tpe", (
             f"TPE: {structured['pattern_count']} patterns, "
             f"{structured['triggered_count']} triggered, "
-            f"{structured['unresolved_count']} unresolved vars, "
+            f"{structured['unresolved_count']} unresolved vars "
+            f"({structured['internal_only_count']} internal-only filtered), "
             f"{structured['missing_can_count']} missing CAN signals"
         ))
         self._last_tpe_result = result
@@ -1474,9 +1514,12 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             result = self.router.chat(
                 [{"role": "user", "content": pattern_prompt}],
                 complexity="simple",
-                max_tokens=512,
+                max_tokens=1024,
             )
-            pattern = parse_json_from_llm(result.get("content", ""))
+            pattern = parse_json_from_llm(
+                result.get("content", ""),
+                context="update_memories.pattern",
+            )
             if pattern:
                 self.memory.add_pattern(pattern)
         except Exception:

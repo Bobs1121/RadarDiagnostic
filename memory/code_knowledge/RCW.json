@@ -1,12 +1,16 @@
 {
   "_meta": {
     "function": "RCW",
-    "last_updated": "2026-04-18T17:35:21.164948",
+    "last_updated": "2026-04-20T10:36:18.976673",
     "learned_focuses": [
-      "alarm_logic"
+      "alarm_logic",
+      "calculation_chain",
+      "output_chain"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee"
+      "alarm_logic": "5b8b9159e79e3dee",
+      "calculation_chain": "a564f1bdfacce99d",
+      "output_chain": "a0fcddb880fd37e7"
     }
   },
   "alarm_logic": {
@@ -272,6 +276,202 @@
         },
         "id": "item-662a369e",
         "_learned_at": "2026-04-18T17:35:21.164948"
+      }
+    ]
+  },
+  "calculation_chain": {
+    "key_variables": {
+      "rcwSystemState": {
+        "description": "RCW 系统状态机变量（0-None, 1-Init, 2-Standby, 3-Active, ...）",
+        "formula": "逻辑判断：基于 ego_speed, ego_curv_radius 与阈值比较",
+        "inputs": [
+          "ego_vehicle.speed",
+          "ego_vehicle.curvature_radius",
+          "fRcwActiveSpd",
+          "fRcwActiveCurbRadius"
+        ],
+        "data_source": "车辆总线信号 & adasFunc.c 参数定义",
+        "output_usage": "决定 RCW 功能是否进入可预警状态 (Active/Standby)",
+        "code_ref": {
+          "file": "adas\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 734,
+          "function": "Static Variable Definition"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      "objRcwWarningFlag": {
+        "description": "单个目标对象的 RCW 警告标志位",
+        "formula": "IF (InROI && TTC < WarningTTC && Vrel > WarningSpd) THEN Warning ELSE Normal",
+        "inputs": [
+          "object.distX",
+          "object.velX",
+          "object.yaw_angle",
+          "fRcwObjWarningTTC",
+          "fRcwObjWarningSpd",
+          "rcwRoi (LineRCWA~D)"
+        ],
+        "data_source": "感知层轨迹对象 (objStruct)",
+        "output_usage": "用于计算最终 bRcwWarningFlg 及反馈跟踪权重",
+        "code_ref": {
+          "file": "adas\\symmetry\\perception\\include\\structDefine.h",
+          "line": 669,
+          "function": "struct objStruct definition"
+        },
+        "confidence": 0.85,
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      "bRcwWarningFlg": {
+        "description": "RCW 最终输出警告标志（驾驶员提示）",
+        "formula": "HysteresisLogic(objRcwWarningFlag, rcwFrmCount, KEEPWARNINGFRM)",
+        "inputs": [
+          "objRcwWarningFlag",
+          "rcwFrmCount",
+          "bRcwKeepFlag"
+        ],
+        "data_source": "adasFunc.c 内部状态变量",
+        "output_usage": "发送给上层应用或仪表盘报警",
+        "code_ref": {
+          "file": "adas\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 743,
+          "function": "RCW Initialization Block"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      }
+    },
+    "derivation_chain": [
+      {
+        "step": 1,
+        "from": "Vehicle Bus Signals (Speed, Radius) & Sensor Fusion Tracks",
+        "to": "rcwSystemState",
+        "in_file": "adasFunc.c",
+        "transform": "速度/曲率门限判定 (Active/Standby/Off)",
+        "id": "item-889b3056",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "step": 2,
+        "from": "Track Objects (pos/vel) + ROI Parameters (LineRCW*)",
+        "to": "Spatial Filter & objRcwWarningFlag",
+        "in_file": "adasFunc.c",
+        "transform": "几何区域判断 (ROI Intersection) + 动态风险判断 (TTC/Speed)",
+        "id": "item-e82ecd08",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "step": 3,
+        "from": "objRcwWarningFlag",
+        "to": "bRcwWarningFlg",
+        "in_file": "adasFunc.c",
+        "transform": "多帧滤波防抖 (Buffer + KeepFlag) -> 最终输出",
+        "id": "item-94520e6e",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      }
+    ],
+    "thresholds_used": [
+      {
+        "name": "fRcwActiveSpd",
+        "value": "120.0 km/h",
+        "role": "系统激活车速下阈值",
+        "id": "frcwactivespd-67cb3ef4",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "name": "fRcwDeactiveSpd",
+        "value": "125.0 km/h",
+        "role": "系统退出车速上阈值 (迟滞)",
+        "id": "frcwdeactivespd-50080484",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "name": "fRcwObjWarningTTC",
+        "value": "1.4 s",
+        "role": "物体触发警告的碰撞时间阈值",
+        "id": "frcwobjwarningttc-b71b82ad",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "name": "fRcwObjDeWarningTTC",
+        "value": "1.7 s",
+        "role": "物体消除警告的碰撞时间阈值",
+        "id": "frcwobjdewarningttc-4adf5c89",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "name": "fRcwObjWarningSpd",
+        "value": "10.8 km/h",
+        "role": "目标物体相对速度警告下限",
+        "id": "frcwobjwarningspd-0b531bc1",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      },
+      {
+        "name": "KEEPWARNINGFRM",
+        "value": "3 Frames",
+        "role": "警告保持持续帧数",
+        "id": "keepwarningfrm-d1d79a7f",
+        "_learned_at": "2026-04-18T19:22:23.387264"
+      }
+    ]
+  },
+  "output_chain": {
+    "outputs": [
+      {
+        "id": "out-rcw-01",
+        "internal_var": "PEROutput.adasWarning.bRcwWarning",
+        "description": "RCW 警告等级输出 (源自 bRcwWarningFlg)",
+        "set_location": {
+          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
+          "line": 1220,
+          "function": "ObjWarningLogic (推断，依据状态机复位逻辑)"
+        },
+        "merge_logic": "右后雷达控制器 (RR) 读取左后雷达 (RL) 的 RCW 触发信号与自身警告取最大值协调",
+        "merge_location": {
+          "file": "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c",
+          "line": 242,
+          "function": "RE_ASWOUT_OutCalc_RadarWarnSignal"
+        },
+        "can_signal": "RSDS_RCW_Trigger (触发) / RCW_State (状态)",
+        "rte_write_location": {
+          "file": "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
+          "line": 1215,
+          "function": "RteComMapping_TxRunnable_FuncSignal"
+        },
+        "transform": "uint8 警告级映射为 Bool/枚举 (Level 2->1)",
+        "message_id": "0x301 (State), 0x338 (Inter-Radar)",
+        "downstream": [
+          "仪表 HMI (声光报警)",
+          "声音盒 (Sound Box)",
+          "VCU (可选制动干预)"
+        ],
+        "gating_conditions": [
+          "rcwSystemState == 3 (Active) || 2 (Standby)",
+          "adasEnable.bRCWEnable == TRUE",
+          "车速 < fRcwDeactiveSpd (125km/h)",
+          "无系统故障 (Failure Flg)"
+        ],
+        "_learned_at": "2026-04-20T10:36:18.976673"
+      }
+    ],
+    "merge_strategy": "双雷达冗余策略：主节点 (RR) 接收从节点 (RL) 的私有 CAN 触发信号 (0x338)，若双方均检测到威胁 (>0)，取较高警告等级；若一方失效或无检测，优先保证安全唤醒。最终状态机状态 (State) 在公共 CAN 上取两路最大值外发。",
+    "external_gating": [
+      {
+        "source": "RCWSwtReq (功能开关)",
+        "effect": "开关关闭时 adasEnable.bRCWEnable 置 FALSE，强制复位警告标志 (adasFunc.c L1269)",
+        "id": "item-121bf3e3",
+        "_learned_at": "2026-04-20T10:36:18.976673"
+      },
+      {
+        "source": "Speed (车速)",
+        "effect": "超速 (>fRcwDeactiveSpd) 时系统进入 Passive (6) 或 Off (4) 状态，停止外发警告",
+        "id": "item-a9ff0f07",
+        "_learned_at": "2026-04-20T10:36:18.976673"
+      },
+      {
+        "source": "DTCCode.failureFlg",
+        "effect": "自检失败或校准中时，状态机进入 Failure (5) 或 Off (4)，清除警告 (adasFunc.c L2384-L2422)",
+        "id": "item-ccd82a0e",
+        "_learned_at": "2026-04-20T10:36:18.976673"
       }
     ]
   }
