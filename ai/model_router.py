@@ -24,6 +24,7 @@ class ModelRouter:
 
         local_cfg = ai_cfg.get("local") or ai_cfg.get("gemma", {})
         remote_cfg = ai_cfg.get("remote") or ai_cfg.get("qwen", {})
+        coder_cfg = ai_cfg.get("coder", {})
 
         self.local_client = OpenAI(
             base_url=local_cfg.get("base_url", "http://localhost:11434/v1"),
@@ -36,6 +37,14 @@ class ModelRouter:
             api_key=remote_cfg.get("api_key", "none"),
         )
         self.remote_model = remote_cfg.get("model", "Qwen3.5-27B-FP16")
+
+        # Coder model — for code generation tasks
+        self.coder_client = OpenAI(
+            base_url=coder_cfg.get("base_url", "http://10.190.161.39:8080/v1"),
+            api_key=coder_cfg.get("api_key", "ollama"),
+        )
+        self.coder_model = coder_cfg.get("model", "qwen3-coder:30b")
+        self.coder_max_tokens = coder_cfg.get("max_tokens", 2000)
 
         self.thinking_mode = ai_cfg.get("thinking", "off")
 
@@ -66,6 +75,11 @@ class ModelRouter:
 
         if complexity == "simple":
             client, model = self.local_client, self.local_model
+        elif complexity == "coder":
+            client, model = self.coder_client, self.coder_model
+            # KV cache protection: cap max_tokens
+            if max_tokens > self.coder_max_tokens:
+                max_tokens = self.coder_max_tokens
         else:
             client, model = self.remote_client, self.remote_model
 
@@ -80,7 +94,7 @@ class ModelRouter:
         if response_format:
             kwargs["response_format"] = response_format
 
-        if complexity != "simple":
+        if complexity != "simple" and complexity != "coder":
             extra = {"chat_template_kwargs": {"enable_thinking": thinking}, "top_k": 20}
             if thinking:
                 extra["presence_penalty"] = 1.5
@@ -89,6 +103,12 @@ class ModelRouter:
             else:
                 kwargs["top_p"] = 0.8
             kwargs["extra_body"] = extra
+        elif complexity == "coder":
+            # Coder: no thinking, low temperature for deterministic code
+            if temperature > 0.3:
+                temperature = 0.3
+            kwargs["temperature"] = temperature
+            kwargs["top_p"] = 0.9
 
         try:
             t0 = time.perf_counter()

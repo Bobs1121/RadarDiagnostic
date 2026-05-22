@@ -4,11 +4,18 @@ ai:
     base_url: "${LOCAL_BASE_URL:-http://localhost:11434/v1}"
     api_key: "${LOCAL_API_KEY:-ollama}"
     model: "qwen3:14b"
-  # 远端服务器模型（复杂任务）
+  # 远端服务器模型（复杂推理任务）
   remote:
     base_url: "${REMOTE_BASE_URL}"
     api_key: "${REMOTE_API_KEY}"
     model: "Qwen3.5-27B-FP16"
+  # Coder 模型 — 编码专用（代码生成/重构/审查）
+  # 注意: 单 GPU 跑满，KV cache 有限，max_tokens 控制在 2000 以内
+  coder:
+    base_url: "${CODER_BASE_URL:-http://10.190.161.39:8080/v1}"
+    api_key: "${CODER_API_KEY:-ollama}"
+    model: "${CODER_MODEL:-qwen3-coder:30b}"
+    max_tokens: 2000
   # 思考模式 — Qwen3.5 专属能力
   # "off"    : 全部关闭（最快，日常诊断推荐）
   # "synth"  : 仅 Round 3 综合收敛开启（平衡：质量↑ 耗时略增）
