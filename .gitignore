@@ -28,3 +28,18 @@ Thumbs.db
 
 # Memory cache
 memory/store/
+memory/codegraph.db
+memory/.dream-lock
+memory/sessions/
+
+# Case reports and artifacts
+cases/**/report.html
+cases/**/report.md
+cases/**/expert_opinions.md
+cases/**/memory.json
+cases/**/*.json
+
+# Generated docs
+source_docs/*_conditions.json
+radarAnalyze_introduction.html
+radarAnalyze_introduction.md
