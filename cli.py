@@ -103,6 +103,11 @@ Examples:
         help="Re-learn the global numeric constants table (paraDefine.h / dotCalibDefine.h / "
              "adasFunc.c). Fast (1 AI call) and skipped automatically if source is unchanged.",
     )
+    parser.add_argument(
+        "--codegraph-stats",
+        action="store_true",
+        help="Show CodeGraph statistics (debug only).",
+    )
     args = parser.parse_args()
 
     if args.query and args.expected:
@@ -111,6 +116,12 @@ Examples:
     # ── Learn-constants only mode ───────────────────────────────────────
     if args.learn_constants:
         _run_learn_constants()
+        if not args.case_dir:
+            return
+
+    # ── CodeGraph stats (debug only) ────────────────────────────────────
+    if args.codegraph_stats:
+        _show_codegraph_stats()
         if not args.case_dir:
             return
 
@@ -249,6 +260,19 @@ def _run_dream(force: bool = False):
             )
         if conflicts:
             console.print(f"  [yellow]Conflicts resolved: {len(conflicts)}[/yellow]")
+
+
+def _show_codegraph_stats():
+    """Show CodeGraph statistics (debug only)."""
+    from ai.codegraph import CodeGraph, CodeGraphRenderer
+
+    db_path = PROJECT_ROOT / "memory" / "codegraph.db"
+    cg = CodeGraph(db_path)
+    renderer = CodeGraphRenderer(cg)
+    md = renderer.render_stats()
+
+    console.print(Panel(md, title="CodeGraph Stats", border_style="cyan"))
+    cg.close()
 
 
 def _run_learn_constants():

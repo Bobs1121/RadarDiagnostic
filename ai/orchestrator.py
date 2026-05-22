@@ -1305,6 +1305,50 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             )
             status("source_docs", f"Signal mapping: {result.get('mapping_count', 0)} entries")
 
+        # CodeGraph: silent incremental build (user-transparent)
+        self._build_codegraph(status)
+
+    def _build_codegraph(self, status):
+        """Silently build/increment CodeGraph DB. Falls back gracefully on error."""
+        try:
+            from .codegraph import CodeGraphBuilder
+            from .code_learner import FUNC_KEYWORDS
+
+            source_root = Path(self.config["paths"]["source_code"])
+            key_files = self.config.get("paths", {}).get("key_source_files", [])
+
+            # calib_source_files: header files with calibration params
+            calib_files = [
+                p for p in key_files
+                if "paraDefine" in p or "structDefine" in p or "globalVarDefine" in p
+            ]
+
+            db_path = self.project_root / "memory" / "codegraph.db"
+
+            builder = CodeGraphBuilder(
+                db_path=db_path,
+                source_root=source_root,
+                key_files=key_files,
+                func_keywords=FUNC_KEYWORDS,
+                calib_files=calib_files,
+            )
+            result = builder.build()
+
+            if result.build_type == "skip":
+                status("codegraph", "CodeGraph: no changes (skipped)")
+            elif result.success:
+                status("codegraph",
+                       f"CodeGraph: {result.build_type} "
+                       f"(+{result.nodes_added} nodes, +{result.edges_added} edges, "
+                       f"{result.duration_sec:.1f}s)")
+            else:
+                status("codegraph", f"CodeGraph: build failed ({result.error})")
+
+        except Exception as e:
+            # Completely silent on error — user should never see this
+            import logging
+            logging.getLogger(__name__).debug("CodeGraph build error (non-fatal): %s", e)
+
     def _understand_problem(self, problem: str, expected: str, case_dir: Path) -> dict:
         memory_context = self.memory.build_context_for_diagnosis("UNKNOWN", problem, case_dir)
 
