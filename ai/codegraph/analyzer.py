@@ -61,12 +61,22 @@ _RTELite_WRITE_RE = re.compile(
     r"\bRteLite_Write_(?P<signal>\w+)\s*\("
 )
 
-# Regex: AUTOSAR P2S/S2P ReadSignal/WriteSignal
+# Regex: AUTOSAR P2S/S2P ReadSignal/WriteSignal (bare)
 _READ_SIGNAL_RE = re.compile(
     r"\bReadSignal\s*\(\s*(?P<signal>\w+)\s*\)"
 )
 _WRITE_SIGNAL_RE = re.compile(
     r"\bWriteSignal\s*\(\s*(?P<signal>\w+)\s*,\s*(?P<var>\w+)"
+)
+
+# Regex: RteComMapping macro calls (GWM_B26 style)
+# RteComMapping_ReadSignal(SignalName)(&var) → expands to RteLite_Read_SignalName(&var)
+# RteComMapping_WriteSignal(SignalName)(expr) → expands to RteLite_Write_SignalName(expr)
+_RTE_MAPPING_READ_RE = re.compile(
+    r"\bRteComMapping_ReadSignal\s*\(\s*(?P<signal>\w+)\s*\)"
+)
+_RTE_MAPPING_WRITE_RE = re.compile(
+    r"\bRteComMapping_WriteSignal\s*\(\s*(?P<signal>\w+)\s*\)"
 )
 
 # Regex: global variable write patterns
@@ -438,6 +448,18 @@ def _extract_signal_matches_from_line(clean: str, line_num: int, signals: list, 
 
     # RteLite_Write
     for m in _RTELite_WRITE_RE.finditer(clean):
+        signals.append({"function": func_name, "signal_name": m.group("signal"),
+                         "signal_module": None, "access_type": "write",
+                         "rte_call": m.group(0), "line": line_num})
+
+    # RteComMapping_ReadSignal (GWM_B26 macro → RteLite_Read_<signal>)
+    for m in _RTE_MAPPING_READ_RE.finditer(clean):
+        signals.append({"function": func_name, "signal_name": m.group("signal"),
+                         "signal_module": None, "access_type": "read",
+                         "rte_call": m.group(0), "line": line_num})
+
+    # RteComMapping_WriteSignal (GWM_B26 macro → RteLite_Write_<signal>)
+    for m in _RTE_MAPPING_WRITE_RE.finditer(clean):
         signals.append({"function": func_name, "signal_name": m.group("signal"),
                          "signal_module": None, "access_type": "write",
                          "rte_call": m.group(0), "line": line_num})
