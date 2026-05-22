@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-05-22 (数据流分析 + 架构评估完成)
+> 更新: 2026-05-22 (信号链补全完成 + CodeFixEngine 设计待启动)
 > 分支: `refactor/codegraph`
-> 状态: CodeGraph Phase 2 完成，产品架构规划中
+> 状态: 信号链 READS_SIGNAL/WRITES_SIGNAL 边从 0 → 463，CodeGraph 基础设���完备
 
 ---
 
@@ -46,7 +46,7 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 | 项目 | 优先级 | 说明 |
 |------|--------|------|
 | CodeGraph Phase 3 | P1 | 专家面板注入 + 信号链追踪 |
-| READS_SIGNAL 边为 0 | P1 | 信号声明已提取(240个)但无调用边 |
+| 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
 | State Machine (Phase 6) | P2 | 状态转换正则未匹配 |
 | 变量 false positives | P2 | 797 变量含普通局部变量 |
 | 专家面板 CodeGraph 集成 | P1 | prompt 注入 call chain + var deps |
@@ -58,7 +58,7 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 
 ### 高优先级 (用户直接反馈)
 
-1. **信号链追踪**: BLF signal → RteLite declaration → C code usage 完整链路。当前信号节点 240 个但无 edge，诊断时 LLM 不知道哪个 C 变量对应哪个 CAN signal。
+1. ~~**信号链追踪**: BLF signal → RteLite declaration → C code usage 完整链路。~~ **✅ 已修复** — 新增 `_RTE_MAPPING_READ_RE` / `_RTE_MAPPING_WRITE_RE` 正则匹配 `RteComMapping_ReadSignal/WriteSignal` 宏调用。SIGNAL 节点 240 → 426, READS_SIGNAL 0 → 140, WRITES_SIGNAL 0 → 323。
 
 2. **专家面板用 CodeGraph**: 目前 5 个专家只看 textual evidence。需要注入结构化代码关系（函数调用链、变量依赖、信号映射），让根因分析更精确。
 
@@ -125,13 +125,14 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 ## Git 提交历史 (refactor/codegraph)
 
 ```
+0667f3d fix(codegraph): 补全信号链边 - RteComMapping ReadSignal/WriteSignal
+14575ad docs: 数据流分析 + 架构评估 + master handoff 更新
+1cf9947 feat: 产品开发 skill + master handoff
 441ed4f docs: CodeGraph Phase 2 handoff
 fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 94c3367 feat: 添加 coder 模型路由 (qwen3-coder:30b)
 001ae34 chore: .gitignore - 排除构建产物和缓存文件
 6132312 feat: CodeGraph Phase 1 - 确定性代码知识图谱基础设施
-1adf233 docs: CodeGraph handoff v2
-d5801b5 docs: 项目架构与 CodeGraph 改造计划
 ```
 
 ---
@@ -151,8 +152,15 @@ d5801b5 docs: 项目架构与 CodeGraph 改造计划
 ## 下次对话从这里开始
 
 1. 读这个 handoff 了解当前状态
-2. 读 `docs/technical/codegraph-phase2-handoff.md` 了解 Phase 2 细节
-3. 根据需求池决定下一步工作
-4. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
+2. 读 `docs/technical/data-flow-and-architecture-assessment.md` 了解数据流分析和架构评估
+3. 读 `docs/technical/codegraph-phase2-handoff.md` 了解 Phase 2 细节
+4. 根据需求池决定下一步工作
+5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
+
+**下一步工作**:
+- CodeFixEngine 设计 + 实现 (ai/codefix_engine.py) — 将专家面板的文字"修复建议"转化为结构化 diff
+- CodeGraph Phase 3: 专家面板注入 CodeGraph 数据（call chain + var deps + signal mapping）
+- MF4 Parser (parsers/mf4_parser.py)
+- 交互追问模式
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
