@@ -1,16 +1,28 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-05-22
+> 更新: 2026-05-22 (数据流分析 + 架构评估完成)
 > 分支: `refactor/codegraph`
-> 状态: CodeGraph Phase 2 完成，Phase 3 待启动
+> 状态: CodeGraph Phase 2 完成，产品架构规划中
 
 ---
 
 ## 项目定位
 
-AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (BAG + BLF)。输出：HTML 诊断报告（根因 + 因果链 + 参数建议）。
+AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (BAG + BLF + MF4)。输出：根因诊断 + 可执行的源码修改方案 (diff)。
 
-**核心价值**: 把"人看 BLF 波形 + 看 C 代码"这个过程自动化，让 AI 扮演 5 个领域专家做根因分析。
+**核心价值**: 把"人看 BLF 波形 + 看 C 代码"这个过程自动化 → 自动诊断根因 → 自动给出代码修改方案。
+
+### 产品目标 vs 当前状态
+
+| 需求 | 状态 | 说明 |
+|------|------|------|
+| 输入 BAG | ✅ | 已实现 |
+| 输入 BLF | ✅ | 已实现 |
+| 输入 MF4 | ❌ | 缺失 (Phase A) |
+| 诊断根因 | ✅ | 5 专家 × 3 轮辩论 |
+| 给出代码修改方案 | ⚠️ | 仅有文字建议，无 diff (Phase B) |
+| 修改效果预估 | ⚠️ | 仅参数级支持 (Phase C) |
+| 交互追问 | ❌ | 缺失 (Phase D) |
 
 ---
 
@@ -121,6 +133,18 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 1adf233 docs: CodeGraph handoff v2
 d5801b5 docs: 项目架构与 CodeGraph 改造计划
 ```
+
+---
+
+## 相关文档索引
+
+| 文档 | 说明 |
+|------|------|
+| `data-flow-and-architecture-assessment.md` | **数据流完整分析 + 鲁棒性评估 + 实施路线图** |
+| `codegraph-phase2-handoff.md` | CodeGraph Phase 2 交付 |
+| `codegraph-phase1-handoff.md` | CodeGraph Phase 1 交付 |
+| `codegraph-handoff-v2.md` | CodeGraph 完整设计 (schema/query/render) |
+| `00-总览.md` ~ `09-记忆系统.md` | 各模块架构文档 |
 
 ---
 

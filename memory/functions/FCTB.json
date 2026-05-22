@@ -3,8 +3,8 @@
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / FctbUpdateSystemStatus",
   "status": "State Machine Added & Validated",
-  "_updated": "2026-04-23T17:20:02.228316",
-  "diagnosis_count": 54,
+  "_updated": "2026-05-22T18:31:01.839980",
+  "diagnosis_count": 55,
   "known_issues": [
     {
       "id": "FCTB001",
@@ -86,6 +86,11 @@
       "problem": "测试CCCscp near side 60kph,FCTB没有触发功能",
       "session": "FCTB0413-60kphnok_20260423_171104",
       "date": "2026-04-23"
+    },
+    {
+      "problem": "FCTB没有触发",
+      "session": "FCATB001_20260522_163518",
+      "date": "2026-05-22"
     }
   ],
   "function": "FCTB",

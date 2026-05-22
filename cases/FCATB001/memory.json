@@ -1,7 +1,7 @@
 {
-  "session_id": "FCATB001_20260417_180840",
+  "session_id": "FCATB001_20260522_163518",
   "function": "FCTB",
-  "problem": "FCATB001这个FCTB触发时间很短，只有1帧左右就被取消了",
-  "diagnosis_summary": "\n\n# FCTB制动请求持续时间不足根因诊断\n\n## 根因\n**角雷达目标跟踪不稳定导致预警标志(fctb_obj_flag)高频抖动(同帧on/off)，叠加自车车速在0.5km/h激活阈值边缘震荡，致使FCTB状态机无法维持在Active(3)态超过3秒；同时ESP AEB协同信号(AEBBAActv_0x137)长期为0满足外部抑制条件，进一步中断制动保持逻辑**。\n\n因果链: \n```\nradar_objects目标消失(trc_0~3 at t=423.29s, 来源:测试窗口4) \n→ obj_flag同帧on/off(t=400.99s等, 来源:测试窗口1/4/15) \n→ bFctbDetectFlg复位(推测逻辑层) \n→ fctb_system_state 3→2/6跳变(t=423.68s, 来源:测试窗口4) \n→ CR_BrkgReq提前释放(~0.9s < 3.0s阈值, 来源:现象描述)\n+ ESP_FD2.AEBBAActv_0x137≈0 (99.9%帧, 来源:抑制信号实测) → 抑制生效 → Brake Hold释放\n```\n\n---\n\n## 时",
-  "_updated": "2026-04-17T18:23:01.421433"
+  "problem": "FCTB没有触发",
+  "diagnosis_summary": "",
+  "_updated": "2026-05-22T18:30:22.268999"
 }
