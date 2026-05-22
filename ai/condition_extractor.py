@@ -197,20 +197,34 @@ class ConditionExtractor:
     MAX_RETRIES = 2
 
     def _extract_with_ai(self, func_name: str) -> dict:
-        """Use Qwen3.5 to extract conditions from source code."""
+        """Use Qwen3.5 to extract conditions from source code.
+
+        Uses CodeGraph to pinpoint relevant code sections instead of
+        blind keyword matching across all files.
+        """
         source_parts = []
-        for domain, files in self._domain_sources.items():
-            for rel_path in files:
-                full_path = self.source_root / rel_path
-                if not full_path.exists():
-                    continue
-                try:
-                    text = full_path.read_text(encoding="utf-8", errors="replace")
-                    relevant = self._extract_relevant_sections(text, func_name)
-                    if relevant:
-                        source_parts.append(f"### {rel_path} (相关段落)\n```c\n{relevant}\n```")
-                except Exception:
-                    pass
+
+        # Strategy 1: CodeGraph-guided extraction (precise)
+        cg_source_parts = self._extract_with_codegraph(func_name)
+        if cg_source_parts:
+            source_parts.extend(cg_source_parts)
+
+        # Strategy 2: Legacy keyword matching (fallback + supplement)
+        if len(source_parts) < 3:
+            for domain, files in self._domain_sources.items():
+                for rel_path in files:
+                    full_path = self.source_root / rel_path
+                    if not full_path.exists():
+                        continue
+                    try:
+                        text = full_path.read_text(encoding="utf-8", errors="replace")
+                        relevant = self._extract_relevant_sections(text, func_name)
+                        if relevant:
+                            already_present = any(rel_path in sp for sp in source_parts)
+                            if not already_present:
+                                source_parts.append(f"### {rel_path} (相关段落)\n```c\n{relevant}\n```")
+                    except Exception:
+                        pass
 
         if not source_parts:
             return {"error": "源码不可用", "function": func_name}
@@ -256,6 +270,99 @@ class ConditionExtractor:
         return extract_relevant_sections(
             text, build_keyword_variants(func_name), context_lines=15, max_chunks=30,
         )
+
+    def _extract_with_codegraph(self, func_name: str) -> list[str]:
+        """Use CodeGraph to precisely locate relevant code sections.
+
+        Returns list of markdown-formatted source code snippets.
+        """
+        result = []
+        try:
+            from .codegraph import CodeGraph
+            cg_path = self.project_root / "memory" / "codegraph.db"
+            if not cg_path.exists():
+                return result
+
+            cg = CodeGraph(cg_path)
+
+            # 1. Find functions in this module
+            funcs = cg.get_functions_by_module(func_name)
+            if not funcs:
+                cg.close()
+                return result
+
+            # 2. For each function, read the actual source code
+            seen_files = set()
+            for func_info in funcs:
+                # NodeInfo has file_id like "FILE:coem/.../file.c"
+                file_id = getattr(func_info, 'file_id', '') or ''
+                if not file_id:
+                    continue
+                file_rel = file_id.split(":", 1)[-1]  # strip "FILE:" prefix
+                if file_rel in seen_files:
+                    continue
+
+                full_path = self.source_root / file_rel
+                if not full_path.exists():
+                    continue
+
+                try:
+                    text = full_path.read_text(encoding="utf-8", errors="replace")
+
+                    # Get function start/end lines
+                    func_name_attr = getattr(func_info, 'name', '')
+                    func_start = getattr(func_info, 'start_line', 0) or 0
+                    func_end = getattr(func_info, 'end_line', 0) or 0
+
+                    if func_start and func_end:
+                        # Extract exact function body + context
+                        lines = text.split("\n")
+                        ctx_start = max(0, func_start - 10)
+                        ctx_end = min(len(lines), func_end + 5)
+                        func_code = "\n".join(lines[ctx_start:ctx_end])
+                    else:
+                        # Fallback: keyword extraction
+                        func_code = self._extract_relevant_sections(text, func_name_attr)
+
+                    if func_code:
+                        seen_files.add(file_rel)
+                        result.append(
+                            f"### {file_rel} (CodeGraph: {func_name_attr})\n"
+                            f"```c\n{func_code[:5000]}\n```"
+                        )
+                except Exception:
+                    pass
+
+            # 3. Also include callers (upstream context)
+            for func_info in funcs[:3]:  # top 3 functions only
+                func_name_attr = getattr(func_info, 'name', '')
+                callers = cg.find_callers(func_name_attr)
+                for caller in callers[:2]:  # top 2 callers
+                    caller_file_id = getattr(caller, 'file_id', '') or ''
+                    if not caller_file_id or caller_file_id in seen_files:
+                        continue
+                    caller_file = caller_file_id.split(":", 1)[-1]
+
+                    caller_path = self.source_root / caller_file
+                    if caller_path.exists():
+                        try:
+                            text = caller_path.read_text(encoding="utf-8", errors="replace")
+                            caller_name = getattr(caller, 'name', '?')
+                            caller_code = self._extract_relevant_sections(text, caller_name)
+                            if caller_code:
+                                seen_files.add(caller_file)
+                                result.append(
+                                    f"### {caller_file} (Caller: {caller_name})\n"
+                                    f"```c\n{caller_code[:3000]}\n```"
+                                )
+                        except Exception:
+                            pass
+
+            cg.close()
+        except Exception:
+            pass  # silent fallback to legacy
+
+        return result
 
     @staticmethod
     def _load_cache(cache_path: Path) -> Optional[dict]:

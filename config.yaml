@@ -62,6 +62,8 @@ paths:
     - "adas\\symmetry\\perception\\include\\structDefine.h"
     - "adas\\symmetry\\perception\\include\\paraDefine.h"
     - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
+    # RteLite - 信号接口声明 (GWM_B26)
+    - "coem\\GWM_B26\\components\\com\\AutoGen\\PriCan\\rteLite_PriCan.h"
 
 functions:
   rear:  [BSD, LCA, DOW, RCW, RCTA, RCTB]

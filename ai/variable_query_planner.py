@@ -46,7 +46,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from .utils import parse_json_from_llm
+from .utils import parse_json_from_llm, ALL_FUNCTIONS
 
 
 _SYSTEM_PROMPT = """你是一个雷达数据诊断的"查询规划员"。
@@ -266,7 +266,37 @@ class VariableQueryPlanner:
     # ------------------------------------------------------------------
 
     def _render_code_knowledge(self, func_name: str, max_chars: int = 4000) -> str:
-        """Pull the L6 knowledge for ``func_name`` in a compact form."""
+        """Pull code knowledge for ``func_name``.
+
+        Priority: CodeGraph (structured) > L6 JSON (legacy).
+        """
+        # Try CodeGraph first
+        codegraph_md = ""
+        try:
+            from .codegraph import CodeGraph, CodeGraphRenderer
+            cg_path = self.project_root / "memory" / "codegraph.db"
+            if cg_path.exists():
+                cg = CodeGraph(cg_path)
+                renderer = CodeGraphRenderer(cg)
+                if func_name:
+                    codegraph_md = renderer.render_for_probe(func_name, max_chars=max_chars)
+                # Also try module-level context
+                for module in ALL_FUNCTIONS:
+                    funcs = cg.get_functions_by_module(module)
+                    func_names = [f.name for f in funcs]
+                    if func_name in func_names or any(func_name.lower() in fn.lower() for fn in func_names):
+                        module_md = renderer.render_for_problem(module, max_chars=max_chars // 2)
+                        if module_md and module_md not in codegraph_md:
+                            codegraph_md = module_md + "\n" + codegraph_md
+                        break
+                cg.close()
+        except Exception:
+            pass
+
+        if codegraph_md:
+            return codegraph_md[:max_chars]
+
+        # Fallback to legacy L6 JSON
         if not self.memory or not func_name:
             return "(暂无代码知识)"
         try:

@@ -53,6 +53,14 @@ _RTE_WRITE_RE = re.compile(
     r"\bRte_(?:\w+_)?Write_(?P<module>\w+)_(?P<signal>\w+)\s*\("
 )
 
+# Regex: RteLite Read/Write (GWM_B26 style: RteLite_Read_SignalName(&port))
+_RTELite_READ_RE = re.compile(
+    r"\bRteLite_Read_(?P<signal>\w+)\s*\("
+)
+_RTELite_WRITE_RE = re.compile(
+    r"\bRteLite_Write_(?P<signal>\w+)\s*\("
+)
+
 # Regex: AUTOSAR P2S/S2P ReadSignal/WriteSignal
 _READ_SIGNAL_RE = re.compile(
     r"\bReadSignal\s*\(\s*(?P<signal>\w+)\s*\)"
@@ -374,10 +382,13 @@ def _classify_var_access(clean_line: str, var_name: str) -> Optional[str]:
 
 def phase5_signal_interface(file_path: Path, functions: list[dict]) -> list[dict]:
     """
-    Extract Rte_Read/Rte_Write/ReadSignal/WriteSignal calls.
+    Extract Rte_Read/Rte_Write/ReadSignal/WriteSignal/RteLite_Read/RteLite_Write calls.
 
     Returns: [{function, signal_name, signal_module, access_type, rte_call, line}]
     access_type: 'read' | 'write'
+
+    For header files (.h) with function declarations, scans entire file
+    to extract signal interface declarations.
     """
     try:
         text = file_path.read_text(encoding="utf-8", errors="replace")
@@ -387,56 +398,49 @@ def phase5_signal_interface(file_path: Path, functions: list[dict]) -> list[dict
     lines = text.split("\n")
     signals = []
 
-    for func in functions:
-        for line_num in range(func["start_line"], min(func["end_line"] + 1, len(lines))):
-            line = lines[line_num - 1]
+    # Determine scan range: function bodies for .c, entire file for .h
+    is_header = file_path.suffix == ".h"
+
+    if is_header:
+        # For headers with function declarations, scan entire file
+        for line_num, line in enumerate(lines, 1):
             clean = strip_strings_and_comments(line)
-
-            # Rte_Read
-            for m in _RTE_READ_RE.finditer(clean):
-                signals.append({
-                    "function": func["name"],
-                    "signal_name": m.group("signal"),
-                    "signal_module": m.group("module"),
-                    "access_type": "read",
-                    "rte_call": m.group(0),
-                    "line": line_num,
-                })
-
-            # Rte_Write
-            for m in _RTE_WRITE_RE.finditer(clean):
-                signals.append({
-                    "function": func["name"],
-                    "signal_name": m.group("signal"),
-                    "signal_module": m.group("module"),
-                    "access_type": "write",
-                    "rte_call": m.group(0),
-                    "line": line_num,
-                })
-
-            # ReadSignal
-            for m in _READ_SIGNAL_RE.finditer(clean):
-                signals.append({
-                    "function": func["name"],
-                    "signal_name": m.group("signal"),
-                    "signal_module": None,
-                    "access_type": "read",
-                    "rte_call": m.group(0),
-                    "line": line_num,
-                })
-
-            # WriteSignal
-            for m in _WRITE_SIGNAL_RE.finditer(clean):
-                signals.append({
-                    "function": func["name"],
-                    "signal_name": m.group("signal"),
-                    "signal_module": None,
-                    "access_type": "write",
-                    "rte_call": m.group(0),
-                    "line": line_num,
-                })
+            _extract_signal_matches_from_line(clean, line_num, signals, None)
+    else:
+        for func in functions:
+            for line_num in range(func["start_line"], min(func["end_line"] + 1, len(lines))):
+                line = lines[line_num - 1]
+                clean = strip_strings_and_comments(line)
+                _extract_signal_matches_from_line(clean, line_num, signals, func["name"])
 
     return signals
+
+
+def _extract_signal_matches_from_line(clean: str, line_num: int, signals: list, func_name: str | None):
+    """Extract all signal access patterns from a single cleaned line."""
+    # Rte_Read
+    for m in _RTE_READ_RE.finditer(clean):
+        signals.append({"function": func_name, "signal_name": m.group("signal"),
+                         "signal_module": m.group("module"), "access_type": "read",
+                         "rte_call": m.group(0), "line": line_num})
+
+    # Rte_Write
+    for m in _RTE_WRITE_RE.finditer(clean):
+        signals.append({"function": func_name, "signal_name": m.group("signal"),
+                         "signal_module": m.group("module"), "access_type": "write",
+                         "rte_call": m.group(0), "line": line_num})
+
+    # RteLite_Read
+    for m in _RTELite_READ_RE.finditer(clean):
+        signals.append({"function": func_name, "signal_name": m.group("signal"),
+                         "signal_module": None, "access_type": "read",
+                         "rte_call": m.group(0), "line": line_num})
+
+    # RteLite_Write
+    for m in _RTELite_WRITE_RE.finditer(clean):
+        signals.append({"function": func_name, "signal_name": m.group("signal"),
+                         "signal_module": None, "access_type": "write",
+                         "rte_call": m.group(0), "line": line_num})
 
 
 # ── Phase 6: State Machine ─────────────────────────────────────────────

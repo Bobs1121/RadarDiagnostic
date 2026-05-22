@@ -1374,6 +1374,22 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             except Exception:
                 pass
 
+        # CodeGraph: inject structured code context
+        codegraph_md = ""
+        try:
+            from .codegraph import CodeGraph, CodeGraphRenderer
+            cg_path = self.project_root / "memory" / "codegraph.db"
+            if cg_path.exists():
+                cg = CodeGraph(cg_path)
+                renderer = CodeGraphRenderer(cg)
+                for fn in matched_funcs:
+                    md_text = renderer.render_for_problem(fn, problem, max_chars=3000)
+                    if md_text:
+                        codegraph_md += f"\n{md_text}\n"
+                cg.close()
+        except Exception:
+            pass  # silent fallback
+
         prompt = f"""分析以下问题，制定诊断计划。
 
 ## 问题现象
@@ -1387,6 +1403,9 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
 ## 功能文档概要 {prefilter_note}
 {source_summaries if source_summaries else "(功能文档将自动生成)"}
+
+## 代码结构 (CodeGraph)
+{codegraph_md if codegraph_md else "(代码知识图谱构建中，将在后续步骤可用)"}
 
 请输出JSON:
 {{

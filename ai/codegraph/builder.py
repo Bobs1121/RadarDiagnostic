@@ -431,7 +431,19 @@ class CodeGraphBuilder:
         count = 0
         seen = set()
         for s in signals:
-            func_id = f"FUNCTION:{s['function']}"
+            func_name = s.get("function")
+            if func_name:
+                func_id = f"FUNCTION:{func_name}"
+                # Verify function node exists; skip if not
+                existing = self.conn.execute(
+                    "SELECT 1 FROM nodes WHERE id = ?", (func_id,)
+                ).fetchone()
+                if not existing:
+                    continue
+            else:
+                # Header file signal declarations: use FILE node as source
+                func_id = None  # handled below
+
             sig_key = f"{s.get('signal_module', '')}_{s['signal_name']}" if s.get('signal_module') else s['signal_name']
             sig_id = f"SIGNAL:{sig_key}"
 
@@ -443,17 +455,18 @@ class CodeGraphBuilder:
                 (sig_id, "SIGNAL", sig_key, None, None, None),
             )
 
-            edge_type = "READS_SIGNAL" if s["access_type"] == "read" else "WRITES_SIGNAL"
-            edge_id = f"{func_id}->{sig_id}:{edge_type}:{s['line']}"
+            if func_id:
+                edge_type = "READS_SIGNAL" if s["access_type"] == "read" else "WRITES_SIGNAL"
+                edge_id = f"{func_id}->{sig_id}:{edge_type}:{s['line']}"
 
-            if edge_id not in seen:
-                self.conn.execute(
-                    """INSERT OR REPLACE INTO edges (id, source, target, type, line, rte_call)
-                       VALUES (?,?,?,?,?,?)""",
-                    (edge_id, func_id, sig_id, edge_type, s["line"], s.get("rte_call", "")),
-                )
-                seen.add(edge_id)
-                count += 1
+                if edge_id not in seen:
+                    self.conn.execute(
+                        """INSERT OR REPLACE INTO edges (id, source, target, type, line, rte_call)
+                           VALUES (?,?,?,?,?,?)""",
+                        (edge_id, func_id, sig_id, edge_type, s["line"], s.get("rte_call", "")),
+                    )
+                    seen.add(edge_id)
+                    count += 1
 
         self.conn.commit()
         return count
