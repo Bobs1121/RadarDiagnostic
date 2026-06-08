@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-06-08 (CodeGraph Phase 3 完成 — 专家面板注入结构化代码上下文)
-> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+CodeGraph Phase 3 完成)
-> 状态: v2 Phase 1+2 完成; CodeGraph Phase 3 专家面板注入完成
+> 更新: 2026-06-09 (CodeFixEngine Phase 4.5 完成 — 从专家结论生成 unified diff)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+CodeGraph Phase 3+4 完成)
+> 状态: v2 Phase 1+2 完成; CodeGraph Phase 3 专家面板注入完成; Phase 4 CodeFixEngine 完成
 
 ---
 
@@ -20,8 +20,8 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 | 输入 BLF | ✅ | 已实现 |
 | 输入 MF4 | ❌ | 缺失 (Phase A) |
 | 诊断根因 | ✅ | 5 专家 × 3 轮辩论 |
-| 给出代码修改方案 | ⚠️ | 仅有文字建议，无 diff (Phase B) |
-| 修改效果预估 | ⚠️ | 仅参数级支持 (Phase C) |
+| 给出代码修改方案 | ✅ | CodeFixEngine 生成 unified diff (Phase B) |
+| 修改效果预估 | ✅ | 参数级 + 代码级 effect estimate (Phase C) |
 | 交互追问 | ❌ | 缺失 (Phase D) |
 
 ---
@@ -265,3 +265,32 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
   - 已有但未使用的渲染方法: `render_for_conditions` (render.py:226-294) — 可考虑条件提取阶段使用
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
+
+---
+
+**CodeFixEngine Phase 4.5 进度 (2026-06-09)**:
+
+- **提交**: `c2a2c96` feat: CodeFixEngine — Phase 4.5, generate unified diffs from expert verdict
+- **新模块**: `ai/code_fix_engine.py` (811 行)
+- **管线集成**: `orchestrator.py` Phase 4.5 (expert panel → codefix → report)
+
+**架构流程**:
+1. **解析专家结论**: 从 `final_verdict` 提取 "### 修复建议" 段落 + `file:line` 定位
+2. **CodeGraph 精确定位**: 通过 CodeGraph DB 将模糊文件名 → 完整 `file_path`，读取源代码上下文（前后 20 行）
+3. **Diff 生成**: 调用 `model_router.complex()` (coder route: `qwen3-coder:30b`) 生成 unified diff
+4. **安全审查**: LLM 审查 MISRA C/AUTOSAR 规则（缓冲区溢出、空指针、整数溢出、类型安全等）
+5. **语法验证**: `clang -fsyntax-only` 检查 C 语法（clang 不存在时 graceful skip）
+6. **效果预估**: LLM 评估修复预期效果、影响范围、风险、置信度
+
+**输出**: `FixResult` dataclass → `render_fix_report_markdown()` → 报告附录
+
+**降级策略**:
+- CodeGraph DB 不存在 → 在 `source_root` 目录树中递归搜索文件
+- 未找到代码位置 → 返回文字建议（无 diff）
+- `clang` 不可用 → 语法检查标记为 "skipped"
+- 任何步骤异常 → 静默降级，不影响主诊断流程
+
+**数据模型**:
+- `FixLocation`: file_path, start_line, end_line, function_name, context
+- `SafetyIssue`: severity (critical/warning/info), category, description, line
+- `FixResult`: success, fix_suggestions, locations, diffs, safety_issues, syntax_check, effect_estimate, error
