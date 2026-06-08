@@ -375,6 +375,33 @@ class Orchestrator:
                 status("params", f"Parameter analysis failed: {exc}")
                 param_section_md = ""
 
+        # ── CodeGraph: inject structured code context into expert panel ──
+        # render_for_expert_panel 已经包含：模块函数/信号/调用链 + 校准参数 +
+        # 跨模块共享函数/信号 + 构建信息。注入到 ContextBudget 让所有专家可见。
+        codegraph_section = ""
+        try:
+            from .codegraph import CodeGraph, CodeGraphRenderer
+            cg_path = self.project_root / "memory" / "codegraph.db"
+            if cg_path.exists():
+                cg = CodeGraph(cg_path)
+                renderer = CodeGraphRenderer(cg)
+                cg_md = renderer.render_for_expert_panel(
+                    module=func_name,
+                    problem_desc=problem,
+                    max_chars=10000,
+                )
+                if cg_md:
+                    codegraph_section = f"""## ★★ 代码结构知识图谱(CodeGraph) ★★
+{cg_md}
+
+**CodeGraph 使用说明**: 以上为系统从 C 源码静态分析提取的结构化代码知识，
+包括函数调用链、信号依赖、变量读写、状态转换等行为模式。分析根因时请结合
+TPE 证据段与 CodeGraph 结构数据交叉验证。
+"""
+                cg.close()
+        except Exception:
+            pass  # silent fallback — CodeGraph is optional enhancement
+
         # ── Phase 4: Expert Panel Diagnosis ──────────────────────────────
         n_experts = len(ExpertPanel.select_experts(func_info.get("fail_type", "OTHER")))
         status("diagnose", f"Launching expert panel ({n_experts} experts, 3 rounds)...")
@@ -505,6 +532,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         budget.add("conditions",    f"## ★ 条件检查表(代码提取) ★\n{conditions_text}", priority=80, min_chars=1500)
         budget.add("threshold",     threshold_section, priority=75,  min_chars=1000)
         budget.add("params",        params_section,    priority=70,  min_chars=1000)
+        budget.add("codegraph",     codegraph_section, priority=72,  min_chars=800)
         budget.add("timeline",      f"## 窗口内数据时间线\n{timeline_text[:10000]}", priority=60, min_chars=2000)
         budget.add("frame_anal",    f"## 帧分析\n{frame_analysis[:6000]}", priority=55, min_chars=1500)
         budget.add("evidence",      f"## 数据取证\n{evidence_text}", priority=55, min_chars=3000)
