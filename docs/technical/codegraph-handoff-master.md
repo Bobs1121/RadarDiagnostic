@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-06-08 (v2.0 改造规划完成 — PRD + 实施计划 + GitHub 调研)
-> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — 待创建)
-> 状态: v1 管线已稳定; v2 改造规划已完成，等待启动
+> 更新: 2026-06-08 (v2.0 Phase 1 完成 — MF4 stub + topic 自动发现 + fallback + 可观测性)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1 已完成)
+> 状态: v1 管线已稳定; v2 Phase 1 完成，准备启动 Phase 2
 
 ---
 
@@ -40,6 +40,10 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 | CodeGraph Phase 1 | ✅ | SQLite 图谱 (1381 节点, 9897 边) |
 | CodeGraph Phase 2 | ✅ | LLM 消费 CodeGraph 数据 |
 | Coder 模型路由 | ✅ | qwen3-coder:30b @ 10.190.161.39:8080 |
+| **v2 Phase 1: MF4 Parser** | ✅ | 框架 + stub (asammdf 不可用) |
+| **v2 Phase 1: Topic 自动发现** | ✅ | `discover_radar_topics()` |
+| **v2 Phase 1: 降级策略** | ✅ | `safe_llm_call` + 6 个 fallback |
+| **v2 Phase 1: 可观测性** | ✅ | `StepLogger` + `observability_log.json` |
 
 ### 🔧 进行中 / 待优化
 
@@ -184,9 +188,17 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 
 ---
 
-## Git 提交历史 (refactor/codegraph)
+## Git 提交历史 (refactor/v2)
 
-## 下次对话从这里开始
+```
+a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + fallback + observability
+```
+
+(基于 refactor/codegraph: 0667f3d)
+
+---
+
+## 相关文档索引
 
 1. 读这个 handoff 了解当前状态
 2. 读 `docs/PRD_refactor_v2.md` 了解 v2 改造规划
@@ -195,7 +207,12 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- 启动 v2.0 改造 (Phase 1: MF4 Parser + topic 发现 + 降级策略 + 可观测性)
+- 启动 v2.0 改造 Phase 2: tree-sitter 代码分析 (AST 解析 + CodeGraph + 模式提取) — 10 天
 - 或继续 v1 迭代 (CodeGraph Phase 3 / CodeFixEngine 设计)
+
+**Phase 1 遗留问题**:
+- MF4 Parser 需要 asammdf 或 mffparser 依赖库 (当前网络环境不可用)
+- 安装依赖后需要补全 _parse_mf4_metadata / _parse_mf4_frames 实现
+- observability 的 TokenTracker 已在 orchestrator 创建但未注入 model_router，后续需联动
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
