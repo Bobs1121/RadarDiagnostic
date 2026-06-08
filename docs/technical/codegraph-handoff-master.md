@@ -51,7 +51,7 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 
 | 项目 | 优先级 | 说明 |
 |------|--------|------|
-| AST Parser → CodeGraph 集成 | P1 | `ast_builder.py` 已写好但尚未替换 `builder.py` 中的正则分析器 |
+| AST Parser → CodeGraph 集成 | ✅ | `ast_builder.py` 已集成，use_ast=True 验证通过 (P2.4 benchmark 完成) |
 | CodeGraph Phase 3 | P1 | 专家面板注入 + 信号链追踪 |
 | 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
 | State Machine (Phase 6) | P2 | 状态转换正则未匹配 |
@@ -206,11 +206,16 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 ## Git 提交历史 (refactor/v2)
 
 ```
+0fb5284 docs: update handoff with P2.3 completion status
 f949baa feat(codegraph): integrate tree-sitter AST builder into builder.py (Plan A)
 a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + fallback + observability
 ```
 
 (基于 refactor/codegraph: 0667f3d)
+
+**未提交修改** (2026-06-08):
+- `ai/codegraph/ast_parser.py`: `_walk_subtree` 改为迭代栈 + `_find_descendant` 优化
+- `ai/codegraph/ast_builder.py`: `_build_func_index` + `_build_line_to_func_index` 避免 O(N×M) 遍历；添加 `tree_sitter` import
 
 ---
 
@@ -223,8 +228,9 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- **P2.4**: 在真实项目 (BYD_OVS_CB / GWM_B26) 上对比 AST vs 正则的准确率
-- 或继续 v1 迭代 (CodeGraph Phase 3 / CodeFixEngine 设计)
+- **Phase 3 (LangGraph 专家面板)**: 迁移 5 专家 3 轮辩论到 LangGraph 状态图
+- **Phase 4 (CodeFixEngine)**: diff 生成 + 安全审查 + 效果预估
+- 或继续 v1 迭代 (CodeGraph Phase 3 — 专家面板注入 CodeGraph 数据)
 
 **Phase 1 遗留问题**:
 - MF4 Parser 需要 asammdf 或 mffparser 依赖库 (当前网络环境不可用)
@@ -238,6 +244,14 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
   - AST 分支已覆盖: Phase 2-3, 5-7, 9
   - 仍用正则: Phase 4 (variable access on known vars), Phase 10 (behaviour patterns)
   - AST 结果通过 self._ast_results_by_file 共享给各 extract 方法
+- P2.4 ✓ AST vs Regex 准确率对比 (GWM_B26 真实项目 benchmark)
+  - 对比结果: AST 发现 421 节点 / 5858 边 vs Regex 261 节点 / 5154 边
+  - FUNCTION: AST 254 vs Regex 110 (+144) — AST 完全覆盖正则结果
+  - CALLS: AST 386 vs Regex 126 (+260) — 发现大量函数调用关系
+  - VARIABLE: AST 157 vs Regex 143 (+14) — 基本持平
+  - 性能: AST 5.8s vs Regex 2.7s（约 2 倍）
+  - 关键优化: `_build_func_index` + `_build_line_to_func_index` 避免 O(N×M) 遍历，从 120s+ 超时降至 0.98s/文件
+  - `_walk_subtree` 从递归改为迭代栈，避免 Python 递归深度限制
 - tree-sitter 0.24+ 版本 (PyCapsule) 与 0.21.x (Language 对象) API 不兼容，已锁定 0.21.3 + 0.21.4
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。

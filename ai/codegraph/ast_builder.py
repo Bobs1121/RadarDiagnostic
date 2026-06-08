@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import tree_sitter as ts
 from .ast_parser import CParser, FunctionDef, FunctionCall, SignalInterface
 
 log = logging.getLogger(__name__)
@@ -120,26 +121,35 @@ class ASTBuilder:
         func_defs = self.parser.extract_functions(tree, source_bytes)
         result.functions = [self._func_def_to_dict(f, rel_path) for f in func_defs]
 
-        # Extract calls (per function for caller context)
+        # Pre-build function name -> node mapping (avoids O(N*M) traversal)
+        func_name_to_node = self._build_func_index(tree, source_bytes)
+
+        # Extract calls (per function for caller context) — uses cached index
         for func_def in func_defs:
-            func_node = self._find_func_node(tree, source_bytes, func_def.name)
+            func_node = func_name_to_node.get(func_def.name)
             if func_node:
                 calls = self.parser.extract_calls_in_function(
                     func_node, source_bytes, func_def.name,
                 )
                 result.calls.extend([self._call_to_dict(c) for c in calls])
 
+        # Pre-build line -> function_name index (avoids O(M*N) traversal for each write/signal)
+        line_to_func = self._build_line_to_func_index(tree, source_bytes)
+
+        def _find_caller_by_line(line: int) -> str:
+            return line_to_func.get(line, "")
+
         # Extract signal interfaces
         signals = self.parser.extract_signal_interfaces(tree, source_bytes)
-        result.signals = [self._signal_to_dict(s, self._find_caller(tree, source_bytes, s.line)) for s in signals]
+        result.signals = [self._signal_to_dict(s, _find_caller_by_line(s.line)) for s in signals]
 
         # Extract state machine
         states_raw = self.parser.extract_state_machine(tree, source_bytes)
-        result.states = [self._state_to_dict(s, self._find_caller(tree, source_bytes, s.line)) for s in states_raw]
+        result.states = [self._state_to_dict(s, _find_caller_by_line(s.line)) for s in states_raw]
 
         # Extract variable writes
         writes = self.parser.extract_variable_writes(tree, source_bytes)
-        result.var_writes = [self._var_write_to_dict(w, self._find_caller(tree, source_bytes, w.line)) for w in writes]
+        result.var_writes = [self._var_write_to_dict(w, _find_caller_by_line(w.line)) for w in writes]
 
         # Extract includes
         includes = self.parser.extract_includes(tree, source_bytes)
@@ -276,6 +286,46 @@ class ASTBuilder:
 
     # ── AST helpers ──────────────────────────────────────────────────────
 
+    def _build_func_index(self, tree, source: bytes) -> dict[str, ts.Node]:
+        """Build function_name -> function_definition_node index (single pass)."""
+        from .ast_parser import _walk_subtree, _node_text
+        index = {}
+        for node in _walk_subtree(tree.root_node, source, "function_definition"):
+            declarator = None
+            for child in node.children:
+                if child.type in ("function_declarator", "pointer_declarator", "declarator"):
+                    declarator = child
+                    break
+            if declarator:
+                for c in declarator.children:
+                    if c.type == "identifier":
+                        name = _node_text(c, source)
+                        index[name] = node
+                        break
+        return index
+
+    def _build_line_to_func_index(self, tree, source: bytes) -> dict[int, str]:
+        """Build line_number -> function_name index (single pass)."""
+        from .ast_parser import _walk_subtree
+        index = {}
+        for node in _walk_subtree(tree.root_node, source, "function_definition"):
+            start = node.start_point[0] + 1  # 1-indexed
+            end = node.end_point[0] + 1
+            # Extract function name
+            name = ""
+            for child in node.children:
+                if child.type in ("function_declarator", "pointer_declarator", "declarator"):
+                    for c in child.children:
+                        if c.type == "identifier":
+                            name = c.text.decode("utf-8", errors="replace")
+                            break
+                    break
+            if name:
+                for line in range(start, end + 1):
+                    index[line] = name
+        return index
+
+    # Legacy methods kept for backward compatibility
     def _find_func_node(self, tree, source: bytes, func_name: str):
         """Find the function_definition node for a given function name."""
         from .ast_parser import _walk_subtree, _node_text
@@ -298,7 +348,6 @@ class ASTBuilder:
             start = node.start_point[0] + 1  # 1-indexed
             end = node.end_point[0] + 1
             if start <= line <= end:
-                # Extract function name
                 declarator = None
                 for child in node.children:
                     if child.type in ("function_declarator", "pointer_declarator", "declarator"):

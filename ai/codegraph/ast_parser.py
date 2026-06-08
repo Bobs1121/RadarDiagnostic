@@ -132,25 +132,19 @@ def _is_descendant_of(node: ts.Node, ancestor: ts.Node) -> bool:
 
 def _walk_subtree(node: ts.Node, source: bytes, node_type: Optional[str] = None) -> list[ts.Node]:
     """
-    DFS walk returning nodes matching node_type (or all nodes if None).
-    Uses tree-sitter 0.21.x cursor API (node.walk()).
+    Walk AST tree, returning nodes of the given type (or all if None).
+    Pure iterative — no recursion, no recursion limit.
     """
     results = []
-    cursor = node.walk()
-    _walk_recursive(cursor, node_type, results, source)
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        if node_type is None or current.type == node_type:
+            results.append(current)
+        # Push children in reverse order for left-to-right processing
+        for i in range(len(current.children) - 1, -1, -1):
+            stack.append(current.children[i])
     return results
-
-
-def _walk_recursive(cursor: ts.TreeCursor, node_type: Optional[str], results: list, source: bytes):
-    if not node_type or cursor.node.type == node_type:
-        results.append(cursor.node)
-    if cursor.goto_first_child():
-        try:
-            _walk_recursive(cursor, node_type, results, source)
-        finally:
-            cursor.goto_parent()
-    while cursor.goto_next_sibling():
-        _walk_recursive(cursor, node_type, results, source)
 
 
 def _find_child(node: ts.Node, child_type: str) -> Optional[ts.Node]:
