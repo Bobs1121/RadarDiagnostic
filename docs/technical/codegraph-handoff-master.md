@@ -206,9 +206,8 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 ## Git 提交历史 (refactor/v2)
 
 ```
+f949baa feat(codegraph): integrate tree-sitter AST builder into builder.py (Plan A)
 a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + fallback + observability
-(未提交) ast_parser.py: tree-sitter C AST 解析器 (9 个提取器)
-(未提交) ast_builder.py: AST → CodeGraph 节点/边转换器
 ```
 
 (基于 refactor/codegraph: 0667f3d)
@@ -224,7 +223,6 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- **P2.3**: 将 `ast_builder.py` 集成到 `builder.py` — 用 AST 结果替换正则分析器的 phase 1-7, 9-10
 - **P2.4**: 在真实项目 (BYD_OVS_CB / GWM_B26) 上对比 AST vs 正则的准确率
 - 或继续 v1 迭代 (CodeGraph Phase 3 / CodeFixEngine 设计)
 
@@ -233,10 +231,13 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 - 安装依赖后需要补全 _parse_mf4_metadata / _parse_mf4_frames 实现
 - observability 的 TokenTracker 已在 orchestrator 创建但未注入 model_router，后续需联动
 
-**Phase 2 新发现**:
+**Phase 2 进度更新**:
+- P2.1 ✓ tree-sitter C 语言包安装 + 路径解决
+- P2.2 ✓ ast_parser.py (9 个提取器) + ast_builder.py (AST → CodeGraph 转换) + 单元测试
+- P2.3 ✓ builder.py 集成 ASTBuilder，use_ast=True/False 开关式迁移
+  - AST 分支已覆盖: Phase 2-3, 5-7, 9
+  - 仍用正则: Phase 4 (variable access on known vars), Phase 10 (behaviour patterns)
+  - AST 结果通过 self._ast_results_by_file 共享给各 extract 方法
 - tree-sitter 0.24+ 版本 (PyCapsule) 与 0.21.x (Language 对象) API 不兼容，已锁定 0.21.3 + 0.21.4
-- `ast_parser.py` 已实现 9 个提取器，全部通过单元测试
-- `ast_builder.py` 可独立运行，输出与现有 `CodeGraphBuilder` 兼容的 dict 格式
-- 下一步需要在 `builder.py` 中增加 `use_ast=True` 开关，用 `ASTBuilder` 替代 `analyzer.py` 的正则分析
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
