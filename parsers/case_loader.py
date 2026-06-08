@@ -11,19 +11,22 @@ import datetime
 from pathlib import Path
 from typing import Optional
 
-from .bag_parser import BagParser, TOPIC_RADAR_ID
+from .bag_parser import BagParser, TOPIC_RADAR_ID, discover_radar_topics
 from .blf_parser import BlfParser
 from .dbc_loader import DbcLoader
 from .frame_store import FrameStore
 from .time_sync import TimeSync
+from .mf4_parser import Mf4Parser, check_mf4_dependency
 
-_WFA_TOPICS = {
+# Legacy hardcoded topic lists — kept for backward compatibility when
+# auto-discovery is not available or returns no results.
+_WFA_TOPICS_LEGACY = {
     "/wf/corner_radar/lgu_data_1",
     "/wf/corner_radar/lgu_data_2",
     "/wf/corner_radar/lgu_data_3",
     "/wf/corner_radar/lgu_data_4",
 }
-_WFO_TOPICS = {
+_WFO_TOPICS_LEGACY = {
     "/wf/objectlist_1",
     "/wf/objectlist_2",
     "/wf/objectlist_3",
@@ -39,12 +42,13 @@ _FLAG_COL_MAP = {
 
 class CaseLoadResult:
     """Container for everything produced by loading a case directory."""
-    __slots__ = ("store", "bag_meta", "blf_meta", "sync", "dbc")
+    __slots__ = ("store", "bag_meta", "blf_meta", "mf4_meta", "sync", "dbc")
 
     def __init__(self):
         self.store: Optional[FrameStore] = None
         self.bag_meta: Optional[dict] = None
         self.blf_meta: Optional[dict] = None
+        self.mf4_meta: Optional[dict] = None
         self.sync: Optional[TimeSync] = None
         self.dbc: Optional[DbcLoader] = None
 
@@ -81,12 +85,34 @@ def load_case_data(
         parser = BagParser(bf)
         bag_metas.append(parser.get_metadata())
 
+        # P1.2: Auto-discover radar topics from this bag
+        discovered = discover_radar_topics(bf)
+        wfa_topics = {t for t, info in discovered.items() if info["type"] == "wfa"}
+        wfo_topics = {t for t, info in discovered.items() if info["type"] == "wfo"}
+
+        # Fall back to legacy hardcoded topics if discovery found nothing
+        if not wfa_topics:
+            wfa_topics = _WFA_TOPICS_LEGACY
+            status("parse", "  Topic discovery: using legacy WFA topics")
+        if not wfo_topics:
+            wfo_topics = _WFO_TOPICS_LEGACY
+            status("parse", "  Topic discovery: using legacy WFO topics")
+
+        # Build topic -> radar_id map from discovery (merge with legacy)
+        topic_radar_id = dict(TOPIC_RADAR_ID)
+        for t, info in discovered.items():
+            if info["radar_id"] and t not in topic_radar_id:
+                topic_radar_id[t] = info["radar_id"]
+
+        if wfa_topics != _WFA_TOPICS_LEGACY or wfo_topics != _WFO_TOPICS_LEGACY:
+            status("parse", f"  Topic discovery: {len(wfa_topics)} WFA + {len(wfo_topics)} WFO topics")
+
         for frame in parser.iter_frames():
             result.store.insert_bag_frame(frame)
 
             # Extract deep data from wfAutosarData
-            if frame.topic in _WFA_TOPICS:
-                radar_id = TOPIC_RADAR_ID.get(frame.topic, 0)
+            if frame.topic in wfa_topics:
+                radar_id = topic_radar_id.get(frame.topic, 0)
                 fld = frame.fields
                 frame_id = fld.get("wfa_frame_id", 0)
                 for obj in fld.get("objects", []):
@@ -125,8 +151,8 @@ def load_case_data(
                     })
 
             # Extract full objects from wfObjectMsg (supplementary)
-            elif frame.topic in _WFO_TOPICS:
-                radar_id = TOPIC_RADAR_ID.get(frame.topic, 0)
+            elif frame.topic in wfo_topics:
+                radar_id = topic_radar_id.get(frame.topic, 0)
                 for obj in frame.fields.get("objects", []):
                     obj_rows.append({
                         "timestamp_ns": frame.timestamp_ns,
@@ -172,6 +198,20 @@ def load_case_data(
 
     result.bag_meta = _merge_metas(bag_metas) if bag_metas else None
     result.blf_meta = _merge_metas(blf_metas) if blf_metas else None
+
+    # P1.1: MF4 measurement data
+    mf4_metas: list[dict] = []
+    mf4_available = check_mf4_dependency()
+    for mf in case_dir.glob("*.mf4"):
+        if not mf4_available:
+            status("parse", f"MF4 {mf.name} found but asammdf/mffparser not installed — skipping")
+            break
+        status("parse", f"Parsing {mf.name} (MF4 measurement data)...")
+        parser = Mf4Parser(mf)
+        mf4_metas.append(parser.get_metadata())
+        parser.write_to_store(result.store)
+
+    result.mf4_meta = _merge_metas(mf4_metas) if mf4_metas else None
 
     if result.bag_meta and result.blf_meta:
         blf_start = blf_end = None

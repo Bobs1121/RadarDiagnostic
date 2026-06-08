@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-05-22 (信号链补全完成 + CodeFixEngine 设计待启动)
-> 分支: `refactor/codegraph`
-> 状态: 信号链 READS_SIGNAL/WRITES_SIGNAL 边从 0 → 463，CodeGraph 基础设���完备
+> 更新: 2026-06-08 (v2.0 改造规划完成 — PRD + 实施计划 + GitHub 调研)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — 待创建)
+> 状态: v1 管线已稳定; v2 改造规划已完成，等待启动
 
 ---
 
@@ -141,7 +141,9 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 
 | 文档 | 说明 |
 |------|------|
-| `data-flow-and-architecture-assessment.md` | **数据流完整分析 + 鲁棒性评估 + 实施路线图** |
+| `PRD_refactor_v2.md` | **v2.0 改造 PRD** — 第一性原理架构重构规划 |
+| `IMPLEMENTATION_PLAN_v2.md` | **v2.0 实施规划** — 5 Phase / 30 天实施路线 |
+| `data-flow-and-architecture-assessment.md` | 数据流完整分析 + 鲁棒性评估 + 实施路线图 (v1) |
 | `codegraph-phase2-handoff.md` | CodeGraph Phase 2 交付 |
 | `codegraph-phase1-handoff.md` | CodeGraph Phase 1 交付 |
 | `codegraph-handoff-v2.md` | CodeGraph 完整设计 (schema/query/render) |
@@ -149,18 +151,51 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 
 ---
 
+## v2.0 改造概览 (2026-06-08)
+
+**触发原因**: 第一性原理审计 + GitHub 开源项目调研 (15 个项目)，发现以下结构性问题:
+
+1. **LLM 链路过长**: 8-12 次串行调用 → 目标 5-7 次
+2. **正则解析 C 代码**: 覆盖率有限 → 迁移到 tree-sitter AST 解析
+3. **手写专家面板**: 686 行代码编排 5 专家 3 轮 → 迁移到 LangGraph
+4. **管线步骤过多**: 15+ 步 → 精简到 8 步
+5. **无代码修改能力**: 只能文字建议 → 新增 CodeFixEngine 生成 diff
+6. **无 MF4 支持**: 大量测量数据不可用 → 新增 Mf4Parser
+
+**核心改造方向**:
+
+| 方向 | 技术方案 | 借鉴项目 |
+|------|---------|---------|
+| 代码分析升级 | tree-sitter AST 解析 | tree-sitter/tree-sitter (25.7k star) |
+| 专家面板重构 | LangGraph 状态图编排 | langchain-ai/langgraph (34.1k star) |
+| 数据解析加固 | mffparser (MF4) + topic 自动发现 | — |
+| 代码修复引擎 | coder LLM + CodeGraph 定位 + diff 生成 | — |
+| 时序异常检测 | 可选引入 pyod/adtk | pyod (9.9k star), adtk (1.2k star) |
+| 可视化增强 | 参考 CANviz 交互波形图 | CANviz (260 star) |
+
+**实施路线 (5 Phase / 30 天)**:
+- Phase 1: 基础层加固 (MF4 + topic 发现 + 降级 + 可观测) — 5 天
+- Phase 2: tree-sitter 代码分析 (AST 解析 + CodeGraph + 模式提取) — 10 天
+- Phase 3: LangGraph 专家面板 (状态图 + 节点迁移 + prompt 外部化) — 5 天
+- Phase 4: CodeFixEngine (diff 生成 + 安全审查 + 效果预估) — 5 天
+- Phase 5: 管线精简 (15→8 步) + 记忆简化 (6→3 层) + 回归测试 — 5 天
+
+详见 `docs/PRD_refactor_v2.md` 和 `docs/IMPLEMENTATION_PLAN_v2.md`。
+
+---
+
+## Git 提交历史 (refactor/codegraph)
+
 ## 下次对话从这里开始
 
 1. 读这个 handoff 了解当前状态
-2. 读 `docs/technical/data-flow-and-architecture-assessment.md` 了解数据流分析和架构评估
-3. 读 `docs/technical/codegraph-phase2-handoff.md` 了解 Phase 2 细节
-4. 根据需求池决定下一步工作
+2. 读 `docs/PRD_refactor_v2.md` 了解 v2 改造规划
+3. 读 `docs/IMPLEMENTATION_PLAN_v2.md` 了解实施步骤
+4. 根据需求池/v2 规划决定下一步工作
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- CodeFixEngine 设计 + 实现 (ai/codefix_engine.py) — 将专家面板的文字"修复建议"转化为结构化 diff
-- CodeGraph Phase 3: 专家面板注入 CodeGraph 数据（call chain + var deps + signal mapping）
-- MF4 Parser (parsers/mf4_parser.py)
-- 交互追问模式
+- 启动 v2.0 改造 (Phase 1: MF4 Parser + topic 发现 + 降级策略 + 可观测性)
+- 或继续 v1 迭代 (CodeGraph Phase 3 / CodeFixEngine 设计)
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。

@@ -210,6 +210,28 @@ class FrameStore:
         self.conn.commit()
         return count
 
+    def bulk_insert_can_from_dict(self, frames: list[dict], batch_size: int = 1000) -> int:
+        """Insert CAN frames from dict list (used by Mf4Parser). Returns total count."""
+        count = 0
+        batch = []
+        sql = "INSERT OR IGNORE INTO can_frames (timestamp, datetime_str, channel, can_id, can_id_hex, dlc, message_name, raw_hex, signals_json) VALUES (?,?,?,?,?,?,?,?,?)"
+        for f in frames:
+            batch.append((
+                f["timestamp"], f.get("datetime_str", ""), f.get("channel", 0),
+                f.get("can_id", 0), f.get("can_id_hex", "0x000"),
+                f.get("dlc", 0), f.get("message_name", ""),
+                f.get("raw_hex", ""),
+                json.dumps(f.get("signals", {}), default=str),
+            ))
+            count += 1
+            if len(batch) >= batch_size:
+                self.conn.executemany(sql, batch)
+                batch.clear()
+        if batch:
+            self.conn.executemany(sql, batch)
+        self.conn.commit()
+        return count
+
     # ---- radar_objects bulk insert & query ----
 
     def bulk_insert_radar_objects(self, objects: list[dict], batch_size: int = 500) -> int:

@@ -26,6 +26,8 @@ from .utils import parse_json_from_llm, ALL_FUNCTIONS
 from .context_budget import ContextBudget
 from .data_probe import DataProbe
 from .variable_query_planner import VariableQueryPlanner, render_probe_results_for_prompt
+from .fallback import safe_llm_call, fallback_understand, fallback_expert_panel
+from .observability import StepLogger, TokenTracker, ObservableStatus
 
 
 def _signal_overlap_ok(hint: str, candidate: str, min_ratio: float = 0.45) -> bool:
@@ -104,6 +106,11 @@ class Orchestrator:
             if on_status:
                 on_status(step, detail)
 
+        # P1.4: Observability — wrap status with step logging
+        step_logger = StepLogger()
+        token_tracker = TokenTracker()
+        obs_status = ObservableStatus(on_status, step_logger)
+
         # ── Phase 0: Ensure prerequisites ────────────────────────────────
         status("init", "Checking prerequisites...")
         self._ensure_source_docs(status)
@@ -111,7 +118,14 @@ class Orchestrator:
         # ── Phase 1: Understand the problem ──────────────────────────────
         status("understand", "AI is understanding the problem...")
         session_id = self.memory.create_session(case_dir.name, problem, expected)
-        func_info = self._understand_problem(problem, expected, case_dir)
+        func_info = safe_llm_call(
+            "understand",
+            lambda **kw: self._understand_problem(kw.get("problem", ""), kw.get("expected", ""), kw.get("case_dir")),
+            fallback_kwargs={},
+            problem=problem,
+            expected=expected,
+            case_dir=case_dir,
+        )
         func_name = func_info.get("function", "UNKNOWN")
         self.memory.log_step(session_id, "understand", func_info)
         status("understand", f"Identified function: {func_name}")
@@ -500,10 +514,22 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         status("panel_prompt", budget.format_report())
 
         panel = ExpertPanel(self.router, self.config, self.project_root)
-        panel_result = panel.run_panel(
+        panel_result = safe_llm_call(
+            "expert_panel",
+            lambda **kw: panel.run_panel(
+                problem=kw["problem"],
+                expected=kw["expected"],
+                func_name=kw["func_name"],
+                data_summary=kw["data_summary"],
+                memory_context=kw["memory_context"],
+                on_status=kw["on_status"],
+                fail_type=kw["fail_type"],
+                task_type=kw["task_type"],
+            ),
             problem=problem,
             expected=expected,
             func_name=func_name,
+            evidence=key_facts[:2000],
             data_summary=combined_data,
             memory_context=memory_context,
             on_status=on_status,
@@ -567,6 +593,15 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         status("done", report_path)
 
         store.close()
+
+        # P1.4: Save observability log
+        try:
+            obs_log_path = case_dir / "observability_log.json"
+            step_logger.save(obs_log_path)
+            status("observability", f"Step log saved: {obs_log_path}")
+        except Exception:
+            pass
+
         return report_path
 
     # ── Temporal Pattern Engine runner ─────────────────────────────────

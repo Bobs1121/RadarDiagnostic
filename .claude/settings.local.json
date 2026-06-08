@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(hermes update *)",
+      "Bash(powershell *)",
+      "Bash(pip install *)"
+    ]
+  }
+}

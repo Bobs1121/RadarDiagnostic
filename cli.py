@@ -151,17 +151,19 @@ Examples:
 
     bag_files = list(case_dir.glob("*.bag"))
     blf_files = list(case_dir.glob("*.blf"))
+    mf4_files = list(case_dir.glob("*.mf4"))
 
     console.print(Panel(
         f"[bold]{case_dir.name}[/bold]\n"
         f"BAG: {len(bag_files)} file(s)  {', '.join(f.name for f in bag_files) or '-'}\n"
-        f"BLF: {len(blf_files)} file(s)  {', '.join(f.name for f in blf_files) or '-'}",
+        f"BLF: {len(blf_files)} file(s)  {', '.join(f.name for f in blf_files) or '-'}\n"
+        f"MF4: {len(mf4_files)} file(s)  {', '.join(f.name for f in mf4_files) or '-'}",
         title="Corner Radar Analysis",
         border_style="blue",
     ))
 
-    if not bag_files and not blf_files:
-        console.print("[red]No .bag or .blf files in the case folder![/red]")
+    if not bag_files and not blf_files and not mf4_files:
+        console.print("[red]No .bag, .blf, or .mf4 files in the case folder![/red]")
         sys.exit(1)
 
     # ── Auto-dream (only when case_dir is present, not forced) ──────────
