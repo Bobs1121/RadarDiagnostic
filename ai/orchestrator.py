@@ -100,6 +100,7 @@ class Orchestrator:
           Phase 3.6 — External suppression signal check
           Phase 3.7 — Output signal analysis
           Phase 4   — Expert panel diagnosis
+          Phase 4.5 — CodeFixEngine: generate unified diffs for fixes     [NEW]
           Phase 5   — Report + memory
         """
         def status(step, detail=""):
@@ -575,6 +576,23 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             render_what_if_markdown(whatif_entries) if whatif_entries else ""
         )
 
+        # ── Phase 4.5: CodeFixEngine — generate actionable code diffs ───
+        fix_report_md = ""
+        try:
+            status("code_fix", "Generating code fix suggestions...")
+            fix_report_md = self._generate_code_fix(
+                problem=problem,
+                diagnosis=diagnosis,
+                func_name=func_name,
+                status=status,
+            )
+            if fix_report_md:
+                status("code_fix", "Code fix generated successfully")
+            else:
+                status("code_fix", "No actionable code fix generated")
+        except Exception as exc:
+            status("code_fix", f"Code fix generation failed: {exc}")
+
         # ── Phase 5: Generate report & update memory ─────────────────────
         status("report", "Generating report...")
         report_path = self._save_report(
@@ -583,6 +601,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             task_type=task_type,
             param_report_md=param_section_md,
             whatif_md=whatif_md,
+            fix_report_md=fix_report_md,
         )
 
         expert_appendix_path = case_dir / "expert_opinions.md"
@@ -1412,6 +1431,41 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             import logging
             logging.getLogger(__name__).debug("CodeGraph build error (non-fatal): %s", e)
 
+    def _generate_code_fix(self, problem, diagnosis, func_name, status):
+        """
+        Phase 4.5 — CodeFixEngine: generate actionable unified diffs
+        from expert panel verdict.
+
+        Returns markdown string for report appendix (empty on failure).
+        """
+        try:
+            from .code_fix_engine import generate_fix, render_fix_report_markdown
+        except ImportError as e:
+            status("code_fix", f"CodeFixEngine unavailable: {e}")
+            return ""
+
+        cg_path = self.project_root / "memory" / "codegraph.db"
+        if not cg_path.exists():
+            status("code_fix", "CodeGraph DB not found; skipping code fix generation")
+            return ""
+
+        source_root = self.config.get("paths", {}).get("source_code", "")
+        if not source_root:
+            status("code_fix", "source_code path not configured; skipping")
+            return ""
+
+        fix_result = generate_fix(
+            problem=problem,
+            diagnosis=diagnosis,
+            func_name=func_name,
+            codegraph_db_path=cg_path,
+            source_root=source_root,
+            router=self.router,
+            on_status=status,
+        )
+
+        return render_fix_report_markdown(fix_result)
+
     def _understand_problem(self, problem: str, expected: str, case_dir: Path) -> dict:
         memory_context = self.memory.build_context_for_diagnosis("UNKNOWN", problem, case_dir)
 
@@ -1550,7 +1604,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                      func_name, bag_meta, blf_meta, windows,
                      task_type: str = "diagnose",
                      param_report_md: str = "",
-                     whatif_md: str = "") -> str:
+                     whatif_md: str = "",
+                     fix_report_md: str = "") -> str:
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         title_map = {
@@ -1594,6 +1649,9 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 trailer += param_report_md + "\n\n"
             if whatif_md:
                 trailer += "## 附录 B — What-if 评估(与输入提案一一对应)\n\n" + whatif_md + "\n"
+
+        if fix_report_md:
+            trailer += "\n---\n\n" + fix_report_md + "\n"
 
         report_path = case_dir / "report.md"
         report_path.write_text(
