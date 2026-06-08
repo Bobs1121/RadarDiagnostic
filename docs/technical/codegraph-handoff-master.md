@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-06-08 (v2.0 Phase 1 完成 — MF4 stub + topic 自动发现 + fallback + 可观测性)
-> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1 已完成)
-> 状态: v1 管线已稳定; v2 Phase 1 完成，准备启动 Phase 2
+> 更新: 2026-06-08 (v2.0 Phase 2 P2.1+P2.2 完成 — tree-sitter AST 解析器 + AST Builder)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2 部分完成)
+> 状态: v2 Phase 1 完成; Phase 2 AST 基础设施完成，待集成 CodeGraph Builder
 
 ---
 
@@ -44,11 +44,14 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 | **v2 Phase 1: Topic 自动发现** | ✅ | `discover_radar_topics()` |
 | **v2 Phase 1: 降级策略** | ✅ | `safe_llm_call` + 6 个 fallback |
 | **v2 Phase 1: 可观测性** | ✅ | `StepLogger` + `observability_log.json` |
+| **v2 Phase 2: AST Parser** | ✅ | `ast_parser.py` — tree-sitter C 解析 wrapper (0.21.3) |
+| **v2 Phase 2: AST Builder** | ✅ | `ast_builder.py` — AST → CodeGraph 节点/边转换器 |
 
 ### 🔧 进行中 / 待优化
 
 | 项目 | 优先级 | 说明 |
 |------|--------|------|
+| AST Parser → CodeGraph 集成 | P1 | `ast_builder.py` 已写好但尚未替换 `builder.py` 中的正则分析器 |
 | CodeGraph Phase 3 | P1 | 专家面板注入 + 信号链追踪 |
 | 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
 | State Machine (Phase 6) | P2 | 状态转换正则未匹配 |
@@ -115,14 +118,26 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 - coder 响应慢 (13 tok/s)，需要控制 token 量
 - 编码任务不需要 thinking 模式
 
-### ADR-004: Regex 而非 AST 解析器
+### ADR-004: tree-sitter AST 替代正则 (原 Regex 而非 AST)
 
-**决策**: 初始阶段用正则表达式提取 C 代码模式，不用 Clang/GCC AST。
+**决策**: v2.0 阶段使用 tree-sitter (0.21.3) + tree-sitter-c (0.21.4) 解析 C 代码，替代正则表达式。
+`ast_parser.py` + `ast_builder.py` 提供 AST → CodeGraph 节点的完整转换链路。
 
 **理由**:
-- 速度快（18 文件 6 秒 vs AST 可能几分钟）
-- 量产代码结构相对规范，正则有足够覆盖率
-- 后续可逐步加 AST 精化
+- 正则在复杂嵌套括号、多层指针声明、宏调用场景下准确率不足
+- tree-sitter 提供精确的语法树，函数/结构体/调用/宏展开均可准确定位
+- 速度可接受（单个文件 < 10ms）
+- tree-sitter 0.24+ PyCapsule 与 Python 绑定不兼容，0.21.3 + 0.21.4 是唯一稳定组合
+
+**实现**:
+- `ai/codegraph/ast_parser.py`: CParser 类 — 9 个提取器 (functions, includes, structs, macros, variables, calls, signals, states, var_writes)
+- `ai/codegraph/ast_builder.py`: ASTBuilder 类 — 将 AST 结果转换为 CodeGraph 节点/边 dict
+- 两个模块完全独立于现有 `analyzer.py`，可随时开关
+
+**注意事项**:
+- `ai/__init__.py` 导入链依赖 `openai.OpenAI`，测试时需 mock
+- `_walk_subtree` 使用 `node.walk()` API (0.21.x)，与 0.24+ 的 `TreeCursor` 不兼容
+- `function_declarator` 类型在 0.21.x 中独立于 `declarator`，需要分别处理
 
 ---
 
@@ -192,6 +207,8 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 
 ```
 a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + fallback + observability
+(未提交) ast_parser.py: tree-sitter C AST 解析器 (9 个提取器)
+(未提交) ast_builder.py: AST → CodeGraph 节点/边转换器
 ```
 
 (基于 refactor/codegraph: 0667f3d)
@@ -207,12 +224,19 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- 启动 v2.0 改造 Phase 2: tree-sitter 代码分析 (AST 解析 + CodeGraph + 模式提取) — 10 天
+- **P2.3**: 将 `ast_builder.py` 集成到 `builder.py` — 用 AST 结果替换正则分析器的 phase 1-7, 9-10
+- **P2.4**: 在真实项目 (BYD_OVS_CB / GWM_B26) 上对比 AST vs 正则的准确率
 - 或继续 v1 迭代 (CodeGraph Phase 3 / CodeFixEngine 设计)
 
 **Phase 1 遗留问题**:
 - MF4 Parser 需要 asammdf 或 mffparser 依赖库 (当前网络环境不可用)
 - 安装依赖后需要补全 _parse_mf4_metadata / _parse_mf4_frames 实现
 - observability 的 TokenTracker 已在 orchestrator 创建但未注入 model_router，后续需联动
+
+**Phase 2 新发现**:
+- tree-sitter 0.24+ 版本 (PyCapsule) 与 0.21.x (Language 对象) API 不兼容，已锁定 0.21.3 + 0.21.4
+- `ast_parser.py` 已实现 9 个提取器，全部通过单元测试
+- `ast_builder.py` 可独立运行，输出与现有 `CodeGraphBuilder` 兼容的 dict 格式
+- 下一步需要在 `builder.py` 中增加 `use_ast=True` 开关，用 `ASTBuilder` 替代 `analyzer.py` 的正则分析
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。

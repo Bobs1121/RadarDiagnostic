@@ -22,6 +22,13 @@ from typing import Optional
 from . import analyzer
 from .schema import INIT_SQL, SCHEMA_VERSION
 
+try:
+    from .ast_builder import ASTBuilder
+    AST_AVAILABLE = True
+except ImportError:
+    AST_AVAILABLE = False
+    ASTBuilder = None  # type: ignore
+
 log = logging.getLogger(__name__)
 
 
@@ -62,13 +69,20 @@ class CodeGraphBuilder:
         key_files: list[str],
         func_keywords: dict[str, list[str]],
         calib_files: Optional[list[str]] = None,
+        use_ast: bool = False,
     ):
         self.db_path = Path(db_path)
         self.source_root = Path(source_root)
         self.key_files = key_files
         self.func_keywords = func_keywords
         self.calib_files = calib_files or []
+        self.use_ast = use_ast and AST_AVAILABLE
         self.conn: Optional[sqlite3.Connection] = None
+        self._ast_results_by_file: dict = {}
+
+        if self.use_ast and not AST_AVAILABLE:
+            log.warning("CodeGraph: use_ast=True but tree-sitter not installed; falling back to regex")
+            self.use_ast = False
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -97,10 +111,13 @@ class CodeGraphBuilder:
                 return result
 
             # Collect all function names for cross-reference
-            all_functions = self._extract_all_functions(file_infos)
-            known_func_names = set()
-            for _, fns in all_functions:
-                known_func_names.update(f["name"] for f in fns)
+            if self.use_ast:
+                all_functions, known_func_names = self._ast_extract_all(file_infos)
+            else:
+                all_functions = self._extract_all_functions(file_infos)
+                known_func_names = set()
+                for _, fns in all_functions:
+                    known_func_names.update(f["name"] for f in fns)
 
             # Clear old data for changed files
             changed_files = [f["file_path"] for f in changed]
@@ -140,13 +157,21 @@ class CodeGraphBuilder:
             result.edges_added += len(states)
 
             # Phase 7: Module Binding
-            all_func_list = []
-            for fi, fns in all_functions:
-                for f in fns:
-                    f["file_path"] = fi["file_path"]
-                all_func_list.extend(fns)
-            bindings = analyzer.phase7_module_binding(all_func_list, self.func_keywords)
-            edge_count = self._insert_module_binding_edges(bindings)
+            if self.use_ast and hasattr(self, '_ast_results_by_file'):
+                # AST mode: use extracted bindings
+                all_bindings = []
+                for ar in self._ast_results_by_file.values():
+                    for b in ar.bindings:
+                        all_bindings.append(b)
+                edge_count = self._insert_module_binding_edges(all_bindings)
+            else:
+                all_func_list = []
+                for fi, fns in all_functions:
+                    for f in fns:
+                        f["file_path"] = fi["file_path"]
+                    all_func_list.extend(fns)
+                bindings = analyzer.phase7_module_binding(all_func_list, self.func_keywords)
+                edge_count = self._insert_module_binding_edges(bindings)
             result.edges_added += edge_count
 
             # Phase 10: Behaviour Patterns (label edges)
@@ -260,6 +285,49 @@ class CodeGraphBuilder:
 
     # ── Internal: Extract & Insert ──────────────────────────────────────
 
+    def _ast_extract_all(self, file_infos: list[dict]) -> tuple[list[tuple], set[str]]:
+        """AST-based extraction using ASTBuilder. Returns (all_functions, known_func_names).
+        
+        Replaces phases 2-7, 9 with tree-sitter AST traversal.
+        Phases 4 (variable access on known vars) and 10 (behaviour patterns) still
+        use analyzer.py because they depend on known_variable sets and regex patterns.
+        """
+        ast_builder = ASTBuilder(
+            func_keywords=self.func_keywords,
+        )
+        
+        # Build all files through AST
+        files_to_build = [
+            (Path(fi["full_path"]), fi["file_path"])
+            for fi in file_infos
+            if fi["exists"]
+        ]
+        ast_results = ast_builder.build_files(files_to_build)
+        
+        # Convert to (file_info, [function_dicts]) format matching _insert_function_nodes
+        all_functions = []
+        known_func_names = set()
+        
+        # Create a lookup for file_infos
+        fi_map = {fi["file_path"]: fi for fi in file_infos}
+        
+        for ar in ast_results:
+            fi = fi_map.get(ar.file_path)
+            if not fi:
+                continue
+            
+            funcs = ar.functions
+            known_func_names.update(f["name"] for f in funcs)
+            all_functions.append((fi, funcs))
+        
+        # Store AST results on self so other methods can access them
+        self._ast_results_by_file = {ar.file_path: ar for ar in ast_results}
+        
+        log.info("CodeGraph AST: extracted %d functions across %d files",
+                 len(known_func_names), len(ast_results))
+        
+        return all_functions, known_func_names
+
     def _extract_all_functions(self, file_infos: list[dict]) -> list[tuple]:
         """Return list of (file_info, [function_dicts])."""
         results = []
@@ -321,6 +389,17 @@ class CodeGraphBuilder:
         return count
 
     def _extract_all_calls(self, all_functions: list[tuple], known_funcs: set[str]) -> list[dict]:
+        # AST mode: use stored AST results directly
+        if self.use_ast and hasattr(self, '_ast_results_by_file'):
+            calls = []
+            for ar in self._ast_results_by_file.values():
+                # Filter to known functions only
+                for c in ar.calls:
+                    if c["callee"] in known_funcs:
+                        calls.append(c)
+            return calls
+        
+        # Regex mode: use analyzer
         calls = []
         for fi, fns in all_functions:
             if not fi["exists"]:
@@ -419,6 +498,15 @@ class CodeGraphBuilder:
         return count
 
     def _extract_all_signals(self, all_functions: list[tuple]) -> list[dict]:
+        # AST mode: use stored results
+        if self.use_ast and hasattr(self, '_ast_results_by_file'):
+            signals = []
+            for ar in self._ast_results_by_file.values():
+                for s in ar.signals:
+                    signals.append(s)
+            return signals
+        
+        # Regex mode
         signals = []
         for fi, fns in all_functions:
             if not fi["exists"]:
@@ -472,6 +560,15 @@ class CodeGraphBuilder:
         return count
 
     def _extract_all_states(self, all_functions: list[tuple]) -> list[dict]:
+        # AST mode: use stored results
+        if self.use_ast and hasattr(self, '_ast_results_by_file'):
+            states = []
+            for ar in self._ast_results_by_file.values():
+                for s in ar.states:
+                    states.append(s)
+            return states
+        
+        # Regex mode
         states = []
         for fi, fns in all_functions:
             if not fi["exists"]:
@@ -526,6 +623,29 @@ class CodeGraphBuilder:
 
     def _insert_calibration_params(self, file_infos: list[dict]):
         """Extract and insert calibration parameters from header files."""
+        # AST mode: use stored results
+        if self.use_ast and hasattr(self, '_ast_results_by_file'):
+            calib_paths = [normalize_path(c) for c in self.calib_files]
+            for fi in file_infos:
+                fp = fi["file_path"]
+                if not fi["exists"] or fp not in calib_paths:
+                    continue
+                ar = self._ast_results_by_file.get(fp)
+                if not ar:
+                    continue
+                for p in ar.calibration_params:
+                    node_id = f"CALIB_PARAM:{p['name']}"
+                    self.conn.execute(
+                        """INSERT OR REPLACE INTO nodes
+                           (id, type, name, value, line, defined_in, source_hash)
+                           VALUES (?,?,?,?,?,?,?)""",
+                        (node_id, "CALIB_PARAM", p["name"], p["value"],
+                         p["line"], p["source_file"], fi["hash"]),
+                    )
+            self.conn.commit()
+            return
+        
+        # Regex mode
         calib_paths = [normalize_path(c) for c in self.calib_files]
         for fi in file_infos:
             if not fi["exists"] or fi["file_path"] not in calib_paths:
