@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-06-08 (v2.0 Phase 2 P2.1+P2.2 完成 — tree-sitter AST 解析器 + AST Builder)
-> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2 部分完成)
-> 状态: v2 Phase 1 完成; Phase 2 AST 基础设施完成，待集成 CodeGraph Builder
+> 更新: 2026-06-08 (CodeGraph Phase 3 完成 — 专家面板注入结构化代码上下文)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+CodeGraph Phase 3 完成)
+> 状态: v2 Phase 1+2 完成; CodeGraph Phase 3 专家面板注入完成
 
 ---
 
@@ -45,18 +45,18 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 | **v2 Phase 1: 降级策略** | ✅ | `safe_llm_call` + 6 个 fallback |
 | **v2 Phase 1: 可观测性** | ✅ | `StepLogger` + `observability_log.json` |
 | **v2 Phase 2: AST Parser** | ✅ | `ast_parser.py` — tree-sitter C 解析 wrapper (0.21.3) |
-| **v2 Phase 2: AST Builder** | ✅ | `ast_builder.py` — AST → CodeGraph 节点/边转换器 |
+|| **v2 Phase 2: AST Builder** | ✅ | `ast_builder.py` — AST → CodeGraph 节点/边转换器 |
+|| **CodeGraph Phase 3** | ✅ | 专家面板 prompt 注入 CodeGraph 结构化上下文 (orchestrator ContextBudget) |
 
 ### 🔧 进行中 / 待优化
 
 | 项目 | 优先级 | 说明 |
 |------|--------|------|
-| AST Parser → CodeGraph 集成 | ✅ | `ast_builder.py` 已集成，use_ast=True 验证通过 (P2.4 benchmark 完成) |
-| CodeGraph Phase 3 | P1 | 专家面板注入 + 信号链追踪 |
-| 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
+|| AST Parser → CodeGraph 集成 | ✅ | `ast_builder.py` 已集成，use_ast=True 验证通过 (P2.4 benchmark 完成) |
+|| 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
 | State Machine (Phase 6) | P2 | 状态转换正则未匹配 |
 | 变量 false positives | P2 | 797 变量含普通局部变量 |
-| 专家面板 CodeGraph 集成 | P1 | prompt 注入 call chain + var deps |
+| 专家面板 CodeGraph 集成 | ✅ | ContextBudget 注入 render_for_expert_panel (priority=72, max 10000 chars) |
 | CodeGraph prompt token 预算 | P2 | 动态调整 3000 chars |
 
 ---
@@ -67,7 +67,7 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 
 1. ~~**信号链追踪**: BLF signal → RteLite declaration → C code usage 完整链路。~~ **✅ 已修复** — 新增 `_RTE_MAPPING_READ_RE` / `_RTE_MAPPING_WRITE_RE` 正则匹配 `RteComMapping_ReadSignal/WriteSignal` 宏调用。SIGNAL 节点 240 → 426, READS_SIGNAL 0 → 140, WRITES_SIGNAL 0 → 323。
 
-2. **专家面板用 CodeGraph**: 目前 5 个专家只看 textual evidence。需要注入结构化代码关系（函数调用链、变量依赖、信号映射），让根因分析更精确。
+2. ~~**专家面板用 CodeGraph**: 目前 5 个专家只看 textual evidence。需要注入结构化代码关系（函数调用链、变量依赖、信号映射），让根因分析更精确。~~ **✅ 已完成** — orchestrator ContextBudget 新增 `codegraph` section (priority=72, max 10000 chars)，调用 `CodeGraphRenderer.render_for_expert_panel()` 注入模块结构、校准参数、跨模块共享函数/信号、行为模式。
 
 3. **Prompt token 优化**: CodeGraph context 目前固定 3000 chars，需要按总预算动态调整（context_budget 已有但没和 CodeGraph 联动）。
 
@@ -206,6 +206,7 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 ## Git 提交历史 (refactor/v2)
 
 ```
+98b8b75 feat(codegraph): inject CodeGraph structured context into Expert Panel prompt
 0fb5284 docs: update handoff with P2.3 completion status
 f949baa feat(codegraph): integrate tree-sitter AST builder into builder.py (Plan A)
 a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + fallback + observability
@@ -213,9 +214,8 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 
 (基于 refactor/codegraph: 0667f3d)
 
-**未提交修改** (2026-06-08):
-- `ai/codegraph/ast_parser.py`: `_walk_subtree` 改为迭代栈 + `_find_descendant` 优化
-- `ai/codegraph/ast_builder.py`: `_build_func_index` + `_build_line_to_func_index` 避免 O(N×M) 遍历；添加 `tree_sitter` import
+**未提交修改** (handoff 文档更新待提交):
+- `docs/technical/codegraph-handoff-master.md`: CodeGraph Phase 3 完成状态记录
 
 ---
 
@@ -230,7 +230,8 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 **下一步工作**:
 - **Phase 3 (LangGraph 专家面板)**: 迁移 5 专家 3 轮辩论到 LangGraph 状态图
 - **Phase 4 (CodeFixEngine)**: diff 生成 + 安全审查 + 效果预估
-- 或继续 v1 迭代 (CodeGraph Phase 3 — 专家面板注入 CodeGraph 数据)
+- **CodeGraph Phase 3 验证**: 跑一个真实案例，确认专家面板输出质量提升
+- 或继续 v1 迭代 (CodeGraph prompt token 预算动态调整)
 
 **Phase 1 遗留问题**:
 - MF4 Parser 需要 asammdf 或 mffparser 依赖库 (当前网络环境不可用)
@@ -253,5 +254,14 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
   - 关键优化: `_build_func_index` + `_build_line_to_func_index` 避免 O(N×M) 遍历，从 120s+ 超时降至 0.98s/文件
   - `_walk_subtree` 从递归改为迭代栈，避免 Python 递归深度限制
 - tree-sitter 0.24+ 版本 (PyCapsule) 与 0.21.x (Language 对象) API 不兼容，已锁定 0.21.3 + 0.21.4
+
+**CodeGraph Phase 3 进度 (2026-06-08)**:
+- P3.1 ✓ 完成 — 专家面板 prompt 注入 CodeGraph 结构化上下文
+  - 注入点: `orchestrator.py` ContextBudget 组装区 (line 377-408)
+  - 调用: `CodeGraphRenderer.render_for_expert_panel(module=func_name, problem_desc=problem, max_chars=10000)`
+  - ContextBudget 优先级: priority=72 (介于 params=70 和 timeline=60 之间)
+  - 内容包含: 模块函数/信号/调用链 + 校准参数 + 跨模块共享函数/信号 + 构建信息 + 行为模式
+  - 失败策略: `try/except` 静默降级，无 CodeGraph DB 时不影响诊断流程
+  - 已有但未使用的渲染方法: `render_for_conditions` (render.py:226-294) — 可考虑条件提取阶段使用
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
