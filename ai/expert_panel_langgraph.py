@@ -40,6 +40,78 @@ from langgraph.graph import StateGraph, END
 from .model_router import ModelRouter
 from .utils import parse_json_from_llm
 
+# ── Prompt Loader ────────────────────────────────────────────────────────
+# All prompts are loaded from prompts/expert_panel/*.md at runtime.
+# If the file is missing, the old hardcoded values are used as fallback.
+
+def _load_prompts():
+    """Lazy-load prompts from external .md files; fall back to hardcoded values."""
+    try:
+        from prompts.expert_panel.loader import (
+            load_expert_system,
+            load_moderator_system,
+            load_task_header,
+            load_expert_analyze_prompt,
+            load_expert_respond_prompt,
+            load_moderator_challenge_prompt,
+            load_moderator_synthesize_prompt,
+            load_retry_strict_json,
+        )
+        return (
+            load_expert_system,
+            load_moderator_system,
+            load_task_header,
+            load_expert_analyze_prompt,
+            load_expert_respond_prompt,
+            load_moderator_challenge_prompt,
+            load_moderator_synthesize_prompt,
+            load_retry_strict_json,
+        )
+    except Exception:
+        return (None, None, None, None, None, None, None, None)
+
+
+(
+    _load_expert_system,
+    _load_moderator_system,
+    _load_task_header,
+    _load_expert_analyze_prompt,
+    _load_expert_respond_prompt,
+    _load_moderator_challenge_prompt,
+    _load_moderator_synthesize_prompt,
+    _load_retry_strict_json,
+) = _load_prompts()
+
+
+def _get_expert_system(expert_id: str, hardcoded: str) -> str:
+    """Load expert system prompt from file, falling back to hardcoded value."""
+    if _load_expert_system is not None:
+        try:
+            return _load_expert_system(expert_id)
+        except Exception:
+            pass
+    return hardcoded
+
+
+def _get_moderator_system(hardcoded: str) -> str:
+    """Load moderator system prompt from file, falling back to hardcoded value."""
+    if _load_moderator_system is not None:
+        try:
+            return _load_moderator_system()
+        except Exception:
+            pass
+    return hardcoded
+
+
+def _get_task_header(task: str, hardcoded_map: dict) -> str:
+    """Load task header from file, falling back to hardcoded map."""
+    if _load_task_header is not None:
+        try:
+            return _load_task_header(task)
+        except Exception:
+            pass
+    return hardcoded_map.get(task, hardcoded_map.get("diagnose", ""))
+
 
 # ── State Definition ─────────────────────────────────────────────────────
 
@@ -549,7 +621,15 @@ class ExpertPanelLangGraph:
     ) -> str:
         """Single expert's independent analysis."""
         src = source_code[:MAX_SOURCE_CHARS_R1]
-        prompt = f"""## 问题与数据
+        system = _get_expert_system(expert_id, expert_def["system"])
+        prompt = None
+        if _load_expert_analyze_prompt is not None:
+            try:
+                prompt = _load_expert_analyze_prompt(case_context, src, expert_def["domain"])
+            except Exception:
+                pass
+        if prompt is None:
+            prompt = f"""## 问题与数据
 {case_context}
 
 ## 源码
@@ -591,7 +671,7 @@ class ExpertPanelLangGraph:
 **需确认**: 需要其他专家验证的点(一句话)"""
 
         think = self._thinking == "full"
-        result = self.router.complex(prompt, system=expert_def["system"], thinking=think)
+        result = self.router.complex(prompt, system=system, thinking=think)
         return result.get("content", f"({expert_def['name']} 分析失败)")
 
     def _expert_respond(
@@ -600,7 +680,16 @@ class ExpertPanelLangGraph:
         my_analysis: str, question: str, all_opinions: str,
     ) -> str:
         """Expert responds to moderator challenge."""
-        prompt = f"""## 追问
+        system = _get_expert_system(expert_id, expert_def["system"])
+        sc = source_code[:MAX_SOURCE_CHARS_R2]
+        prompt = None
+        if _load_expert_respond_prompt is not None:
+            try:
+                prompt = _load_expert_respond_prompt(question, all_opinions[:12000], my_analysis[:6000], sc)
+            except Exception:
+                pass
+        if prompt is None:
+            prompt = f"""## 追问
 {question}
 
 ## 其他专家发现
@@ -610,13 +699,13 @@ class ExpertPanelLangGraph:
 {my_analysis[:6000]}
 
 ## 源码
-{source_code[:MAX_SOURCE_CHARS_R2]}
+{sc}
 
 ---
 简洁回答追问，修正之前的错误(如有)。必须引用具体数值。不超过500字。"""
 
         think = self._thinking == "full"
-        result = self.router.complex(prompt, system=expert_def["system"], thinking=think)
+        result = self.router.complex(prompt, system=system, thinking=think)
         return result.get("content", "(回应失败)")
 
     # ── Moderator Operations ────────────────────────────────────────────
@@ -629,8 +718,17 @@ class ExpertPanelLangGraph:
             f'"{eid}": "追问内容(空字符串表示无追问)"' for eid in expert_ids
         )
         panel_hint = "、".join(expert_ids) if expert_ids else "各"
-        prompt = f"""## 问题
-{case_context[:8000]}
+        cc = case_context[:8000]
+        mod_system = _get_moderator_system(MODERATOR_SYSTEM)
+        prompt = None
+        if _load_moderator_challenge_prompt is not None:
+            try:
+                prompt = _load_moderator_challenge_prompt(cc, all_opinions, len(expert_ids), panel_hint, questions_template)
+            except Exception:
+                pass
+        if prompt is None:
+            prompt = f"""## 问题
+{cc}
 
 ## 本轮参与的专家（{len(expert_ids)}位）的独立分析
 {all_opinions}
@@ -655,7 +753,7 @@ class ExpertPanelLangGraph:
 }}"""
 
         think = self._thinking == "full"
-        result = self.router.complex(prompt, system=MODERATOR_SYSTEM, thinking=think)
+        result = self.router.complex(prompt, system=mod_system, thinking=think)
 
         fallback_payload = {
             "contradictions": [],
@@ -672,13 +770,20 @@ class ExpertPanelLangGraph:
 
         # Retry once if parse failed
         if parsed.get("gaps") == ["Parsing failed"]:
-            strict_prompt = (
-                "【CRITICAL】你的整个回复必须是一个合法 JSON 对象。"
-                "禁止输出任何解释文字、Markdown 代码块或 <think> 标签。"
-                "回复以 `{` 开头、以 `}` 结尾，中间严格为合法 JSON。\n\n"
-                + prompt
-            )
-            result = self.router.complex(strict_prompt, system=MODERATOR_SYSTEM, thinking=False)
+            strict_prefix = ""
+            if _load_retry_strict_json is not None:
+                try:
+                    strict_prefix = _load_retry_strict_json() + "\n\n"
+                except Exception:
+                    pass
+            if not strict_prefix:
+                strict_prefix = (
+                    "【CRITICAL】你的整个回复必须是一个合法 JSON 对象。"
+                    "禁止输出任何解释文字、Markdown 代码块或 <think> 标签。"
+                    "回复以 `{` 开头、以 `}` 结尾，中间严格为合法 JSON。\n\n"
+                )
+            strict_prompt = strict_prefix + prompt
+            result = self.router.complex(strict_prompt, system=mod_system, thinking=False)
             parsed = parse_json_from_llm(
                 result.get("content", ""),
                 fallback={**fallback_payload, "gaps": ["Parsing failed (after retry)"]},
@@ -693,15 +798,27 @@ class ExpertPanelLangGraph:
         self, case_context: str, all_opinions: str, challenges: dict,
     ) -> tuple[str, float]:
         """Round 3: Moderator synthesizes into final verdict."""
-        prompt = f"""## 问题
-{case_context[:8000]}
+        mod_system = _get_moderator_system(MODERATOR_SYSTEM)
+        cc = case_context[:8000]
+        ao = all_opinions[:30000]
+        contradictions = challenges.get("contradictions", [])
+        gaps = challenges.get("gaps", [])
+        prompt = None
+        if _load_moderator_synthesize_prompt is not None:
+            try:
+                prompt = _load_moderator_synthesize_prompt(cc, ao, contradictions, gaps)
+            except Exception:
+                pass
+        if prompt is None:
+            prompt = f"""## 问题
+{cc}
 
 ## 全部专家分析
-{all_opinions[:30000]}
+{ao}
 
 ## 审查结果
-矛盾: {json.dumps(challenges.get('contradictions', []), ensure_ascii=False)}
-遗漏: {json.dumps(challenges.get('gaps', []), ensure_ascii=False)}
+矛盾: {json.dumps(contradictions, ensure_ascii=False)}
+遗漏: {json.dumps(gaps, ensure_ascii=False)}
 
 ---
 
@@ -755,7 +872,7 @@ CAN信号→内部变量→判断条件→结果 (一条链路一行)
 一句话说明不确定因素"""
 
         think = self._thinking in ("synth", "full")
-        result = self.router.complex(prompt, system=MODERATOR_SYSTEM, thinking=think)
+        result = self.router.complex(prompt, system=mod_system, thinking=think)
         content = result.get("content", "Final synthesis failed.")
 
         # Extract confidence from output
@@ -810,6 +927,11 @@ CAN信号→内部变量→判断条件→结果 (一条链路一行)
             parts.append(f"## 数据与条件\n{data_summary[:20000]}")
         if memory_context:
             parts.append(f"## 历史记忆\n{memory_context[:5000]}")
+
+        # Use loader for task header if available; fall back to hardcoded map
+        task_header = _get_task_header(task_type, task_header_map)
+        parts[0] = task_header
+
         return "\n\n".join(parts)
 
     def _load_expert_sources(self, expert_def: dict) -> str:
