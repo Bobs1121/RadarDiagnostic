@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-06-09 (v2 Phase 1+2+3 全部完成 — 包括 LangGraph 专家面板集成 + Prompt 外部化)
-> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+3 完成)
-> 状态: v2 Phase 1+2+3 完成; Phase 4 CodeFixEngine 待开始
+> 更新: 2026-06-09 (v2 Phase 1+2+3+4 全部完成 — E2E 验证通过)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+3+4 完成)
+> 状态: v2 Phase 1-4 完成; Phase 5 (管线精简) 待开始
 
 ---
 
@@ -56,10 +56,9 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 || 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
 | State Machine (Phase 6 / P2.4) | ✅ | `state_machine_extractor.py` 已完成 — switch-case 和 if-elif 双检测器 |
 | 变量 false positives | P2 | 797 变量含普通局部变量 |
-|| 专家面板 LangGraph (P3.1) | ✅ | `expert_panel_langgraph.py` — StateGraph + 5专家并行 + moderator 3轮 |
-|| Orchestrator 集成 (P3.2) | ✅ | `orchestrator.py` 切换导入 LangGraph 版本，兼容 run_panel/select_experts 接口 |
-|| Prompt 外部化 (P3.4) | ✅ | `prompts/expert_panel/` — 12个 .md 文件 + loader.py，代码 fallback hardcoded |
-|| 专家面板 CodeGraph 集成 | ✅ | ContextBudget 注入 render_for_expert_panel (priority=72, max 10000 chars) |
+||| **LangGraph 专家面板 (P3.1-P3.4 全部完成)** | ✅ | 详见下方 Phase 3 进度 |
+||| 专家面板 CodeGraph 集成 | ✅ | ContextBudget 注入 render_for_expert_panel (priority=72, max 10000 chars) |
+|| **CodeFixEngine (Phase 4.5)** | ✅ | `code_fix_engine.py` — diff 生成 + 安全审查 + 效果预估 |
 | CodeGraph prompt token 预算 | P2 | 动态调整 3000 chars |
 
 ---
@@ -89,6 +88,59 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 8. **CodeGraph Web UI**: 交互式图谱浏览（D3 / cytoscape）。
 
 9. **自动测试覆盖**: CodeGraph analyzer 的 10 个 phase 都需要单元测试。
+
+---
+
+## Phase 4: CodeFixEngine (2026-06-09) — ✅ 完成
+
+**提交**: `c2a2c96` feat: CodeFixEngine — Phase 4.5, generate unified diffs from expert verdict
+**新模块**: `ai/code_fix_engine.py` (811 行)
+**管线集成**: `orchestrator.py` Phase 4.5 (expert panel → codefix → report)
+
+**架构流程**:
+1. **解析专家结论**: 从 `final_verdict` 提取 "### 修复建议" 段落 + `file:line` 定位
+2. **CodeGraph 精确定位**: CodeGraph DB 将模糊文件名 → 完整 `file_path`，读取源代码上下文（前后 20 行）
+3. **Diff 生成**: `model_router.complex()` (coder route: `qwen3-coder:30b`) 生成 unified diff
+4. **安全审查**: LLM 审查 MISRA C/AUTOSAR 规则（缓冲区溢出、空指针、整数溢出、类型安全等）
+5. **语法验证**: `clang -fsyntax-only` 检查 C 语法（clang 不存在时 graceful skip）
+6. **效果预估**: LLM 评估修复预期效果、影响范围、风险、置信度
+
+**输出**: `FixResult` dataclass → `render_fix_report_markdown()` → 报告附录
+
+**降级策略**:
+- CodeGraph DB 不存在 → 在 `source_root` 目录树中递归搜索文件
+- 未找到代码位置 → 返回文字建议（无 diff）
+- `clang` 不可用 → 语法检查标记为 "skipped"
+- 任何步骤异常 → 静默降级，不影响主诊断流程
+
+**数据模型**:
+- `FixLocation`: file_path, start_line, end_line, function_name, context
+- `SafetyIssue`: severity (critical/warning/info), category, description, line
+- `FixResult`: success, fix_suggestions, locations, diffs, safety_issues, syntax_check, effect_estimate, error
+
+---
+
+## 环境配置 (2026-06-09)
+
+**运行依赖**:
+- Python 3.12.10
+- `openai` 2.41.0 (vLLM 兼容客户端)
+- `langgraph` 1.2.4 (专家面板)
+- `tree-sitter` 0.21.3 + `tree-sitter-c` 0.21.4 (AST 解析)
+- `rosbags` 0.11.3 (BAG 解析)
+- `python-can` + `cantools` (BLF/DBC 解析)
+- `python-dotenv` (CLI 环境变量加载)
+
+**模型端点**:
+- 推理: Qwen3.5-27B-FP16 @ `http://10.190.179.61:11999/qwen3_5/v1` (可用)
+- Coder: qwen3-coder:30b @ `http://10.190.161.39:8080` (可用)
+- 本地 Ollama (`qwen3:14b` @ `localhost:11434`) — 当前不可用
+
+**.gitignore 规则**:
+- `cases/**/*.md` / `cases/**/*.json` — 运行时生成的报告
+- `source_docs/*.md` / `source_docs/*.json` — 缓存的知识文档
+- `memory/*` — 记忆系统运行数据
+- `scripts/*.db` — 临时数据库
 
 ---
 
@@ -209,6 +261,14 @@ fab3481 feat: CodeGraph Phase 2 - LLM 消费代码知识图谱
 ## Git 提交历史 (refactor/v2)
 
 ```
+3404b9e chore: ignore runtime artifacts (case reports, source_docs, memory)
+86c45ee docs(v2): mark Phase 3 as complete — LangGraph panel + prompt externalization
+b25d0a2 feat(v2 P3.4): externalize expert panel prompts to markdown files
+277c463 fix(v2 P3.2): integrate LangGraph expert panel into orchestrator
+9329290 feat: Phase 2+3 artifacts — AST pattern/state machine extractors + LangGraph expert panel + benchmark
+32bffc0 docs: update handoff — CodeFixEngine Phase 4.5 completion
+c2a2c96 feat: CodeFixEngine — Phase 4.5, generate unified diffs from expert verdict
+dc26434 docs: update handoff — CodeGraph Phase 3 completion status
 98b8b75 feat(codegraph): inject CodeGraph structured context into Expert Panel prompt
 0fb5284 docs: update handoff with P2.3 completion status
 f949baa feat(codegraph): integrate tree-sitter AST builder into builder.py (Plan A)
@@ -216,9 +276,6 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 ```
 
 (基于 refactor/codegraph: 0667f3d)
-
-**未提交修改** (handoff 文档更新待提交):
-- `docs/technical/codegraph-handoff-master.md`: CodeGraph Phase 3 完成状态记录
 
 ---
 
@@ -231,10 +288,6 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- **Phase 3 收尾 (P3.2)**: orchestrator 集成 — 把 expert_panel.py 替换为 expert_panel_langgraph.py
-- **Phase 3 收尾 (P3.3)**: 端到端测试，跑真实案例对比新旧专家面板输出质量
-- **Phase 3 收尾 (P3.4)**: prompt 外部化 — prompts/expert_panel/*.md
-- **Phase 4 (CodeFixEngine)**: 已有 Phase 4.5 diff 生成，继续安全审查 + 效果预估
 - **Phase 5**: 管线精简 (15→8 步) + 记忆简化 (6→3 层) + 回归测试
 - 或继续 v1 迭代 (CodeGraph prompt token 预算动态调整)
 
@@ -277,7 +330,7 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
   - 失败策略: `try/except` 静默降级，无 CodeGraph DB 时不影响诊断流程
   - 已有但未使用的渲染方法: `render_for_conditions` (render.py:226-294) — 可考虑条件提取阶段使用
 
-**Phase 3 进度 (2026-06-09)**:
+**Phase 3 进度 (2026-06-09) — ✅ 全部完成**:
 - P3.1 ✓ LangGraph 专家面板 expert_panel_langgraph.py (731 行, 36KB)
   - 依赖: langgraph 1.2.4 (已安装)
   - 架构: StateGraph — START → parallel_experts → moderator_challenge → expert_rebuttals → moderator_synthesize → END
@@ -286,38 +339,21 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
   - ThreadPoolExecutor 实现真正的专家并行（最多 5 并发）
   - Moderator system prompt: 因果链五层模型 + TPE 一致性强制 + 文件行号锁定
   - ExpertPanel 别名指向 ExpertPanelLangGraph，orchestrator 可直接替换
-- 待做: P3.2 orchestrator 集成, P3.3 端到端测试, P3.4 prompt 外部化
+- P3.2 ✓ Orchestrator 集成
+  - orchestrator.py 导入改为 `from .expert_panel_langgraph import ExpertPanel`
+  - 兼容层: `run_panel()` 和 `select_experts()` 别名方法
+  - 修复: 相对导入级别 (`..` → `.`)
+- P3.3 ✓ E2E 测试 — FCTA001 案例验证通过
+  - `expert_opinions.md` 输出 12KB 高质量分析
+  - `report.md` 诊断报告 5.9KB
+  - 结论正确: FCTA 状态机卡在 Standby(2)，因车速信号波动及 TTC=inf 导致
+  - 依赖安装记录: rosbags, python-can, cantools
+- P3.4 ✓ Prompt 外部化 — prompts/expert_panel/*.md
+  - 12 个 .md 文件: 5 专家 system prompt + 5 专家 task header + moderator + 通用 prompt
+  - loader.py: `load_expert_system()` / `load_task_header()` 函数
+  - fallback 策略: Try-Load-External-Else-Hardcoded，代码完全向后兼容
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
-
----
-
-**CodeFixEngine Phase 4.5 进度 (2026-06-09)**:
-
-- **提交**: `c2a2c96` feat: CodeFixEngine — Phase 4.5, generate unified diffs from expert verdict
-- **新模块**: `ai/code_fix_engine.py` (811 行)
-- **管线集成**: `orchestrator.py` Phase 4.5 (expert panel → codefix → report)
-
-**架构流程**:
-1. **解析专家结论**: 从 `final_verdict` 提取 "### 修复建议" 段落 + `file:line` 定位
-2. **CodeGraph 精确定位**: 通过 CodeGraph DB 将模糊文件名 → 完整 `file_path`，读取源代码上下文（前后 20 行）
-3. **Diff 生成**: 调用 `model_router.complex()` (coder route: `qwen3-coder:30b`) 生成 unified diff
-4. **安全审查**: LLM 审查 MISRA C/AUTOSAR 规则（缓冲区溢出、空指针、整数溢出、类型安全等）
-5. **语法验证**: `clang -fsyntax-only` 检查 C 语法（clang 不存在时 graceful skip）
-6. **效果预估**: LLM 评估修复预期效果、影响范围、风险、置信度
-
-**输出**: `FixResult` dataclass → `render_fix_report_markdown()` → 报告附录
-
-**降级策略**:
-- CodeGraph DB 不存在 → 在 `source_root` 目录树中递归搜索文件
-- 未找到代码位置 → 返回文字建议（无 diff）
-- `clang` 不可用 → 语法检查标记为 "skipped"
-- 任何步骤异常 → 静默降级，不影响主诊断流程
-
-**数据模型**:
-- `FixLocation`: file_path, start_line, end_line, function_name, context
-- `SafetyIssue`: severity (critical/warning/info), category, description, line
-- `FixResult`: success, fix_suggestions, locations, diffs, safety_issues, syntax_check, effect_estimate, error
 
 ---
 
@@ -325,7 +361,7 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 
 ### P2.3: AST 行为模式提取器 — `ai/codegraph/pattern_extractor_ast.py`
 
-**提交**: 待提交
+**提交**: `9329290` (Phase 2+3 合并提交)
 **新模块**: `ai/codegraph/pattern_extractor_ast.py` (428 行, 12KB)
 
 **6 种行为模式**:
