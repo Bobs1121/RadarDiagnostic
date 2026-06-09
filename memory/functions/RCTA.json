@@ -3,8 +3,21 @@
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / RctaRctbUpdateStatus",
   "status": "Calculation Chain Added",
-  "_updated": "2026-04-20T10:09:02.118501",
+  "_updated": "2026-06-09T12:26:33.801411",
   "calculation_chain_items": 14,
   "alarm_logic_items": 19,
-  "latest_update": "2026-04-18T19:27:03.829515"
+  "latest_update": "2026-05-22T18:31:01.839980",
+  "known_issues": [
+    {
+      "id": "RCTA001",
+      "problem": "RCTA 功能未触发，数据完整性缺失导致根因无法唯一确定",
+      "sessions": [
+        "sc6hrcta001_20260520_162214"
+      ],
+      "date": "2026-05-20",
+      "analysis": "BLF 文件中缺失所有关键外部抑制信号（GearPos, CarSpd, RCTASwtReq 等），导致 TPE 无法解析 `adasFunc.c` 中的状态机逻辑，且 Variable Probe 显示无满足 `TTM <= 4.2s` 的目标。最可能的因果链为数据链路中断或信号未记录。",
+      "confidence": 0.8,
+      "status": "Newly Added"
+    }
+  ]
 }

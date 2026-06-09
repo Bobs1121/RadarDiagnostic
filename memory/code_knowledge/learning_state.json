@@ -1,5 +1,5 @@
 {
-  "cursor": 26,
+  "cursor": 0,
   "warmup_done": true,
   "pair_hashes": {
     "FCTB/alarm_logic": "5b8b9159e79e3dee",
@@ -58,5 +58,5 @@
     "FCTA/state_machine"
   ],
   "total_learned_pairs": 26,
-  "last_learn_at": "2026-04-20T15:01:36.515078"
+  "last_learn_at": "2026-06-09T12:02:17.384777"
 }

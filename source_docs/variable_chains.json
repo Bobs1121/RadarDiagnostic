@@ -1,14 +1,6 @@
 {
-  "struct_aliases": {
-    "g_DTCCode": "PERInputCapture.DTCCode"
-  },
-  "alias_details": {
-    "g_DTCCode": {
-      "rte_prefix": "PERInputCapture.DTCCode",
-      "confidence": 100,
-      "reason": "param_exact"
-    }
-  },
+  "struct_aliases": {},
+  "alias_details": {},
   "ambiguous": {},
   "raw_copies": [
     {
@@ -60,16 +52,7 @@
       "source_file": "adas\\symmetry\\perception\\src\\globalVariDef.c"
     }
   ],
-  "rte_write_prefixes": [
-    "AdasStM",
-    "PERInputCapture.DTCCode",
-    "PERInputCapture.adasEnable",
-    "PERInputUpdate.adasEnable",
-    "PERInputUpdate.variantConfig",
-    "PEROutput.objEDRInfo",
-    "SysselfTestMgr",
-    "VehcleInfoUpdate"
-  ],
+  "rte_write_prefixes": [],
   "scanned_files": [
     "adas\\beamform\\perception\\src\\globalVariDef.c",
     "adas\\symmetry\\perception\\src\\globalVariDef.c"

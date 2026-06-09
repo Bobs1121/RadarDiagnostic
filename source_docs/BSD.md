@@ -1,147 +1,126 @@
 # BSD 功能分析
 
 ## 1. 功能概述
-本模块实现了基于角雷达（Corner Radar）的**盲区检测（Blind Spot Detection, BSD）**功能。
-该功能主要用于监测车辆侧后方盲区内的动态障碍物（如车辆、摩托车等）。当检测到目标车辆进入预设的盲区区域（ROI）并满足特定的速度和相对速度条件时，系统会触发报警（通常通过仪表盘指示灯或后视镜 LED 闪烁），提醒驾驶员变道存在风险。
-代码逻辑涵盖了从系统激活条件判断、ROI 区域定义、目标筛选、报警触发与解除（迟滞逻辑）以及状态机管理的全过程。BSD 功能与 LCA（变道辅助）共享部分 ROI 定义和传感器资源，但在报警逻辑和状态管理上独立。
+BSD (Blind Spot Detection，盲区检测) 是角雷达（Corner Radar）的核心功能之一，主要用于监测车辆侧后方的盲区区域。当检测到有目标车辆或物体处于本车侧后方盲区，且与本车存在相对运动风险时，系统会向驾驶员发出警告（通常通过仪表盘指示灯或声音）。
+
+根据提供的源码片段，BSD 功能主要涉及以下逻辑层面：
+1.  **感知层 (Perception)**：在 `track.c` 中进行点云聚类、轨迹跟踪、目标分类及干扰抑制。特别是针对低速、静止目标以及近距离目标的特殊处理逻辑。
+2.  **功能层 (Function)**：定义 BSD 的 ROI (Region of Interest) 区域，判断目标是否进入盲区，并根据目标状态（速度、距离、相对位置）决定报警等级。
+3.  **状态管理**：维护 BSD 系统的运行状态（Init/Active/Off 等）。
 
 ## 2. 状态机
-根据 `ASWIN_SystemState.h` 中的注释和 `ASWIN_SystemState.c` 中的逻辑，BSD 功能的状态机定义如下：
+根据 `perception_public_def.h` 中的定义，BSD 系统状态机包含以下状态：
 
-*   **状态定义 (uint8_t)**:
-    *   `0`: **None** (未定义/未初始化)
-    *   `1`: **Init** (初始化中)
-    *   `2`: **Standby** (就绪/待机) - 系统已激活，满足运行条件，但未检测到报警目标。
-    *   `3`: **Active** (激活/报警中) - 系统处于 Standby 状态，且检测到满足报警条件的目标，正在输出报警信号。
-    *   `4`: **Off** (关闭) - 用户关闭或系统不满足运行条件（如车速过低/过高）。
-    *   `5`: **Failure** (故障) - 雷达传感器故障或通信故障。
-    *   `6`: **Passive** (被动/抑制) - 如拖车模式（Trailer Mode）激活时，功能被抑制。
+*   **状态定义**:
+    *   `0`: None (未定义/初始)
+    *   `1`: Init (初始化)
+    *   `2`: Standby (待机)
+    *   `3`: Active (激活/工作中)
+    *   `4`: Off (关闭)
+    *   `5`: Failure (故障)
+    *   `6`: Passive (被动/降级模式)
 
-*   **状态转换逻辑**:
-    *   **Standby (2) -> Active (3)**:
-        *   条件：系统处于 Standby 状态 (`bsdSystemState == 2`) 且检测到左侧或右侧有有效的 BSD 报警请求 (`PEROutput.adasWarning.bLeftBsdWarning != 0` 或 `bRightBsdWarning != 0`)。
-        *   代码位置：`ASWIN_SystemState.c` L689-L692。
-    *   **Active (3) -> Standby (2)**:
-        *   条件：报警条件不再满足（目标离开 ROI 或相对速度不满足），报警请求信号复位为 0。
-        *   注：代码片段未直接展示复位逻辑，通常由 `adasFunc.c` 中的报警清除逻辑控制，当 `bLeftBsdWarning` 和 `bRightBsdWarning` 归零时，状态机逻辑（未在片段中完全展示，但隐含在 `AdasEnable` 和状态更新函数中）会将状态切回 Standby。
-    *   **Standby/Active -> Off (4)**:
-        *   条件：车速低于 `fBsdDeactiveSpd` (10 km/h) 或高于 `fBsdDeactiveUpperSpd` (151 km/h)，或曲率半径小于 `fBsdDeactiveCurbRadius` (75m)。
-    *   **Standby/Active -> Passive (6)**:
-        *   条件：检测到拖车模式 (`AdasStM.TrailerSts == 1`) 且当前状态为 6 (Passive) 或其他特定抑制条件。见 `ASWIN_SystemState.c` L390。
-    *   **Standby/Active -> Failure (5)**:
-        *   条件：雷达传感器报告故障 (`ErrSts() == TRUE`) 或 DTC 激活。
+*   **状态转换逻辑推断**:
+    *   **Init -> Active**: 当系统自检通过、校准完成 (`InCalibState_Succeed`)、且 `g_adasEnable.bBSDEnable` 为 `true` 时，进入 Active 状态。
+    *   **Active -> Off**: 当用户手动关闭功能或 `g_adasEnable.bBSDEnable` 变为 `false` 时。
+    *   **Active -> Failure**: 当雷达硬件故障、数据异常或校准失败 (`InCalibState_Failed`) 时。
+    *   **Active -> Standby**: 可能发生在车速过低（如 < 10km/h，具体阈值未在片段中明确，但通常 BSD 在极低速下抑制）或系统资源受限暂时挂起时。
+    *   **Failure -> Active**: 故障恢复后重新初始化。
+
+*   **关键变量**: `g_adasWarning.bsdSystemState` (uint8_t)
 
 ## 3. 报警/制动逻辑
-BSD 功能仅输出**报警请求**，不涉及制动请求（制动请求属于 RCTB/FCTB 等功能）。
+BSD 本身通常只产生**视觉/听觉报警**，不直接触发制动（制动通常由 AEB 或 RCTB 处理，但 BSD 是 RCTB 的前置感知基础）。
 
-*   **报警触发条件 (Trigger)**:
-    1.  **系统状态**: 必须处于 `Standby` (2) 或 `Active` (3) 状态。
-    2.  **ROI 区域**: 目标必须位于 BSD 定义的 ROI 区域内（见关键阈值部分）。
-    3.  **目标速度**: 目标绝对速度 `v_obj` 需满足 `fBsdObjWarningSpd` (7.2 km/h) 以上。
-    4.  **相对速度**: 目标相对于自车的纵向速度 `v_rel` 需满足 `fBsdObjWarningRelVx` (-15.0 km/h) 条件（通常指目标正在快速接近或相对静止但处于危险区）。
-    5.  **迟滞处理**: 报警触发可能包含时间延迟 (`fBsdWarnDelay`) 或速度延迟逻辑，防止误报。
+*   **报警触发条件**:
+    1.  **ROI 判定**: 目标必须位于 `g_adasRoi.leftBsdRoi` 或 `g_adasRoi.rightBsdRoi` 定义的多边形区域内。
+    2.  **目标有效性**: 目标必须是通过跟踪算法确认的有效轨迹 (`ClusterStatus_Init` 或更高状态)，且非幽灵目标 (`ghostProb` 低)。
+    3.  **相对运动**: 目标与本车存在相对速度，且未处于“超越缓冲区” (`overTakeBuffer` 状态)。
+    4.  **持续帧数**: 报警通常需要持续一定帧数（`KEEPWARNINGFRM` 或 `LOWSPEEDKEEPWARNINGFRM`）以抑制误报。
 
-*   **报警取消条件 (De-trigger)**:
-    1.  **目标离开**: 目标离开 ROI 区域。
-    2.  **速度不满足**: 目标速度低于 `fBsdObjDeWarningSpd` (3.6 km/h)。
-    3.  **相对速度不满足**: 相对速度高于 `fBsdObjDeWarningRelVx` (-20.0 km/h，即相对远离或接近速度变小)。
-    4.  **边界偏移 (Hysteresis)**: 为了防止目标在边界处报警闪烁，取消报警时 ROI 边界会向内收缩（Offset）：
-        *   左侧：X 轴偏移 `fBsdObjDeWarningLeftTopOffSetX` (0.5m) 和 `fBsdObjDeWarningLeftBottomOffSetX` (-0.5m)，Y 轴偏移 `fBsdObjDeWarningLeftOuterOffSetY` (0.3m) 等。
-        *   右侧：类似逻辑，使用右侧对应的 Offset 变量。
-    5.  **系统状态变化**: 系统进入 Off 或 Failure 状态。
+*   **报警等级**:
+    *   `0`: Normal (无报警)
+    *   `1`: First Warning (一级报警，通常闪烁或低音量)
+    *   `2`: Second Warning (二级报警，通常常亮或高音量，可能伴随 LCA 触发时的紧急提示)
 
-*   **报警输出**:
-    *   左侧报警：`PEROutput.adasWarning.bLeftBsdWarning` (值 > 0 表示报警，可能区分一级/二级报警)。
-    *   右侧报警：`PEROutput.adasWarning.bRightBsdWarning`。
-    *   最终通过 CAN 总线发送 `RR_BsdLca_Warning` 或 `RL_BsdLca_Warning` 信号。
+*   **报警取消条件**:
+    *   目标离开 BSD ROI 区域。
+    *   目标被判定为静止且无碰撞风险（如路边固定物体）。
+    *   目标完成超越，进入 `overTakeBuffer` 状态并驶离。
+    *   系统状态切换至 Off 或 Failure。
+
+*   **关键代码逻辑参考**:
+    *   `objOutDataStruct` 中的 `objBsdWarningFlag` 存储单个目标的报警标志。
+    *   `adasWarningStruct` 中的 `bLeftBsdWarning` / `bRightBsdWarning` 存储系统级报警状态。
 
 ## 4. 关键阈值
-以下阈值直接决定了功能的激活范围和报警灵敏度：
+从 `track.c` 和 `paraDefine.h` 中提取的关键阈值：
 
-| 参数名称 | 变量名 | 默认值 | 单位 | 含义 |
-| :--- | :--- | :--- | :--- :--- |
-| **系统激活车速** | `fBsdActiveSpd` | 12.0 | km/h | 车速高于此值系统进入 Standby |
-| **系统关闭车速** | `fBsdDeactiveSpd` | 10.0 | km/h | 车速低于此值系统退出 (迟滞) |
-| **系统激活上限车速** | `fBsdActiveUpperSpd` | 146.0 | km/h | 车速高于此值系统关闭 |
-| **系统关闭上限车速** | `fBsdDeactiveUpperSpd` | 151.0 | km/h | 车速低于此值系统恢复 (迟滞) |
-| **系统激活曲率半径** | `fBsdActiveCurbRadius` | 125.0 | m | 转弯半径大于此值系统激活 |
-| **系统关闭曲率半径** | `fBsdDeactiveCurbRadius` | 75.0 | m | 转弯半径小于此值系统关闭 |
-| **目标报警速度** | `fBsdObjWarningSpd` | 7.2 | km/h | 目标速度需大于此值才报警 |
-| **目标取消报警速度** | `fBsdObjDeWarningSpd` | 3.6 | km/h | 目标速度低于此值取消报警 |
-| **目标报警相对速度** | `fBsdObjWarningRelVx` | -15.0 | km/h | 相对速度阈值 (负值表示接近) |
-| **目标取消报警相对速度** | `fBsdObjDeWarningRelVx` | -20.0 | km/h | 相对速度阈值 (迟滞) |
-| **BSD ROI 纵向起点** | `LineBSDC` | `DISTANCEDRIVER` | m | 盲区前界 (驾驶员位置) |
-| **BSD ROI 纵向终点** | `LineBSDB` | `-5.0 - DISTANCEREAR` | m | 盲区后界 (车尾后 5 米) |
-| **BSD ROI 横向宽度** | `LineBSDLCAG` / `LineBSDLCAL` | `3.3 + Width/2` | m | 盲区侧向边界 (车宽 + 3.3m) |
+| 阈值名称 | 值/宏定义 | 含义 | 来源文件 |
+| :--- | :--- | :--- | :--- |
+| `MthCluster_VelGateStacEnv` | 未显示具体值 | 静止环境速度门限，用于判断目标是否绝对静止 | `track.c` L500, L505 |
+| `MthCluster_VelGateEnd` | 未显示具体值 | 末端速度门限，用于低速目标跟踪 | `track.c` L505, L512 |
+| `MthCluster_VelGate` | 未显示具体值 | 常规速度门限 | `track.c` L518, L538 |
+| `MthCluster_VelGateSlow` | 未显示具体值 | 低速速度门限，用于低速移动目标 | `track.c` L520 |
+| `MthCluster_VelGateTurn` | 未显示具体值 | 转弯/近距离速度门限 | `track.c` L526 |
+| `MthCluster_VelGateMax` | 未显示具体值 | 最大速度门限 | `track.c` L542 |
+| `CandToObj_NearDistXDelTwice` | 未显示具体值 | 近距离纵向距离阈值，用于区分近场/远场处理逻辑 | `track.c` L518 |
+| `1.5f` | 1.5 米 | 极近距离纵向距离，触发特殊速度门限 (`MthCluster_VelGateTurn`) | `track.c` L524 |
+| `2.0f` | 2.0 米 | 低速近场横向/纵向距离阈值，触发特殊跟踪门限 | `track.c` L677 |
+| `25.0f` | 25 米 | 大型车辆（Truck）远距离长度补偿阈值 | `track.c` L671 |
+| `10.0f` | 10 米 | 大型车辆长度阈值，用于判断是否为卡车 | `track.c` L671 |
+| `3.0f` | 3.0 米 | FOV 边缘目标的最小跟踪门限 X 方向 | `track.c` L663, L818 |
+| `2.5f` | 2.5 米 | 某些条件下的最小跟踪门限 Y 方向 | `track.c` L654 |
+| `KEEPWARNINGFRM` | 3 | 常规报警保持帧数 | `paraDefine.h` L143 |
+| `LOWSPEEDKEEPWARNINGFRM` | 6 | 低速报警保持帧数（更严格，防误报） | `paraDefine.h` L144 |
+| `YAWRATETHERESHOLD` | 3.0f | 航向角变化率阈值，用于判断目标转向意图 | `paraDefine.h` L145 |
+| `MthCluster_CluDiffX/Y/Vel` | 未显示具体值 | 聚类合并的距离和速度差异阈值 | `track.c` L180-L182 |
 
 ## 5. 关键变量
 
 | 变量名 | 类型 | 来源 | 含义 |
 | :--- | :--- | :--- | :--- |
-| `bsdSystemState` | `uint8` | `ASWIN_SystemState.c` | BSD 功能当前状态机状态 (0-6) |
-| `bLeftBsdWarning` | `bool`/`uint8` | `adasFunc.c` (计算) | 左侧 BSD 报警请求标志 |
-| `bRightBsdWarning` | `bool`/`uint8` | `adasFunc.c` (计算) | 右侧 BSD 报警请求标志 |
-| `fBsdActiveSpd` | `float` | `adasFunc.c` | 系统激活车速阈值 |
-| `LineBSDC` | `float` | `adasFunc.c` | BSD ROI 纵向起始坐标 |
-| `LineBSDB` | `float` | `adasFunc.c` | BSD ROI 纵向结束坐标 |
-| `LineBSDLCAG` | `float` | `adasFunc.c` | 左侧 BSD ROI 横向边界 |
-| `LineBSDLCAL` | `float` | `adasFunc.c` | 右侧 BSD ROI 横向边界 |
-| `bBsdCurbDewarningEnable` | `bool` | `adasFunc.c` | 弯道报警抑制开关 |
-| `PERInputUpdate.adasEnable.bBSDEnable` | `bool` | `RteComMapping.c` | 用户/系统使能信号输入 |
-| `g_egoCarAddInfo.carSpd` | `float` | `GlobalVar` | 自车当前车速 |
-| `g_egoCarAddInfo.yawRate` | `float` | `GlobalVar` | 自车横摆角速度 (用于计算曲率) |
+| `g_adasEnable.bBSDEnable` | bool | `globalVarDefine.h` | BSD 功能使能标志，由上层应用或用户设置 |
+| `g_adasRoi.leftBsdRoi` | polygonStruct | `globalVarDefine.h` | 左侧盲区检测感兴趣区域 (ROI) 定义 |
+| `g_adasRoi.rightBsdRoi` | polygonStruct | `globalVarDefine.h` | 右侧盲区检测感兴趣区域 (ROI) 定义 |
+| `g_adasWarning.bLeftBsdWarning` | uint8_t | `globalVarDefine.h` | 左侧 BSD 报警状态 (0:正常, 1:一级, 2:二级) |
+| `g_adasWarning.bRightBsdWarning` | uint8_t | `globalVarDefine.h` | 右侧 BSD 报警状态 (0:正常, 1:一级, 2:二级) |
+| `g_adasWarning.bsdSystemState` | uint8_t | `globalVarDefine.h` | BSD 系统运行状态机当前状态 |
+| `objStruct.objBsdWarningFlag` | int8_t | `structDefine.h` | 单个目标对象的 BSD 报警标志，用于底层跟踪结果上传 |
+| `objStruct.overTakeBuffer` | uint8_t | `structDefine.h` | 超越缓冲区标志，防止对已超越车辆重复报警 |
+| `objStruct.isFOVCrossing` | uint8_t | `structDefine.h` | FOV 穿越标志，用于处理进出视场的目标 |
+| `g_egoCarAddInfo.carSpd` | float | 全局变量 | 本车车速，用于区分低速/高速逻辑及静止判断 |
+| `pTemp->dynFlg` | uint8_t | `track.c` | 目标动态属性标志 (Stationary/Stopped/Moving) |
 
 ## 6. 输入信号
-功能正常运行所需的输入信号：
-
-1.  **自车状态**:
-    *   车速 (`carSpd`)
-    *   横摆角速度 (`yawRate`) -> 用于计算曲率半径
-    *   档位 (`actual_gear`)
-    *   转向角/方向盘状态 (隐含在曲率计算或 LCA 交互中)
-2.  **传感器数据**:
-    *   雷达目标列表 (Object List): 包含目标的距离、方位角、相对速度、绝对速度、RCS 等。
-    *   雷达状态 (PowerOn, Fault, Calibration Status)。
-3.  **系统配置/开关**:
-    *   BSD 功能开关 (`bBSDEnable`): 来自用户设置或 CAN 信号 (`LCASwtReq` 或专用开关)。
-    *   拖车模式状态 (`TrailerSts`)。
-    *   故障状态 (DTC)。
-4.  **车辆参数**:
-    *   车宽 (`EGOCARWIDTH`)
-    *   驾驶员位置 (`DISTANCEDRIVER`)
-    *   车尾距离 (`DISTANCEREAR`)
+1.  **雷达原始数据**: 点云数据 (Clusters)，包含距离、角度、速度、功率等。
+2.  **本车状态**:
+    *   `g_egoCarAddInfo.carSpd`: 本车车速。
+    *   本车航向角、横摆角速度 (用于坐标转换和 ROI 计算)。
+3.  **功能使能信号**: `g_adasEnable.bBSDEnable`。
+4.  **校准数据**: `g_mfTrackCalibData`，用于雷达安装角度补偿。
+5.  **环境信息**: 车道线信息 (可选，用于动态调整 ROI 宽度)。
 
 ## 7. 输出信号
-功能产生的输出信号：
-
-1.  **报警信号**:
-    *   `bLeftBsdWarning` / `bRightBsdWarning`: 内部报警标志。
-    *   `RR_BsdLca_Warning` / `RL_BsdLca_Warning`: 通过 CAN 总线发送给网关或仪表的报警等级信号 (0: 无，1: 一级，2: 二级)。
-2.  **状态信号**:
-    *   `bsdSystemState`: 功能当前状态 (Standby/Active/Off 等)。
-    *   `RSDS_BliSts` (Blind Spot Status): 盲区状态指示。
-    *   `RSDS_BSDState`: 发送给外部系统的 BSD 状态字。
-3.  **诊断信号**:
-    *   `RR_Fault_Err` / `RL_Fault_Err`: 故障标志。
+1.  **报警状态**:
+    *   `g_adasWarning.bLeftBsdWarning`: 左侧盲区报警等级。
+    *   `g_adasWarning.bRightBsdWarning`: 右侧盲区报警等级。
+2.  **目标列表**:
+    *   `objOutDataStruct` 数组，包含每个有效目标的 `objBsdWarningFlag`、`distX`、`distY`、`velX`、`velY` 等信息。
+3.  **系统状态**:
+    *   `g_adasWarning.bsdSystemState`: 当前 BSD 功能状态。
 
 ## 8. 与其他功能的交互
-
-*   **LCA (Lane Change Assist)**:
-    *   **资源共享**: 共享相同的雷达传感器和大部分 ROI 定义 (`LineBSDLCAG`, `LineBSDLCAL` 等)。
-    *   **优先级**: 在输出信号 `RR_BsdLca_Warning` 中，如果 BSD 和 LCA 同时报警，代码逻辑 (L164-L170) 取两者中的**较大值**作为最终输出，确保高优先级报警被传达。
-    *   **状态联动**: `AdasStateActive` 函数中，BSD 和 LCA 的状态更新逻辑相似，但独立判断。
-
-*   **RCTA/RCTB (Rear Cross Traffic Alert/Brake)**:
-    *   **传感器复用**: 使用相同的后角雷达。
-    *   **ROI 区分**: RCTA 通常关注车辆后方横向穿行的车辆，而 BSD 关注侧后方同向/对向车辆。两者在目标筛选逻辑上会有不同的 ROI 和速度/角度阈值。
-    *   **状态抑制**: 当 RCTA 处于激活状态时，可能会影响 BSD 的某些逻辑（代码片段未直接展示，但通常有互斥或优先级逻辑）。
-
-*   **DOW (Door Opening Warning)**:
-    *   共享后角雷达数据，但 DOW 关注的是车辆静止或低速时的后方来车，而 BSD 关注行驶中的侧方盲区。
-    *   在 `BliStsenable` 函数中，DOW 的使能状态与 BSD 一起作为系统整体使能的一部分。
-
-*   **Trailer Mode (拖车模式)**:
-    *   当检测到拖车模式 (`AdasStM.TrailerSts == 1`) 时，BSD 状态会被强制置为 `Passive` (6)，功能被抑制，防止误报。
-
-*   **ELK (Electronic Lane Keep / 电子防碰撞)**:
-    *   代码片段 L821 注释显示，ELK 的使能依赖于 BSD、LCA、DOW 等多个功能的使能状态，表明 ELK 可能是一个上层综合功能或系统健康状态指示。
+1.  **LCA (Lane Change Assist)**:
+    *   **依赖关系**: LCA 是 BSD 的增强功能。当 BSD 检测到盲区有目标，且驾驶员打转向灯时，LCA 会触发更强烈的报警（二级报警）。
+    *   **代码体现**: `objOutDataStruct` 中同时存在 `objBsdWarningFlag` 和 `objLcaWarningFlag`。`g_adasRoi` 中定义了 `leftLcaRoi`，通常比 BSD ROI 更靠前或更宽。
+2.  **RCTA/RCTB (Rear Cross Traffic Alert/Brake)**:
+    *   **依赖关系**: RCTA 在倒车时激活，检测后方横向来车。BSD 的感知算法（特别是低速、静止目标处理）与 RCTA 共享底层跟踪逻辑。
+    *   **代码体现**: `track.c` 中的低速逻辑 (`MthCluster_VelGateSlow`) 对 RCTA 至关重要。`g_adasRoi` 中包含 `leftRctaRoi`。
+3.  **DOW (Door Open Warning)**:
+    *   **依赖关系**: DOW 检测侧后方接近的车辆，防止开门碰撞。与 BSD 共享侧后方感知能力。
+    *   **代码体现**: `g_adasRoi` 中包含 `leftDowRoi`。
+4.  **RCW (Rear Cross Warning / Rear Collision Warning)**:
+    *   **依赖关系**: 检测正后方追尾风险。虽然方向不同，但共享后向雷达的感知资源。
+5.  **跟踪算法 (Track)**:
+    *   **核心交互**: BSD 功能完全依赖于 `track.c` 中的目标跟踪质量。`track.c` 中的聚类合并 (`ClusterStatus_NoUsedNear`)、速度门限调整 (`SetTrcGateVel`) 直接影响 BSD 的检测率和误报率。例如，L500-L545 的逻辑确保了在静止或低速环境下，雷达能正确区分路边静止物体和移动车辆，这对 BSD 的准确性至关重要。

@@ -1,6 +1,6 @@
 {
   "function": "FCTA",
-  "diagnosis_count": 10,
+  "diagnosis_count": 12,
   "known_issues": [
     {
       "id": "FCTA001",
@@ -30,9 +30,19 @@
       "analysis": "功能使能信号未置位导致报警输出被门控：PERInputUpdate.adasEnable.bFCTAEnable(实际值 FALSE) → FCTA_Warn 生成条件不满足。",
       "confidence": 0.9,
       "status": "Newly Added from recent session"
+    },
+    {
+      "problem": "FCTA功能在60km/h速度下没有触发",
+      "session": "FCTA001_20260609_123600",
+      "date": "2026-06-09"
+    },
+    {
+      "problem": "FCTA功能在60km/h速度下没有触发",
+      "session": "FCTA001_20260609_124124",
+      "date": "2026-06-09"
     }
   ],
-  "_updated": "2026-04-20T15:03:25.825902",
+  "_updated": "2026-06-09T13:01:09.771053",
   "description": "前方交叉交通警报，低速向前行驶时检测前方横向穿越目标。",
   "state_machine": "0=None, 1=Init, 2=Standby, 3=Active, 4=Off, 5=Failure, 6=Passive",
   "logic_ref": "adasFunc.c / FctaUpdateSystemStatus",

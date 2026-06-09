@@ -1,9 +1,10 @@
-# radarAnalyze — 第一性原理改造 PRD
+# radarAnalyze — 角雷达 ADAS AI 诊断系统改造 PRD
 
-> 版本: 2.0.0
-> 日期: 2026-06-08
-> 作者: AI Agent (基于 GitHub 调研 + 架构审计)
-> 状态: Draft — 等待用户确认
+> 版本: 2.1.0
+> 日期: 2026-06-09
+> 作者: AI Agent (PM + 架构师 + 开发者)
+> 状态: Confirmed — 用户已确认方向
+> 分支: `refactor/v2`
 
 ---
 
@@ -12,10 +13,11 @@
 | 项 | 值 |
 |---|---|
 | 产品名称 | radarAnalyze — 角雷达 ADAS AI 诊断系统 |
-| 版本 | 2.0.0 (架构重构版) |
-| 修订历史 | v2.0.0: 第一性原理重构规划 (2026-06-08) |
-| 干系人 | 用户=产品经理+诊断工程师; Agent=PM+架构师+开发者 |
+| 版本 | 2.1.0 (多项目支持 + 基础加固版) |
+| 修订历史 | v2.0.0: 第一性原理重构规划 (2026-06-08) → v2.1.0: 多项目支持 + 基础优先策略 (2026-06-09) |
+| 目标用户 | 内部 ASW 工程师 — ADAS 软件问题分析 |
 | 术语表 | **BAG**: ROS1 录制数据; **BLF**: Vector CAN 日志; **MF4**: ASAM MCDF 测量数据; **TPE**: 时序模式引擎; **CodeGraph**: C 源码静态分析图谱; **FrameStore**: SQLite 内存数据库 |
+| 干系人 | 产品经理=用户; 架构师+开发者=Agent; 终端用户=Bosch ADAS ASW 工程师 |
 
 ---
 
@@ -23,67 +25,73 @@
 
 ### 2.1 第一性原理：用户需要什么？
 
-回到最本质问题：**用户在干什么？**
+**使用场景**: ASW 工程师收到"某个 ADAS 功能在特定场景下不工作"的 bug 报告，需要回答：
 
-用户是一名 ADAS 诊断工程师，面对的是"功能不工作"的 bug 报告。他需要回答一个问题：
-
-> **"为什么这个功能在特定场景下没有按预期工作？"**
+> **为什么这个功能没有按预期工作？根因是什么？怎么改？**
 
 回答这个问题的**最小必要动作**是：
 
-1. **看懂数据** — 回放数据里发生了什么（信号值、目标状态、自车状态）
+1. **看懂数据** — BLF/BAG 里实际发生了什么（信号值、目标状态、自车状态）
 2. **理解代码** — 代码期望什么条件才能激活/退出功能
-3. **找到差距** — 实际数据和代码期望之间的差异就是根因
-4. **给出方案** — 怎么改代码或参数可以解决问题
+3. **找到差距** — 实际数据和代码期望之间的差异 = 根因
+4. **给出方案** — 怎么改代码或参数
 
-**当前系统已经在做这件事**，但存在结构性问题。
+### 2.2 产品定位
 
-### 2.2 当前系统的核心矛盾
-
-| 矛盾 | 说明 |
+| 维度 | 定义 |
 |------|------|
-| **LLM 链路过长** | 5+ 串行 LLM 调用，任何一环失败/降级都影响最终结果 |
-| **正则解析 C 代码** | `pattern_extractor.py` 靠正则提取代码模式，覆盖率有限且脆弱 |
-| **管线步骤过多** | 15+ 步，每步都增加出错面和调试复杂度 |
-| **专家面板手写编排** | `expert_panel.py` 自己管理 5 专家 3 轮对话，等于手写了一个 agent framework |
-| **数据解析手写** | BAG parser 手写反序列化，BLF 解析虽有 cantools 但 BLF 文件读取是手写 |
-| **无代码修改能力** | 只能给出文字建议，不能生成 diff |
-| **ContextBudget 被动截断** | 60K 字符硬上限，超了就截，无智能优先级策略 |
-| **无 MF4 支持** | 大量测量数据无法使用 |
+| **目标用户** | 内部 ADAS ASW 工程师 |
+| **使用场景** | 离线分析问题案例，定位根因 |
+| **支持平台** | 多代角雷达项目（5 代 CR5CB、6 代 SC6H-cr60light 等） |
+| **交付形态** | CLI 工具 — 输入案例目录 + 问题描述，输出诊断报告 |
+| **不在范围** | Web UI、实时在线诊断、自动提交/PR、视频辅助诊断 |
 
-### 2.3 产品愿景
+### 2.3 支持的多项目
+
+| 项目代号 | 平台 | 工作目录 | 说明 |
+|---------|------|---------|------|
+| `cr5cb` | BYD_OVS_CB — 5 代角雷达 | `C:\BYD_OVS_CB` | CR5CB 平台，17 子模块，CodeGraph 24,186 文件 |
+| `sc6h` | BYD-SC6H-cr60light — 6 代角雷达 | `D:\BYD-SC6H-cr60light\cr60_light` | CR60Light 平台，CodeGraph 1,381 节点 |
+| *(可扩展)* | 未来新增平台 | 配置添加 | 无需修改代码，仅配置驱动 |
+
+### 2.4 当前系统的核心矛盾
+
+| 矛盾 | 说明 | 改造优先级 |
+|------|------|-----------|
+| **项目配置硬编码** | `config.yaml` 写死 `GWM_B26` 路径，换项目要改配置 | **P0** |
+| **变量 false positives** | CodeGraph 797 变量中大量局部变量 (i, j, tmp) | **P1** |
+| **数据-变量映射不完整** | BLF CAN signal → 内部变量链路不完整 | **P1** |
+| **CodeGraph 语义层为空** | `semantic_annotations` 表空，只有结构无语义 | **P1** |
+| LLM 链路过长 | 8-12 次串行调用 | P2 |
+| 管线步骤过多 | 15+ 步 | P2 |
+| **记忆层级消费不均衡** | L4/L5 写入多消费少 | P2 |
+| ContextBudget 固定预算 | 60K 硬上限 | P3 |
+| MF4 解析缺失 | asammdf 内网不可用 | **Deferred** |
+
+### 2.5 产品愿景
 
 ```
-输入: 问题描述 + 案例数据 (BAG/BLF/MF4)
+输入: 项目配置 + 问题描述 + 案例数据 (BAG/BLF)
   ↓
-自动诊断 (确定性的数据解析 + LLM 推理 + 代码分析)
+自动诊断 (确定性数据解析 + CodeGraph 代码分析 + LLM 专家推理)
   ↓
 输出:
-  1. 根因诊断 (专家面板 → 结构化结论)
-  2. 代码修改方案 (diff + 效果预估)
-  3. 可视化报告 (交互式时间线)
+  1. 根因诊断 (LangGraph 专家面板 → 结构化结论)
+  2. 代码修改方案 (CodeFixEngine → unified diff + 效果预估)
+  3. 可视化报告 (交互式 HTML 时间线)
 ```
 
-### 2.4 成功指标
+### 2.6 成功指标
 
 | 指标 | 当前 | 目标 |
 |------|------|------|
 | 诊断准确率 | ~70% (估算) | >85% |
 | 端到端耗时 | 5-10 min | <5 min |
 | LLM 调用次数 | 8-12 次 | 5-7 次 |
-| 数据解析覆盖率 | BAG+BLF (2/3 格式) | BAG+BLF+MF4 (3/3) |
-| 代码修改能力 | 仅文字建议 | 结构化 diff + 效果模拟 |
-
-### 2.5 范围界定
-
-| In Scope | Out of Scope |
-|----------|-------------|
-| 诊断管线重构 | Web UI (CLI 模式不变) |
-| 代码解析层升级 (tree-sitter) | 多平台代码库支持 (先做好 GWM_B26) |
-| 专家面板迁移到成熟框架 | 实时在线诊断 (仅离线分析) |
-| CodeFixEngine (diff 生成) | 自动提交/PR |
-| MF4 Parser | 视频/图像辅助诊断 |
-| 记忆系统简化 | 多语言支持 (仅中文) |
+| 数据解析覆盖率 | BAG+BLF (2/3) | BAG+BLF (MF4 待改造) |
+| 代码修改能力 | 结构化 diff + 效果模拟 | 已实现 |
+| **多项目支持** | **仅 GWM_B26** | **配置化支持 N 个项目** |
+| **变量映射准确率** | **不完整** | **CAN signal → C 变量全链路** |
 
 ---
 
@@ -93,7 +101,7 @@
 
 | 角色 | 描述 | 核心诉求 |
 |------|------|---------|
-| **诊断工程师** | ADAS SW 工程师，日常分析功能 bug | 快速定位根因，减少看 BLF 波形和 C 代码的时间 |
+| **ADAS ASW 工程师** | 负责角雷达应用层软件，日常分析功能 bug | 快速定位根因，减少看 BLF 波形和 C 代码的时间 |
 | **产品经理** | 评估功能表现，推动问题闭环 | 结构化报告，可转给其他 AI/团队继续处理 |
 
 ### 3.2 典型使用场景
@@ -101,18 +109,25 @@
 **场景 1: 新 bug 诊断**
 ```
 用户: "FCTA 在低速场景没有触发预警"
-操作: python cli.py cases/FCTA_NEW -p "低速 FCTA 无预警" -e "应该触发 FCTA 预警"
+操作: python cli.py cases/FCTA_NEW -P sc6h -p "低速 FCTA 无预警" -e "应该触发 FCTA 预警"
 期望: 5 分钟内得到根因分析报告 + 代码修改建议
 ```
 
 **场景 2: 数据快查**
 ```
 用户: "FCTB 触发时 AEBIB 信号是什么值"
-操作: python cli.py cases/FCTA001 -q "FCTB 触发时 AEBIB 信号值"
+操作: python cli.py cases/FCTA001 -P cr5cb -q "FCTB 触发时 AEBIB 信号值"
 期望: 30 秒内返回信号时间线和统计
 ```
 
-**场景 3: 批量复盘**
+**场景 3: 跨项目对比**
+```
+用户: 同样的问题在 5 代和 6 代平台表现不同
+操作: 分别指定 -P cr5cb 和 -P sc6h 运行诊断
+期望: 两个平台的诊断报告可对比，快速发现平台差异
+```
+
+**场景 4: 批量复盘**
 ```
 用户: 一周积累了 5 个 FCTA 漏报案例
 操作: 逐个运行诊断 → 自动写入记忆 → AutoDream 整合
@@ -125,188 +140,259 @@
 
 ### 4.1 改造核心原则
 
-**原则 1: 确定性层和 LLM 层分离**
+**原则 1: 基础优先，渐进优化**
+- 先解决影响诊断准确率的基础问题（变量过滤、数据-变量映射、语义层）
+- 基础打牢后再做管线精简、ContextBudget 优化等效率提升
+- 每个 Phase 可独立验证，不阻塞后续工作
+
+**原则 2: 确定性层和 LLM 层分离**
 - 数据解析、时间同步、信号映射、CodeGraph 构建 → 纯确定性代码
 - 问题理解、条件提取、专家面板 → LLM 推理
-- 原则：确定性层出错率应接近 0%，LLM 层负责模糊推理
+- 确定性层出错率应接近 0%，LLM 层负责模糊推理
 
-**原则 2: LLM 调用最小化**
+**原则 3: 配置驱动，代码不变**
+- 项目切换通过配置完成，不修改代码
+- CodeGraph DB、source_docs、记忆按项目隔离
+- 新增项目只需在 `config.yaml` 添加 `projects` 配置
+
+**原则 4: LLM 调用最小化**
 - 当前 8-12 次串行 LLM 调用 → 目标 5-7 次
-- 合并可合并的步骤（如 问题理解 + 任务分类 可合并为一次调用）
+- 合并可合并的步骤
 - 能用确定性代码解决的不用 LLM
 
-**原则 3: 可观测性**
-- 每个管线步骤必须记录输入/输出摘要、耗时、状态
-- LLM 调用必须记录 prompt 大小、token 消耗、响应时间
+**原则 5: 可观测性**
+- 每个管线步骤记录输入/输出摘要、耗时、状态
+- LLM 调用记录 prompt 大小、token 消耗、响应时间
 - 失败必须有明确的降级策略
 
 ### 4.2 模块级改造需求
 
-#### FR-001: 数据解析层重构
+#### FR-001: 多项目可配置化 (P0 — 基础)
 
-**目标**: 用成熟库替代手写解析，减少维护负担。
+**目标**: 支持多个角雷达项目，通过配置切换，无需修改代码。
 
-| 子项 | 当前方案 | 改造方案 | 优先级 |
-|------|---------|---------|--------|
-| BAG 解析 | 手写 ROS1 bag 反序列化 | 保持现状 (ROS bag 格式稳定，手写已足够) | P2 |
-| BLF 解析 | cantools + 手写 BLF reader | 评估 `blf-reader` 库 (如有)，否则保持 | P2 |
-| DBC 加载 | cantools | 保持 (cantools 已成熟) | — |
-| MF4 解析 | 缺失 | 新增 `Mf4Parser` (mffparser 库) | P1 |
-| topic 发现 | 硬编码 topic 路径 | 自动扫描 bag 的 topics，按关键词匹配 | P1 |
+**设计方案**:
 
-#### FR-002: 代码分析层升级 — Tree-sitter
+```yaml
+# config.yaml — 项目配置
+projects:
+  sc6h:    # 6 代角雷达
+    display_name: "BYD-SC6H-cr60light (6代角雷达)"
+    source_code: "D:\\BYD-SC6H-cr60light\\cr60_light"
+    dbc_files:
+      - "CR_DBC_V3.2_20260331.dbc"
+    key_source_files: [...]    # 该平台特有的关键源文件
+    source_domains: [...]      # 该平台特有的源域定义
+  cr5cb:   # 5 代角雷达
+    display_name: "BYD_OVS_CB (5代角雷达)"
+    source_code: "C:\\BYD_OVS_CB"
+    dbc_files: [...]
+    key_source_files: [...]
+    source_domains: [...]
 
-**目标**: 用 tree-sitter 替代正则表达式提取 C 代码结构。
-
-**当前问题**:
-- `pattern_extractor.py` 用正则匹配 `HoldRelease`/`Accumulate` 等模式
-- 覆盖率和精确度受限，代码格式变化就失效
-- 无法提取函数调用链、变量作用域等深层信息
-
-**改造方案**:
-```
-tree-sitter parse (C grammar)
-  → AST traversal
-    → 函数声明/调用关系
-    → 全局变量读写关系
-    → 状态机模式 (switch-case + goto)
-    → 条件判断树 (if-else/ternary)
-    → 行为模式 (HoldRelease, Accumulate, Hysteresis)
-  → 写入 CodeGraph (SQLite)
+# 全局配置（所有项目共享）
+default_project: "sc6h"        # 默认项目
+ai: ...                         # 模型配置（全局共享）
+functions: ...                  # ADAS 功能定义（全局共享）
+auto_dream: ...                 # AutoDream 配置（全局共享）
 ```
 
-**借鉴项目**: `tree-sitter/tree-sitter` (25.7k star)
+**CLI 参数**: `-P <project_key>` 或 `--project <project_key>`，省略时使用 `default_project`。
 
-**优先级**: P1 — 这是诊断准确率提升的关键
+**项目隔离策略**:
 
-#### FR-003: 专家面板迁移到 LangGraph
+| 资源 | 隔离方式 | 示例 |
+|------|---------|------|
+| CodeGraph DB | 文件名隔离 | `memory/codegraph_sc6h.db`, `memory/codegraph_cr5cb.db` |
+| source_docs | 目录隔离 | `source_docs/sc6h/`, `source_docs/cr5cb/` |
+| 记忆系统 | 目录隔离 | `memory/projects/sc6h/`, `memory/projects/cr5cb/` |
+| 案例数据 | 不隔离 | `cases/` 共享，案例内标记来源项目 |
+| 模型配置 | 共享 | 所有项目使用同一组 LLM 端点 |
 
-**目标**: 用 LangGraph 替代手写专家面板编排。
+**数据-变量映射设计**:
 
-**当前问题**:
-- `expert_panel.py` (686 行) 自己管理 5 专家 prompt、3 轮对话、并行执行
-- 无法复用成熟的 agent 编排能力（状态管理、循环、条件分支）
-- prompt 硬编码在模块中，难以维护和扩展
+CodeGraph SIGNAL 节点存储完整链路：
 
-**改造方案**:
-```python
-# LangGraph 图定义
-graph = StateGraph(DiagnosisState)
-
-# 5 个专家节点
-graph.add_node("signal_chain", signal_chain_agent)
-graph.add_node("algorithm", algorithm_agent)
-graph.add_node("system_state", system_state_agent)
-graph.add_node("perception", perception_agent)
-graph.add_node("architecture", architecture_agent)
-
-# 并行执行 Round 1
-graph.add_edge("__start__", "signal_chain")
-graph.add_edge("__start__", "algorithm")
-# ...
-
-# 主持人挑战 (Round 2) — 条件分支
-graph.add_conditional_edges("round1_parallel", route_to_challenge)
-
-# 收敛 (Round 3)
-graph.add_edge("round2_challenge", "moderator_synthesize")
+```
+CAN Signal Name (BLF/DBC)
+  → DBC Message (CAN ID + Signal)
+    → RteComMapping_ReadSignal/WriteSignal (C 代码中的宏调用)
+      → Internal Variable (C 代码中的全局变量/静态变量)
+        → CodeGraph VARIABLE 节点
 ```
 
-**借鉴项目**: `langchain-ai/langgraph` (34.1k star)
+SIGNAL 节点扩展字段：
 
-**优先级**: P1
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `can_signal_name` | string | BLF/DBC 中的信号名 |
+| `dbc_message` | string | DBC Message 名 |
+| `can_id` | int | CAN ID |
+| `rte_mapping_file` | string | RteComMapping.c 文件路径 |
+| `rte_mapping_line` | int | 宏调用行号 |
+| `internal_var_name` | string | 映射到的 C 内部变量名 |
+| `direction` | enum | READ (外部→内部) / WRITE (内部→外部) |
+| `platform` | string | 项目代号 (sc6h/cr5cb) |
 
-#### FR-004: CodeFixEngine — 代码修改方案生成
+**验收标准**:
+- `python cli.py cases/FCTA001 -P sc6h` 和 `python cli.py cases/FCTA001 -P cr5cb` 分别使用各自配置
+- CodeGraph DB 按项目隔离，数据不混
+- 新增项目只需在 `config.yaml` 添加配置，无需改代码
 
-**目标**: 将专家面板的"文字修复建议"转化为可执行的 unified diff。
+#### FR-002: 变量过滤 — 只保留有意义的变量 (P1 — 基础)
 
-**流程**:
+**目标**: CodeGraph 变量节点只保留对诊断有意义的变量。
+
+**当前问题**: 797 个变量中大量是 `i`, `j`, `tmp`, `idx` 等局部循环变量，污染查询结果。
+
+**过滤规则**:
+
+| 保留 | 过滤 |
+|------|------|
+| 全局变量 (`file_scope` + non-static) | 局部循环变量 (`for(int i=0;`) |
+| 静态全局变量 (`static` at file scope) | 局部临时变量 (`tmp`, `idx`, `cnt` 等短名) |
+| RTE 读写变量 (`Rte_*` 前缀) | 结构体成员变量 (除非是关键状态) |
+| 状态机变量 (`State_e`, `Mode_e` 等枚举) | 函数参数 |
+| 校准参数 (`Calib_` 前缀) | 标准库函数内部变量 |
+
+**实现**: 在 `ast_parser.py` 的 `extract_variables` 和 `extract_var_writes` 中增加过滤逻辑。
+
+**验收标准**: CodeGraph 变量数从 797 降到 <200，且 90%+ 与诊断相关。
+
+#### FR-003: CodeGraph 语义层填充 (P1 — 基础)
+
+**目标**: 让 CodeGraph 不仅存储"代码结构"，还存储"代码意图"。
+
+**当前问题**: `semantic_annotations` 表为空，CodeGraph 只有语法级信息。
+
+**设计方案 — 代码理解 Pipeline**:
+
 ```
-专家面板结论 (根因 + 修复建议)
-  → CodeFixEngine
-    1. CodeGraph 定位精确代码位置 (file:line)
-    2. 提取上下文 (前后 N 行)
-    3. coder LLM 生成 diff (qwen3-coder:30b, max_tokens=2000)
-    4. embedded-c-runtime-safety 安全审查
-    5. 语法验证 (clang -fsyntax-only 或等价检查)
-  → 输出: cases/{case}/fix.patch + fix_report.md
+tree-sitter AST (结构层)
+  → ASTBuilder (节点/边)
+    → CodeGraph SQLite (结构图谱)
+      → LLM 语义标注 (意图层)
+        → semantic_annotations 表 (语义图谱)
 ```
 
-**借鉴项目**: 内部 `embedded-c-runtime-safety` skill + 现有 coder LLM 路由
+**语义标注内容**:
 
-**优先级**: P1
+| 标注对象 | 标注内容 | 示例 |
+|---------|---------|------|
+| FUNCTION | 功能描述 + 输入输出 | "计算 TTC (Time To Collision)，输入=相对距离+相对速度，输出=TTC 秒数" |
+| VARIABLE | 语义角色 | "FCTA 激活状态标志，1=Active, 0=Inactive" |
+| SIGNAL | 物理含义 | "车速信号，单位 km/h，0-200 范围" |
+| STATE_MACHINE | 状态机语义 | "FCTA 功能状态机：None→Init→Standby→Active→Off" |
+| PATTERN | 行为模式语义 | "TTC 阈值滞回：激活阈值 2.0s，退出阈值 2.5s" |
 
-#### FR-005: 管线步骤合并与精简
+**标注流程**:
+1. CodeGraph 构建完成后触发
+2. 按模块分批（每次 1 个源文件）
+3. LLM 读取 AST 结构 + 源码片段，输出语义标注 JSON
+4. 写入 `semantic_annotations` 表
+5. 缓存 + hash 校验，源码不变时跳过
 
-**目标**: 15+ 步 → 8 步核心管线。
+**标注时机**: AutoDream 阶段或首次 CodeGraph 构建后。
+
+**验收标准**: 核心文件（adasFunc.c, ASWIN_SystemState.c, RteComMapping.c）的函数/变量/信号均有语义标注。
+
+#### FR-004: 管线精简 — 15→8 步 (P2 — 优化)
+
+**目标**: 减少管线步骤，降低出错面和调试复杂度。
+
+**合并方案**:
 
 | 合并前 | 合并后 | 理由 |
 |--------|--------|------|
-| understand + classify | `classify` (1 次 LLM 同时完成) | 两个步骤都在用 LLM 理解问题，合并减少 1 次调用 |
-| parse + detect_window + analyze | `extract` (确定性层合并) | 都是确定性操作，不需要 LLM，合并减少 I/O 开销 |
-| conditions + tpe + probe | `evidence` (并行执行) | conditions 和 tpe 可并行，probe 依赖两者完成 |
-| suppression + output_signals | `signals` (合并) | 都是 CAN 信号查询 |
-| diagnose (专家面板) | `diagnose` (LangGraph 面板) | 保持不变，内部迁移框架 |
-| report + visualize + done | `deliver` (合并) | 报告+可视化+记忆更新，一次性完成 |
+| understand + classify | `classify` (1 次 LLM) | 同一 LLM 调用同时完成 |
+| parse + detect_window | `extract` (确定性) | 都是数据解析，无 LLM |
+| conditions + tpe + probe | `evidence` (并行) | conditions(LLM) 和 tpe(确定性) 可并行 |
+| suppression + output_signals | `signals` (确定性) | 都是 CAN 信号查询 |
+| diagnose | `diagnose` (LangGraph) | 不变 |
+| fix | `fix` (CodeFixEngine) | 不变 |
+| visualize + memory + done | `deliver` (确定性) | 都是收尾工作 |
 
 **目标管线 (8 步)**:
+
 ```
-1. init      → source_docs 保障 + CodeGraph 构建
-2. classify  → 问题理解 + 任务分类 (1 LLM)
-3. extract   → 数据解析 + 窗口检测 + 帧级分析 (确定性)
-4. evidence  → 条件提取 + TPE + 变量探测 (2 LLM, 可并行)
-5. signals   → 抑制信号 + 输出信号 (确定性)
-6. diagnose  → 专家面板 (1-2 LLM, LangGraph)
-7. fix       → CodeFixEngine 生成 diff (1 LLM, 仅在 diagnose 模式)
-8. deliver   → 报告 + 可视化 + 记忆更新
+1. init       → 项目配置加载 + source_docs + CodeGraph 构建 (确定性)
+2. classify   → 问题理解 + 任务分类 (1 LLM)
+3. extract    → 数据解析 + 窗口检测 (确定性)
+4. evidence   → 条件提取(LLM) + TPE(确定性) + 变量探测(LLM) — 并行
+5. signals    → 抑制信号 + 输出信号 (确定性)
+6. diagnose   → LangGraph 专家面板 (多 LLM)
+7. fix        → CodeFixEngine 生成 diff (1 LLM)
+8. deliver    → 报告 + 可视化 + 记忆更新 (确定性)
 ```
 
-#### FR-006: ContextBudget 智能优化
+**注意**: evidence 步骤内部保留并行结构，conditions 和 TPE 并行执行，probe 依赖两者完成后执行。
 
-**目标**: 从被动截断变为智能优先级管理。
+#### FR-005: ContextBudget 智能优化 (P3 — 优化)
 
-**当前**: 60K 字符硬上限，按固定 priority 排序截断。
-**改造**:
-- 引入 token 预算反馈：记录每次 LLM 调用实际的 token 消耗
-- 动态调整：根据历史数据预估需要的 context 大小
-- 分级策略：关键证据 > 时序数据 > 背景信息 > 补充数据
-- 截断告警：截断超过 15% 时标记，专家面板中可见
+**目标**: 从固定 60K 字符变为动态 token 预算。
 
-#### FR-007: 记忆系统简化
+**当前实现评估**: 已有 priority 排序 + min_chars 保底 + greedy 分配 + format_report。不是纯被动截断。
 
-**目标**: 6 层 → 3 层核心记忆。
+**真正需要加的能力**:
 
-| 当前 | 改造 | 理由 |
-|------|------|------|
-| L1: project.md | 保留 → `project.md` | 项目级知识，有价值 |
-| L2: functions/*.json | 保留 → 合并到 `knowledge/` | 功能级知识，有价值 |
-| L3: patterns.json | 保留 → 合并到 `knowledge/` | 模式库，有价值 |
-| L4: sessions/*.json | **降级** → 仅最近 10 条 | 会话日志太多，90% 不会被消费 |
-| L5: cases/*/memory.json | **合并到 L3** | 案例记忆本质上就是模式 |
-| L6: code_knowledge/*.json | 保留 → `knowledge/code/` | 代码知识是诊断核心 |
+1. **动态总预算**: 根据 CodeGraph 大小 + 案例复杂度调整
+2. **截断反馈**: 记录截断内容，专家面板可见
 
-**简化后**:
+```python
+def dynamic_budget(codegraph_size: int, case_complexity: str) -> int:
+    base = 50_000
+    cg_bonus = min(codegraph_size // 100, 20_000)
+    complexity_mult = {"simple": 0.8, "normal": 1.0, "complex": 1.3}[case_complexity]
+    return int((base + cg_bonus) * complexity_mult)
+```
+
+#### FR-006: 记忆系统简化 — 6→3 层 (P2 — 优化)
+
+**目标**: 减少记忆层级，保持 API 兼容。
+
+**简化方案**:
+
+| 当前层级 | 改造后 | 理由 |
+|---------|--------|------|
+| L1: project.md | 保留 → `memory/project.md` | 项目级知识，AutoDream 写入 |
+| L2: functions/*.json | 保留 → `memory/knowledge/{FUNC}.json` | 功能级知识，诊断时读取 |
+| L3: patterns.json | 保留 → `memory/knowledge/patterns.json` | 模式库，跨案例学习 |
+| L4: sessions/*.json | 精简 → 只保留最近 20 条 | 90% 不会被消费 |
+| L5: cases/*/memory.json | 合并到 L3 patterns | 案例记忆 = 特化模式 |
+| L6: code_knowledge/*.json | 保留 → `memory/knowledge/code/` | 代码知识是诊断核心 |
+
+**简化后目录**:
+
 ```
 memory/
-  project.md           # 项目级总览 (AutoDream 写入)
+  project.md                    # 项目级总览
   knowledge/
-    patterns.json      # 跨功能模式库
-    code/              # 代码结构化知识 (CodeLearner 写入)
-    {FUNC}.json        # 功能级知识
-  sessions/            # 仅保留最近 N 条会话
+    patterns.json               # 跨功能模式库
+    code/                       # 代码结构化知识
+    {FUNC}.json                 # 功能级知识
+  sessions/                     # 最近 20 条会话
+  codegraph_{project}.db        # CodeGraph (按项目隔离)
 ```
 
-#### FR-008: 异常处理与降级策略
-
-**目标**: 每个 LLM 调用都有明确的降级策略。
+#### FR-007: 降级策略 (已在 Phase 1 实现，补充完善)
 
 | 步骤 | 降级策略 |
 |------|---------|
-| classify | 降级为默认 diagnose 模式 + 通用专家配置 |
-| evidence (conditions) | 使用缓存的 source_docs，跳过 LLM 提取 |
-| evidence (probe) | 跳过变量探测，不影响主线 |
-| diagnose (专家面板) | 降级为单专家模式，直接输出结论 |
-| fix (CodeFixEngine) | 降级为文字修复建议 (当前行为) |
+| classify | 默认 `diagnose` + 全 5 专家 |
+| evidence (conditions) | 使用缓存的 `{FUNC}_conditions.json` |
+| evidence (probe) | 跳过，`probe_results = {}` |
+| diagnose (专家面板) | 单专家直接输出 |
+| fix (CodeFixEngine) | 返回文字修复建议 |
+| **CodeGraph 构建** | **跳过，使用上一次缓存** |
+
+#### FR-008: MF4 Parser (Deferred — 待改造)
+
+**状态**: `parsers/mf4_parser.py` 已有框架 + stub，但因 `asammdf` 在内网环境不可安装，推迟为待改造项。
+
+**后续方案**:
+- 方案 A: 在内网部署 asammdf 或 mffparser 依赖
+- 方案 B: 使用 mf4-converter CLI 工具转 BLF 后处理
+- 方案 C: 等待网络环境支持后补全
 
 ---
 
@@ -315,9 +401,15 @@ memory/
 ### 5.1 核心实体关系
 
 ```
+Project (项目配置)
+  ├── source_code (源码根目录)
+  ├── dbc_files (DBC 文件列表)
+  ├── key_source_files (关键源文件)
+  └── source_domains (源域定义)
+
 Case (案例)
-  ├── BAG/BLF/MF4 Files (数据源)
-  ├── FrameStore (SQLite)
+  ├── BAG/BLF Files (数据源)
+  ├── FrameStore (SQLite — 临时)
   │     ├── bag_frames
   │     ├── can_frames
   │     ├── radar_objects
@@ -327,25 +419,46 @@ Case (案例)
   │     ├── classification
   │     ├── evidence
   │     ├── expert_verdict
-  │     └── code_fix (NEW)
+  │     └── code_fix
   └── Reports (报告产物)
         ├── report.md
         ├── report.html
         ├── expert_opinions.md
-        └── fix.patch (NEW)
+        └── fix.patch
 
-CodeGraph (代码图谱) — SQLite
+CodeGraph (代码图谱 — SQLite, 按项目隔离)
   ├── functions (函数节点)
-  ├── variables (变量节点)
-  ├── signals (信号节点)
+  ├── variables (变量节点 — 过滤后)
+  ├── signals (信号节点 — 含完整链路)
   ├── files (文件节点)
   ├── edges (关系边: CALLS, READS, WRITES, READS_SIGNAL, WRITES_SIGNAL)
-  └── patterns (行为模式: HoldRelease, Accumulate...)
+  ├── patterns (行为模式)
+  └── semantic_annotations (语义标注 — 待填充)
 
-Memory (记忆系统)
+Memory (记忆系统 — 按项目隔离)
   ├── project.md (项目级)
   ├── knowledge/ (功能级 + 代码级 + 模式库)
-  └── sessions/ (会话日志)
+  └── sessions/ (会话日志 — 最近 20 条)
+```
+
+### 5.2 SIGNAL 节点数据模型（扩展）
+
+```sql
+CREATE TABLE signals (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,           -- 信号名
+  can_signal_name TEXT,         -- CAN/BLF 中的信号名
+  dbc_message TEXT,             -- DBC Message
+  can_id INTEGER,               -- CAN ID
+  rte_mapping_file TEXT,        -- RteComMapping.c 路径
+  rte_mapping_line INTEGER,     -- 宏调用行号
+  internal_var_name TEXT,       -- 映射的内部变量名
+  direction TEXT CHECK(direction IN ('READ', 'WRITE')),
+  platform TEXT,                -- 项目代号
+  file_path TEXT,               -- 所在文件
+  line INTEGER,
+  semantic_description TEXT     -- LLM 语义标注
+);
 ```
 
 ---
@@ -359,20 +472,23 @@ Memory (记忆系统)
 | 单次诊断总耗时 | 5-10 min | <5 min |
 | LLM 调用总次数 | 8-12 | 5-7 |
 | 数据解析耗时 | 10-30s | <15s |
-| CodeGraph 构建 | 首次 6s, 增量 <1s | 首次 <5s (tree-sitter) |
+| CodeGraph 构建 | 首次 6s, 增量 <1s | 首次 <5s |
 | HTML 报告生成 | <5s | <5s |
+| **项目切换耗时** | **需改配置 + 重建** | **CLI 参数切换，增量构建** |
 
 ### 6.2 可靠性
 
 - 确定性步骤（数据解析、CodeGraph）不依赖 LLM，成功率 >99%
 - LLM 步骤有降级策略，最坏情况仍能产出基础报告
 - 所有中间结果缓存，支持断点续跑
+- **项目隔离：一个项目的 CodeGraph 损坏不影响其他项目**
 
 ### 6.3 可维护性
 
+- 配置驱动：新增项目只需改 `config.yaml`
 - 管线步骤从 15+ 减到 8，代码量减少 30%+
-- 专家面板迁移到 LangGraph，prompt 管理从代码中分离
-- 代码解析从正则迁移到 tree-sitter，维护成本降低
+- 专家面板 LangGraph，prompt 外部化
+- 代码解析 tree-sitter AST，维护成本降低
 
 ---
 
@@ -383,115 +499,126 @@ Memory (记忆系统)
 - 模型: Qwen3.5-27B-FP16 (远端) + qwen3-coder:30b (编码)
 - 单 GPU (RTX A2000 12GB)，KV cache 有限
 - 内网环境，部分外部库可能无法直接安装
+- **Python 3.12.10**
 
 ### 7.2 外部依赖
 
-| 依赖 | 用途 | 风险 |
+| 依赖 | 用途 | 状态 |
 |------|------|------|
-| tree-sitter + tree-sitter-c | C 代码 AST 解析 | 需编译 C 扩展 |
-| mffparser | MF4 解析 | 需安装 C 依赖 |
-| langgraph | 专家面板编排 | pip 安装，低风险 |
-| cantools | DBC 解码 | 已在用，低风险 |
+| tree-sitter + tree-sitter-c | C 代码 AST 解析 | ✅ 已安装 |
+| langgraph | 专家面板编排 | ✅ 已安装 |
+| cantools | DBC 解码 | ✅ 已安装 |
+| rosbags | BAG 解析 | ✅ 已安装 |
+| asammdf / mffparser | MF4 解析 | ❌ Deferred |
 
 ### 7.3 风险与应对
 
 | 风险 | 可能性 | 影响 | 应对措施 |
 |------|--------|------|---------|
-| tree-sitter 编译失败 | 中 | 高 | fallback 到现有正则解析 |
-| LangGraph 迁移破坏现有面板 | 中 | 中 | 并行运行新旧面板，对比输出 |
-| mffparser 安装失败 | 中 | 中 | fallback 到 mf4-converter CLI |
-| 管线合并导致调试困难 | 低 | 高 | 每个步骤保留独立日志输出 |
+| 多项目 CodeGraph 膨胀 | 中 | 中 | 按项目隔离 DB，定期清理 |
+| 变量过滤过度/不足 | 中 | 高 | 渐进式过滤，先保留静态变量 |
+| 语义标注 LLM 质量不稳定 | 中 | 中 | 人工审核关键标注，cache + hash 校验 |
+| asammdf 始终无法安装 | 高 | 低 | MF4 作为待改造项，不影响主线 |
 
 ---
 
-## 8. 里程碑与发布计划
+## 8. 里程碑与实施路线
 
-### Phase 1: 基础层加固 (1-2 周)
-
-| # | 任务 | 工时 | 验收标准 |
-|---|------|------|---------|
-| 1.1 | MF4 Parser 实现 + case_loader 集成 | 2 天 | MF4 文件可解析写入 FrameStore |
-| 1.2 | BAG topic 自动发现 | 1 天 | 不修改代码可识别新 topic |
-| 1.3 | 异常降级策略实现 | 1 天 | 所有 LLM 步骤有 fallback |
-| 1.4 | 可观测性层 (步骤日志 + token 统计) | 1 天 | 每步记录输入/输出/耗时 |
-
-### Phase 2: 代码分析升级 (2-3 周)
+### Phase 5A: 多项目可配置化 (P0 — 3 天)
 
 | # | 任务 | 工时 | 验收标准 |
 |---|------|------|---------|
-| 2.1 | tree-sitter 集成 + C grammar | 2 天 | C 文件可解析为 AST |
-| 2.2 | AST → CodeGraph 构建器 | 3 天 | 函数/变量/信号/边关系完整 |
-| 2.3 | 行为模式提取 (HoldRelease 等) | 2 天 | 等价或优于现有正则提取 |
-| 2.4 | 状态机提取 | 2 天 | switch-case/goto 状态机可识别 |
-| 2.5 | CodeGraph 增量更新 | 1 天 | mtime/hash 检测变化 |
+| 5A.1 | config.yaml 重构为 projects 配置 | 1 天 | `-P sc6h` / `-P cr5cb` 可切换 |
+| 5A.2 | CodeGraph DB 按项目隔离 | 0.5 天 | `codegraph_{project}.db` 独立 |
+| 5A.3 | source_docs 按项目隔离 | 0.5 天 | `source_docs/{project}/` 独立 |
+| 5A.4 | 记忆系统按项目隔离 | 0.5 天 | `memory/projects/{project}/` 独立 |
+| 5A.5 | SIGNAL 节点扩展（数据-变量映射字段） | 0.5 天 | SIGNAL 节点含完整链路信息 |
+| 5A.6 | E2E 验证：两个项目各跑一次 FCTA001 | 0.5 天 | 两个平台产出不同结果 |
 
-### Phase 3: 专家面板重构 (2 周)
-
-| # | 任务 | 工时 | 验收标准 |
-|---|------|------|---------|
-| 3.1 | LangGraph 状态图定义 | 1 天 | 图可编译 |
-| 3.2 | 5 专家节点迁移 | 2 天 | 输出等价于现有面板 |
-| 3.3 | 主持人挑战 + 收敛逻辑 | 1 天 | 3 轮对话完整 |
-| 3.4 | prompt 外部化管理 | 1 天 | prompt 从代码分离 |
-
-### Phase 4: 代码修复引擎 (1-2 周)
+### Phase 5B: 变量过滤 (P1 — 2 天)
 
 | # | 任务 | 工时 | 验收标准 |
 |---|------|------|---------|
-| 4.1 | CodeFixEngine 架构设计 | 1 天 | 设计文档通过评审 |
-| 4.2 | CodeGraph → 代码定位 | 1 天 | 可从结论中提取 file:line |
-| 4.3 | coder LLM diff 生成 | 1 天 | 输出 valid unified diff |
-| 4.4 | 安全审查集成 | 1 天 | embedded-c-runtime-safety 检查通过 |
-| 4.5 | 效果预估 (what-if 扩展) | 1 天 | 可模拟逻辑修改效果 |
+| 5B.1 | ast_parser.py 增加变量过滤规则 | 1 天 | 变量数 797→<200 |
+| 5B.2 | 过滤规则可配置（白名单/黑名单） | 0.5 天 | config.yaml 可覆盖默认规则 |
+| 5B.3 | CodeGraph 重建 + 验证 | 0.5 天 | 验证保留变量均为诊断相关 |
 
-### Phase 5: 管线精简 + 记忆简化 (1 周)
+### Phase 5C: CodeGraph 语义层 (P1 — 3 天)
 
 | # | 任务 | 工时 | 验收标准 |
 |---|------|------|---------|
-| 5.1 | 管线步骤合并 (15→8) | 2 天 | 等价输出，步骤减少 |
-| 5.2 | ContextBudget 智能优化 | 1 天 | 截断率降低 |
-| 5.3 | 记忆系统简化 (6→3 层) | 1 天 | API 向后兼容 |
-| 5.4 | 端到端回归测试 | 1 天 | 现有案例诊断结果一致 |
+| 5C.1 | 设计 semantic_annotations 表结构 | 0.5 天 | SQL schema 确定 |
+| 5C.2 | 实现 LLM 语义标注 pipeline | 1.5 天 | 函数/变量/信号/状态机/模式均可标注 |
+| 5C.3 | 缓存 + hash 校验机制 | 0.5 天 | 源码不变时不重复标注 |
+| 5C.4 | 专家面板注入语义标注 | 0.5 天 | ContextBudget 包含语义描述 |
+| 5C.5 | 核心文件首次标注 + 质量检查 | 0.5 天 | adasFunc.c 等核心文件标注完整 |
+
+### Phase 5D: 管线精简 (P2 — 2 天)
+
+| # | 任务 | 工时 | 验收标准 |
+|---|------|------|---------|
+| 5D.1 | orchestrator.py 重构为 8 步 | 1 天 | 等价输出，步骤数 8 |
+| 5D.2 | evidence 步骤并行化 | 0.5 天 | conditions + TPE 并行 |
+| 5D.3 | 回归测试 | 0.5 天 | FCTA001 诊断结果一致 |
+
+### Phase 5E: 优化项 (P2-3 — 2 天)
+
+| # | 任务 | 工时 | 验收标准 |
+|---|------|------|---------|
+| 5E.1 | ContextBudget 动态总预算 | 0.5 天 | 根据 CodeGraph 大小调整 |
+| 5E.2 | 记忆系统简化 6→3 层 | 1 天 | API 向后兼容 |
+| 5E.3 | 端到端回归测试 | 0.5 天 | 两个项目 × FCTA001 均通过 |
+
+### Deferred: 待改造项
+
+| 项 | 说明 | 触发条件 |
+|---|------|---------|
+| MF4 Parser | asammdf 依赖不可用 | 内网安装 asammdf 或 mffparser |
+| 多平台 CodeGraph 合并查询 | 跨平台对比分析 | 用户明确提出需求 |
+| Web UI | 前端可视化 | 产品方向调整 |
+
+### 总工期
+
+| Phase | 工时 | 优先级 |
+|-------|------|--------|
+| 5A: 多项目可配置化 | 3 天 | **P0** |
+| 5B: 变量过滤 | 2 天 | P1 |
+| 5C: 语义层 | 3 天 | P1 |
+| 5D: 管线精简 | 2 天 | P2 |
+| 5E: 优化项 | 2 天 | P2-3 |
+| **合计** | **12 天** | — |
 
 ---
 
-## 9. 总工作量估算
+## 9. 附录
 
-| Phase | 工时 | 依赖 |
-|-------|------|------|
-| Phase 1: 基础层加固 | 5 天 | 无 |
-| Phase 2: 代码分析升级 | 10 天 | Phase 1 |
-| Phase 3: 专家面板重构 | 5 天 | 无 (可与 Phase 2 并行) |
-| Phase 4: 代码修复引擎 | 5 天 | Phase 2 |
-| Phase 5: 管线精简 | 5 天 | Phase 1-4 |
-| **合计** | **30 天** | — |
-
----
-
-## 10. 附录
-
-### A. 调研项目汇总
-
-详见 GitHub 调研部分（对话中已输出）。
-
-### B. 现有文档索引
+### A. 现有文档索引
 
 | 文档 | 路径 |
 |------|------|
 | Master Handoff | `docs/technical/codegraph-handoff-master.md` |
-| 数据流与架构评估 | `docs/technical/data-flow-and-architecture-assessment.md` |
-| CodeGraph Phase 1 | `docs/technical/codegraph-phase1-handoff.md` |
-| CodeGraph Phase 2 | `docs/technical/codegraph-phase2-handoff.md` |
+| 实施规划 | `docs/IMPLEMENTATION_PLAN_v2.md` |
 | ai/ 模块说明 | `ai/AGENTS.md` |
 | memory/ 模块说明 | `memory/AGENTS.md` |
 | parsers/ 模块说明 | `parsers/AGENTS.md` |
 
-### C. 待确认项
+### B. 用户确认项（2026-06-09）
 
-| 编号 | 问题 | 建议 |
-|------|------|------|
-| Q1 | LangGraph vs AutoGen: 专家面板用哪个框架？ | 推荐 LangGraph（图化编排，更适合 3 轮辩论流程） |
-| Q2 | tree-sitter 编译环境是否可用？(需要 C compiler) | 需要确认 Windows MSYS 环境是否支持 |
-| Q3 | MF4 数据是否有真实测试用例？ | 需要用户提供至少 1 个 MF4 文件用于开发 |
-| Q4 | CodeFixEngine 生成的 diff 是否需要自动化验证？ | 建议先用 `clang -fsyntax-only` 做语法检查 |
-| Q5 | 记忆系统简化是否会影响 AutoDream？ | 需要评估 Phase 3-4 的整合逻辑 |
+| 确认项 | 用户决定 |
+|--------|---------|
+| 多项目支持 | 必须，5 代 CR5CB + 6 代 SC6H，配置化 |
+| 数据-变量映射 | 必须，关注 BLF signal → C 变量全链路 |
+| 代码理解 | AST 结构 + LLM 语义标注两阶段 |
+| 改造顺序 | 基础优先：配置化 → 变量过滤 → 语义层 → 管线精简 |
+| MF4 | 待改造项，暂不阻塞主线 |
+| PRD/文档 | 根据确认信息立即更新 |
+| 产品定位 | 内部 ASW 工程师工具 |
+| 配置要求 | 精简，不增加复杂度 |
+
+### C. 配置精简设计原则
+
+1. **一个 config.yaml 管所有项目** — 不创建项目级子配置文件
+2. **全局共享的配置放顶层** — 模型端点、ADAS 功能定义、AutoDream 策略
+3. **项目特有的配置放 projects.* 下** — source_code, dbc_files, key_source_files, source_domains
+4. **CLI 一个参数切换** — `-P sc6h` 或 `-P cr5cb`
+5. **默认项目** — `default_project` 配置，省略 `-P` 时使用默认

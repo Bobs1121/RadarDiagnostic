@@ -1,149 +1,122 @@
 # RCTB 功能分析
 
 ## 1. 功能概述
-**RCTB (Rear Cross Traffic Braking)** 即后方交叉交通制动功能。该功能在车辆倒车时（通常处于 R 档），利用角雷达监测车辆后方横向移动的交通参与者（如车辆、行人）。当检测到存在碰撞风险且驾驶员未采取制动措施时，系统会先发出警报（通常与 RCTA 联动），若风险进一步升级，则自动请求 ESP/ABS 系统进行制动干预，以防止或减轻碰撞。
+**RCTB (Rear Cross Traffic Braking)** 即后方交叉交通制动功能。该功能主要在车辆倒车时，检测车辆后方左右两侧横向移动的目标（如车辆、行人、自行车等）。当系统判断本车与横向目标存在碰撞风险且满足制动条件时，系统会首先触发报警（通常关联 RCTA），若驾驶员未采取制动措施且碰撞风险进一步加剧，系统将请求自动紧急制动（AEB）以减轻或避免碰撞。
 
-从代码分析来看，RCTB 是 RCTA 的延伸功能，两者共享部分状态机和检测逻辑，但 RCTB 增加了制动请求（Brake Request）和制动保持（Hold）逻辑。
+从源码结构来看，RCTB 是 ADAS 套件中独立的一个功能模块（`AdasModelRCTB`），拥有独立的状态机、使能标志和报警/制动输出接口。
 
 ## 2. 状态机
-根据 `adasFunc.c` (L780) 和 `ASWIN_SystemState.h` (L52) 的定义，RCTB 系统状态机包含以下状态：
+根据 `adasWarningStruct` 中的定义，RCTB 功能遵循标准的 ADAS 状态机模型。
 
-| 状态值 | 状态名称 | 含义 |
-| :--- | :--- | :--- |
-| 0 | **None** | 未初始化/未定义 |
-| 1 | **Init** | 初始化中 |
-| 2 | **Standby** | 待机/就绪 (Ready)，系统自检通过，等待激活条件 |
-| 3 | **Active** | 激活 (Active)，功能正在运行，可检测并触发报警/制动 |
-| 4 | **Off** | 关闭 (Off)，功能被用户关闭或配置禁用 |
-| 5 | **Failure** | 故障 (Failure)，传感器或系统内部故障 |
-| 6 | **Passive** | 被动/降级 (Passive)，部分功能受限 |
+**状态定义 (`rctbSystemState`):**
+*   **0 - None**: 未定义或初始未配置状态。
+*   **1 - Init**: 初始化状态，系统正在加载参数或进行自检。
+*   **2 - Standby**: 待机状态，系统已就绪，但当前驾驶场景不满足激活条件（例如车速过高、未挂倒挡、功能被手动关闭）。
+*   **3 - Active**: 激活状态，系统正在实时监测后方交叉交通，具备触发报警和制动的能力。
+*   **4 - Off**: 关闭状态，用户通过 HMI 手动关闭了该功能。
+*   **5 - Failure**: 故障状态，传感器故障、数据异常或系统内部错误，功能不可用。
+*   **6 - Passive**: 被动状态，可能指系统处于降级模式或等待特定条件恢复。
 
-**状态转换逻辑推断：**
-*   **Standby -> Active**: 当车速在激活范围内 (`fRctbActiveLowSpd` ~ `fRctbActiveUpSpd`，即 0-9 km/h)，且档位为 R 档，功能开关开启 (`bRCTBEnable`)，且无故障时。
-*   **Active -> Standby/Off**: 当车速超过 `fRctbDeactiveUpSpd` (10 km/h) 或低于 `fRctbDeactiveLowSpd` (0 km/h)，或驾驶员踩下刹车/油门超过阈值，或功能被禁用。
-*   **Active -> Failure**: 当雷达信号丢失、通信故障或系统诊断报错时。
-*   **制动保持逻辑 (Hold)**: 在 `Active` 状态下触发制动后，系统进入制动保持阶段。若满足 `RCTBHoldThree` (3秒) 或驾驶员干预（踩油门、急打方向等），则结束制动保持。
+**状态转换逻辑推断:**
+*   **None -> Init**: 系统上电或复位。
+*   **Init -> Standby/Active/Failure**: 初始化完成后，根据使能标志 `bRCTBEnable` 和传感器健康状态决定进入待机、激活或故障。
+*   **Standby <-> Active**:
+    *   **Standby -> Active**: 满足激活条件（如：`bRCTBEnable == true`，挂入 R 挡，车速低于阈值，雷达视野正常）。
+    *   **Active -> Standby**: 不满足激活条件（如：车速超过阈值，退出 R 挡，功能被临时抑制）。
+*   **Active -> Off**: 用户手动关闭 `bRCTBEnable`。
+*   **Any -> Failure**: 检测到传感器故障或严重数据异常。
 
 ## 3. 报警/制动逻辑
+RCTB 的逻辑通常分为两个阶段：**预警 (Warning)** 和 **制动 (Braking)**。虽然源码片段主要展示了结构体定义，但结合变量命名和通用 ADAS 逻辑，推导如下：
 
-### 3.1 报警触发 (Warning)
-虽然 RCTB 主要关注制动，但其报警逻辑通常与 RCTA 共享或作为前置条件。
-*   **触发条件**:
-    1.  系统状态为 `Active`。
-    2.  检测到目标物体位于后方交叉区域。
-    3.  **TTM (Time To Merge/Impact)** 小于警告阈值 `fRctbObjWarningTTM` (1.6s)。
-    4.  **DDCI (Distance to Collision Intersection)** 满足条件：`DDCI < fRctbObjWarningLowerDDCIOffSet` (-2.0m)。
-    5.  **C-DDCI** 满足条件：`C-DDCI < fRctbObjWarningLowerCDDCIOffSet` (-4.0m)。
-*   **报警保持**: 使用 `bRctbLeftKeepFlag` / `bRctbRightKeepFlag` 及缓冲区 `bRctbLeftBuffer` 进行报警状态的平滑处理，防止抖动。
+1.  **目标筛选**:
+    *   系统从感知层获取目标列表。
+    *   筛选出位于后方交叉区域（FOV Crossing）的目标，参考变量 `isFOVCrossing`。
+    *   排除静态障碍物或低速静止物体（除非特定配置），重点关注横向运动目标。
 
-### 3.2 制动触发 (Braking)
-*   **触发条件**:
-    1.  报警条件已满足（或 TTM 进一步恶化）。
-    2.  **AEB 激活阈值**: 碰撞风险达到 `fRctbAEBActiveThresh` (1.0s，推测为 TTM 或 TTC 的临界值)。
-    3.  驾驶员未进行有效的制动或转向规避操作。
-*   **制动请求值**:
-    *   标准制动请求：`fRctbBrakeValue` (-4.0 m/s²)。
-    *   高速制动请求：`fRctbHighSpeedBrakeValue` (-6.0 m/s²)。
-    *   保持制动请求：`fRctbHoldValue` (-2.0 m/s²)。
+2.  **风险评估 (TTC/TTM 计算)**:
+    *   计算本车与目标的碰撞时间 (TTC) 或到达时间 (TTM, `fTTM`)。
+    *   计算交点位置 (`fInterX`, `fInterY`)，判断目标轨迹是否与本车倒车轨迹相交。
 
-### 3.3 取消报警/制动 (De-warning/De-braking)
-*   **取消报警**:
-    *   TTM 大于去报警阈值 `fRctbObjDeWarningTTM` (2.0s)。
-    *   目标物体离开检测区域。
-    *   系统状态退出 `Active`。
-*   **取消制动 (Hold Finish)**:
-    根据 `ASWIN_SystemState.c` (L166-L176) 的 `RctbSetHoldfinish` 函数，制动保持结束条件（满足任一即可）：
-    1.  功能被禁用 (`bRCTBEnable == 0`)。
-    2.  驾驶员踩下刹车踏板持续时间超过阈值 (`Check_Brake_Pedal_Pressed_Duration`)。
-    3.  系统故障 (`GWM_RCTB_FaultEna`)。
-    4.  驾驶员深踩油门 (`AdasStM.AccPedPosDiag >= 5`)。
-    5.  方向盘转动过快 (`AdasStM.SteerWheelSpd > 100`)。
-    6.  制动保持时间达到 `RCTB_HOLD` (3000ms)。
-    7.  方向盘转角过大 (`StWhAng() > 90` 度)。
-    8.  车速极低 (< 0.7 km/h) 且满足上述任一条件。
+3.  **报警触发 (RCTA 联动)**:
+    *   当 TTC 小于报警阈值时，设置 `objRctbWarningFlag` 或 `bLeft/RightRctbWarning`。
+    *   通常 RCTB 的报警阶段会复用或触发 RCTA (Rear Cross Traffic Alert) 的报警信号 (`leftRctaFlag`/`rightRctaFlag`)，通过声音或视觉提示驾驶员。
+
+4.  **制动触发 (RCTB 执行)**:
+    *   在报警持续期间，若 TTC 进一步减小至制动阈值，且驾驶员未踩刹车（需结合制动踏板信号，虽未在片段中直接显示，但为必要输入）。
+    *   设置制动请求标志。
+    *   输出制动强度 `fBrakeValue` 和制动事件时间 `fBrakeEventTime`。
+    *   更新 `bLeft/RightRctbWarning` 状态，可能区分“预警”和“制动请求”等级。
+
+5.  **报警/制动取消**:
+    *   目标移出危险区域（TTC 增大或目标离开 FOV）。
+    *   驾驶员主动制动或转向避让。
+    *   车辆退出倒挡或车速超过限制。
 
 ## 4. 关键阈值
+虽然具体的数值未在头文件中直接给出（通常位于参数配置文件或 `.c` 文件中），但根据结构体中的变量，关键阈值包括：
 
-| 参数名称 | 变量名 | 值 | 单位 | 说明 |
-| :--- | :--- | :--- | :--- | :--- |
-| **系统激活上限速度** | `fRctbActiveUpSpd` | 9.0 | km/h | 倒车速度超过此值功能退出 Active |
-| **系统激活下限速度** | `fRctbActiveLowSpd` | 0.0 | km/h | |
-| **系统退出上限速度** | `fRctbDeactiveUpSpd` | 10.0 | km/h | 滞回区间，防止在 9-10km/h 频繁跳变 |
-| **检测下限速度** | `fRctbDetectLowSpd` | 0.7 | km/h | 低于此速度可能停止检测或进入保持结束逻辑 |
-| **检测上限速度** | `fRctbDetectUpSpd` | 9.0 | km/h | |
-| **警告 TTM** | `fRctbObjWarningTTM` | 1.6 | s | 时间到碰撞/交汇，触发报警 |
-| **去报警 TTM** | `fRctbObjDeWarningTTM` | 2.0 | s | 时间大于此值，取消报警 |
-| **警告 DDCI 偏移** | `fRctbObjWarningLowerDDCIOffSet` | -2.0 | m | 距离碰撞点纵向距离阈值 |
-| **警告 C-DDCI 偏移** | `fRctbObjWarningLowerCDDCIOffSet` | -4.0 | m | 距离碰撞点横向/综合距离阈值 |
-| **AEB 激活阈值** | `fRctbAEBActiveThresh` | 1.0 | s | 触发自动制动的临界时间 |
-| **标准制动减速度** | `fRctbBrakeValue` | -4.0 | m/s² | 常规制动请求 |
-| **高速制动减速度** | `fRctbHighSpeedBrakeValue` | -6.0 | m/s² | 高风险制动请求 |
-| **保持制动减速度** | `fRctbHoldValue` | -2.0 | m/s² | 车辆停止后的保持力 |
-| **停止速度阈值** | `fRctbStopSpd` | 1.0 | km/h | 判定车辆停止的速度 |
-| **制动保持时长** | `RCTB_HOLD` | 3000 | ms | 自动制动保持的最大持续时间 |
-| **功能间隔** | `RCTB_FUNC_GAP` | 10000 | ms | 两次触发之间的冷却时间 |
+*   **fTTM (Time To Meeting)**: 到达交点的时间阈值。
+    *   `TTM_warn`: 触发报警的 TTM 阈值（例如 1.5s - 2.0s）。
+    *   `TTM_brake`: 触发制动的 TTM 阈值（例如 0.8s - 1.2s）。
+*   **fInterX / fInterY**: 预测交点的纵向和横向距离阈值，用于判断交点是否在本车可影响的范围内。
+*   **Speed Thresholds**:
+    *   `beginEgoVel`: 功能激活的最大本车速度（倒车速度通常 < 15 km/h）。
+    *   目标速度阈值：忽略静止或极低速目标。
+*   **Angle Thresholds**: 目标相对本车的角度范围，定义“交叉交通”的扇区。
 
 ## 5. 关键变量
 
 | 变量名 | 类型 | 来源 | 含义 |
 | :--- | :--- | :--- | :--- |
-| `rctbSystemState` | `uint8_t` | `adasFunc.c` | RCTB 系统当前状态机状态 (0-6) |
-| `bRctbDetectFlg` | `bool` | `adasFunc.c` | 是否检测到有效威胁目标 |
-| `bRctbLeftWarningFlg` | `bool` | `adasFunc.c` | 左侧是否触发报警/制动 |
-| `bRctbRightWarningFlg` | `bool` | `adasFunc.c` | 右侧是否触发报警/制动 |
-| `bRctbKeepBrakeFlg` | `bool` | `adasFunc.c` | 制动保持标志位，用于维持制动请求 |
-| `fRctbBrakeReqVal` | `float` | `adasFunc.c` | 当前输出的制动请求减速度值 |
-| `fRctbBrakeEventTime` | `float` | `adasFunc.c` | 制动事件开始的时间戳 |
-| `fRctbHoldEventTime` | `float` | `adasFunc.c` | 制动保持阶段开始的时间戳 |
-| `bRCTBEnable` | `bool` | `RteComMapping.c` | RCTB 功能使能开关 (用户配置/开关) |
-| `rctbTimerActive` | `bool` | `ASWIN_SystemState.c` | 制动保持计时器激活标志 |
-| `AdasStM.RCTBState` | `uint8_t` | `ASWIN_SystemState.c` | 全局 ADAS 状态机中的 RCTB 状态副本 |
+| `bRCTBEnable` | `bool` | `adasEnableStruct` | RCTB 功能使能标志，由 HMI 或系统配置控制。 |
+| `rctbSystemState` | `uint8_t` | `adasWarningStruct` | RCTB 功能当前状态机状态 (0-6)。 |
+| `bLeftRctbWarning` | `uint8_t` | `adasWarningStruct` | 左侧 RCTB 报警/制动状态 (0:正常, 1:预警, 2:制动请求/严重预警)。 |
+| `bRightRctbWarning` | `uint8_t` | `adasWarningStruct` | 右侧 RCTB 报警/制动状态。 |
+| `objRctbWarningFlag` | `int8_t` | `objOutEDRStruct` / `structDefine.h` | 单个目标对象的 RCTB 报警标志 (-1:始终正常, 0:正常, 1:报警)。 |
+| `fBrakeValue` | `float` | `adasWarningStruct` | 请求的制动压力或减速度值，用于执行 AEB。 |
+| `fBrakeEventTime` | `float` | `adasWarningStruct` | 制动事件发生的时间戳或持续时间。 |
+| `fTTM` | `float` | `objOutEDRStruct` | 目标到达预测交点的时间 (Time To Meeting)，核心风险指标。 |
+| `fInterX` | `float` | `objOutEDRStruct` | 预测交点的纵向距离。 |
+| `fInterY` | `float` | `objOutEDRStruct` | 预测交点的横向距离。 |
+| `isFOVCrossing` | `uint8_t` | `structDefine.h` | 目标是否处于视场角交叉区域，用于初步筛选潜在危险目标。 |
+| `leftRctbFlag` / `rightRctbFlag` | `bool` | `perception_public_def.h` (L588-589) | 感知层输出的左右侧 RCTB 危险目标存在标志。 |
 
 ## 6. 输入信号
-
-1.  **雷达感知数据**:
-    *   目标列表 (Object List): 包含距离 (Range)、相对速度 (RelVel)、方位角 (Azimuth)、TTC/TTM 计算值。
-    *   目标属性: 类型 (车辆/行人)、尺寸 (Width/Length)。
-2.  **车辆状态信号**:
-    *   `carSpd`: 自车速度 (km/h)。
-    *   `actual_gear`: 当前档位 (需为 R 档)。
-    *   `SteerWheelAng`: 方向盘转角。
-    *   `SteerWheelSpd`: 方向盘转角速度。
-    *   `AccPedPosDiag`: 油门踏板位置/开度。
-    *   `BrkPedalSts`: 刹车踏板状态。
-3.  **功能配置与开关**:
-    *   `bRCTBEnable`: 用户通过 UI 或配置开启/关闭 RCTB。
-    *   `RCTABrkSwtReq`: 制动功能开关请求信号。
-4.  **系统状态**:
-    *   传感器故障状态 (DTC)。
-    *   系统初始化状态。
+*   **车辆信号**:
+    *   挡位信号 (Gear Position): 判断是否处于 R 挡。
+    *   车速 (Ego Velocity): `beginEgoVel` 相关，判断是否在低速倒车范围。
+    *   制动踏板状态 (Brake Pedal): 判断驾驶员是否已介入（虽未在头文件显式列出，但为制动逻辑必需）。
+    *   转向角/转向信号: 辅助判断车辆运动趋势。
+*   **感知信号**:
+    *   目标列表 (Object List): 包含位置 (X, Y)、速度 (Vx, Vy)、类型 (`objType`)、ID (`objID`)。
+    *   目标属性: `isFOVCrossing`, `ghostProb` (鬼影概率，用于过滤误检)。
+    *   雷达状态: 干扰等级 (`stLvl`)，用于判断数据可靠性。
+*   **配置信号**:
+    *   `bRCTBEnable`: 功能开关。
+    *   标定参数: 阈值配置。
 
 ## 7. 输出信号
-
-1.  **制动请求**:
-    *   `RSDS_BrkgReq` / `RSDS_BrkgReqVal`: 发送给 ESP/ABS 的制动请求标志及减速度值 (m/s²)。
-    *   `RSDS_RCWResp`: 响应信号。
-2.  **报警指示**:
-    *   `RR_Rctb_Warning` / `RL_Rctb_Warning`: 发送给仪表盘或 HUD 的报警状态 (通常与 RCTA 报警共用或分级显示)。
-    *   `RCTABrkResp`: 制动功能响应信号 (告知 HMI 制动已激活)。
-3.  **状态指示**:
-    *   `RCTBState`: 系统当前状态 (Active, Standby, Failure 等)。
-    *   `Fault_Err`: 故障状态码。
-    *   `SDASts`: 系统诊断/激活状态。
+*   **报警信号**:
+    *   `bLeftRctbWarning` / `bRightRctbWarning`: 发送给 HMI 或声音报警模块，触发视觉/听觉警告。
+    *   `leftRctaFlag` / `rightRctaFlag`: 可能同时激活 RCTA 报警，因为 RCTB 通常包含 RCTA 功能。
+*   **制动请求信号**:
+    *   `fBrakeValue`: 发送给底盘控制模块 (Chassis Control) 的制动请求值。
+    *   `fBrakeEventTime`: 制动事件的时间信息。
+*   **状态信号**:
+    *   `rctbSystemState`: 发送给诊断系统或 HMI，显示功能状态。
+*   **数据记录**:
+    *   `objOutEDRStruct`: 包含 `objRctbWarningFlag` 等字段，用于 EDR (Event Data Recorder) 黑匣子记录事故前的关键数据。
 
 ## 8. 与其他功能的交互
-
-*   **与 RCTA (Rear Cross Traffic Alert) 的交互**:
-    *   **逻辑依赖**: RCTB 通常依赖于 RCTA 的检测逻辑。代码中 `bRctaLeftWarningFlg` 和 `bRctaRightWarningFlg` 与 RCTB 的报警标志紧密相关。RCTA 负责报警，RCTB 在报警基础上增加制动。
-    *   **开关联动**: 在 `RteComMapping.c` 中，如果 RCTA 被禁用 (`bRCTAEnable == 0`)，RCTB 通常也会被强制关闭 (`bRCTBEnable = FALSE`)，因为制动功能依赖于准确的交叉交通检测。
-*   **与 ESP/ABS 的交互**:
-    *   RCTB 通过 `RteComMapping` 输出制动请求值 (`fBrakeValue`) 给底盘控制单元。
-    *   接收底盘的反馈信号（如实际减速度、刹车踏板状态）以判断是否取消制动。
-*   **与 DOW (Door Open Warning) 的交互**:
-    *   两者都涉及后方安全，但在逻辑上是独立的。DOW 关注开门瞬间，RCTB 关注倒车过程中的横向交通。
-*   **与 BSD/LCA 的交互**:
-    *   共享角雷达的原始感知数据（目标跟踪列表）。
-    *   共享部分系统状态机架构（Standby/Active/Failure）。
-*   **与 HMI (人机交互) 的交互**:
-    *   通过 `RCTABrkResp` 和 `RCTAWarning` 信号控制仪表盘图标闪烁、声音报警或语音提示。
-    *   通过 `bRCTBEnable` 读取用户开关状态。
+*   **RCTA (Rear Cross Traffic Alert)**:
+    *   **强耦合**: RCTB 通常建立在 RCTA 之上。当检测到风险时，先触发 RCTA 报警。如果驾驶员无反应且风险升级，再触发 RCTB 制动。
+    *   变量 `leftRctaFlag`/`rightRctaFlag` 和 `leftRctbFlag`/`rightRctbFlag` 同时存在，表明两者可能并行运行或 RCTB 复用 RCTA 的检测结果。
+*   **RCW (Rear Cross Warning / Rear Collision Warning)**:
+    *   **区分**: RCW 通常指后方同向碰撞预警（如倒车时后方有车靠近），而 RCTB 指横向交叉。两者在目标筛选逻辑上互斥或互补。`bRCWEnable` 和 `bRCTBEnable` 是独立的。
+*   **BSD/LCA**:
+    *   **数据共享**: 使用相同的角雷达感知数据。BSD/LCA 关注侧方盲区，RCTB 关注后方交叉。在目标分类和跟踪算法上可能有共用模块。
+*   **AEB (Autonomous Emergency Braking)**:
+    *   **执行层**: RCTB 的制动请求最终由 AEB 系统执行。`fBrakeValue` 是 RCTB 与 AEB 执行器之间的接口。
+*   **HMI (Human Machine Interface)**:
+    *   接收 `rctbSystemState` 和报警标志，向驾驶员显示功能状态和警告信息。

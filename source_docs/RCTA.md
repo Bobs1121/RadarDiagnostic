@@ -1,142 +1,144 @@
 # RCTA 功能分析
 
 ## 1. 功能概述
-**RCTA (Rear Cross Traffic Alert)** 即后方交叉交通警报功能。该功能主要利用车辆后角雷达（Corner Radar）监测车辆后方两侧（左侧和右侧）的交通状况。当车辆处于倒车状态（通常挂入 R 挡）且车速较低时，若检测到有横向车辆或障碍物从后方接近，且存在碰撞风险，系统将触发声光报警（Warning），提醒驾驶员注意避让。
-
-根据代码片段，RCTA 与 RCTB (Rear Cross Traffic Braking) 共享部分系统状态机逻辑，但 RCTA 侧重于警报，而 RCTB 在更紧急情况下可能触发制动。代码中明确区分了 RCTA 的激活速度、检测角度、时间阈值（TTM）以及报警/消警的迟滞逻辑。
+**RCTA (Rear Cross Traffic Alert)**，即后方交叉交通警报，是角雷达（Corner Radar）ADAS功能中的核心安全功能之一。
+根据提供的源码片段，该功能主要运行在车辆低速或静止状态（通常倒车场景），用于检测车辆后方左右两侧视野盲区内的横向移动目标（如行人、车辆、自行车等）。
+代码逻辑主要集中在**目标跟踪（Tracking）**和**数据关联（Data Association）**阶段，通过计算预测位置与测量位置的偏差（RxDif, RyDif），结合场景标志（如拥堵、静止、移动），对目标进行有效性过滤（Thinning）和门限判断（Gating），最终输出警告标志。
 
 ## 2. 状态机
-根据 `adasFunc.h` 和 `ASWIN_SystemState.c` 中的定义，RCTA 系统状态机包含以下状态（`uint8_t rctaSystemState`）：
+虽然提供的代码片段主要涉及感知层（Perception）的跟踪逻辑，未直接展示完整的系统级状态机（如 Init/Active/Off 的切换），但可以从变量定义和逻辑中推断出以下隐含状态逻辑：
 
-*   **0 - None**: 未初始化或功能未启用。
-*   **1 - Init**: 初始化状态，系统正在加载参数或自检。
-*   **2 - Standby (Ready)**: 待机状态。系统功能正常，但当前条件（如车速、挡位）不满足激活条件，随时准备进入 Active。
-*   **3 - Active**: 激活状态。系统满足所有激活条件（如 R 挡、车速 < 15km/h），正在实时监测目标并可能触发报警。
-*   **4 - Off**: 功能关闭。用户通过开关关闭或系统逻辑强制关闭。
-*   **5 - Failure**: 故障状态。检测到传感器故障、通信错误或 DTC 激活。
-*   **6 - Passive**: 被动/抑制状态。系统功能正常，但因外部条件（如牵引模式、ESP 激活、车门打开等）暂时抑制报警或制动输出。
-
-**状态转换关键逻辑：**
-*   **Standby -> Active**:
-    *   车速满足条件：`fRctaActiveLowSpd` (0.0 km/h) <= `VehSpd` <= `fRctaActiveUpSpd` (15.0 km/h)。
-    *   无故障：`GWM_RCTA_FaultEna() == 0`。
-    *   无抑制条件：ESP 未激活 (`ESPFUN == 0`)，无牵引模式 (`TrailerSts == 0`)，车门关闭等。
-*   **Active -> Standby**:
-    *   车速超出范围：`VehSpd` > `fRctaDeactiveUpSpd` (17.0 km/h)。
-    *   检测到故障或抑制条件触发。
-*   **Active/Standby -> Failure**:
-    *   `CheckAnyDtcActive()` 返回真，或传感器数据无效。
-*   **Active -> Passive**:
-    *   在牵引模式 (`TrailerSts == 1`) 下，系统状态可能进入 Passive 以抑制报警（见 `DIDTrailerSts` 函数）。
+*   **系统使能状态 (`g_adasEnable.bRCTAEnable`)**:
+    *   **Disable**: 功能关闭，不执行相关逻辑。
+    *   **Enable**: 功能开启，进入感知处理流程。
+*   **跟踪状态 (Track State)**:
+    *   **Init/Standby**: 目标未建立稳定跟踪，`lifeCycle` 较短。
+    *   **Active**: 目标稳定跟踪，`lifeCycle` 超过阈值（如 `TRACK_delayLifeCycle`），且通过关联门限。
+    *   **Lost/Deleted**: 目标丢失或超出ROI，跟踪终止。
+*   **报警状态 (Warning State)**:
+    *   **Normal (0)**: 无危险。
+    *   **Warning (1)**: 触发一级警告（视觉/听觉）。
+    *   **Critical (2)**: 触发二级警告或制动请求（通常关联 RCTB，但在 RCTA 逻辑中可能作为严重等级体现）。
+    *   *注：`adasWarningStruct` 中定义了 `bLeftRctaWarning` 和 `bRightRctaWarning`，类型为 `uint8_t`，通常 0=Normal, 1=First Warning, 2=Second Warning。*
 
 ## 3. 报警/制动逻辑
+由于代码片段侧重于**感知滤波与关联**，而非最终的报警决策机（Decision Module），以下是基于代码推导的**报警触发前置条件**：
 
-### 3.1 报警触发条件 (Warning)
-当系统处于 **Active** 状态时，若检测到目标满足以下所有条件，触发 RCTA 报警：
-1.  **目标速度**: `fRctaObjWarningSpd` (0.0 km/h) <= `ObjSpd` <= `fRctaObjWarningUpSpd` (200.0 km/h)。
-2.  **目标角度 (Yaw Angle)**: 目标相对于自车的绝对偏航角在 `fRctaObjWarningLowYawAngle` (45.0°) 到 `fRctaObjWarningUpYawAngle` (135.0°) 之间。这确保了目标是从侧后方横向接近。
-3.  **距离/碰撞时间 (TTM)**: 目标到达自车路径的时间 `TTM` <= `fRctaObjWarningTTM` (4.2s)。
-4.  **横向距离 (DDCI/C-DDCI)**:
-    *   目标预测的横向距离偏移量需满足：
-        *   `fRctaObjWarningLowerCDDCIOffSet` (0.0m) <= `C-DDCI` <= `fRctaObjWarningUpCDDCIOffSet` (0.0m)。
-        *   `fRctaObjWarningLowerDDCIOffSet` (-0.0m) <= `DDCI` <= `fRctaObjWarningUpDDCIOffSet` (2.0m)。
-    *   注：代码中 C-DDCI 和 DDCI 的阈值设置非常严格（接近 0），表明系统只报警那些预测轨迹与自车路径有显著重叠的目标。
-5.  **ROI (Region of Interest)**: 目标需位于 RCTA 的感兴趣区域内（Y 轴偏移 `fRctaRoiOffSetY` = 0.3m）。
+### 3.1 目标有效性过滤 (Thinning Logic)
+在 `AssignThinFlg` 函数中，系统对目标进行“变薄”处理，即排除非威胁或干扰目标：
+1.  **高速大转弯排除**:
+    *   若自车速度 `carSpd >= TRACK_MaxRCTAEgoCarV` (6.0 m/s) 且横摆角速度 `yaw_rate < TRACK_BigTurnYawRate` (5.0 rad/s)，且目标移动状态与聚类不一致，则标记为无效（`velThinFlg = true`, `distThinFlg = true`）。
+2.  **低速静止/拥堵场景排除**:
+    *   若自车速度 `< 6.0 m/s`，且非交叉场景 (`g_crossSceneFlg == 0`)，且目标被判定为静止 (`DynProp_Stationary`) 或停止 (`DynProp_Stopped`)，但在拥堵场景 (`JamScene_JamStopped`) 下聚类显示为移动，则标记距离滤波 (`distThinFlg = true`)。
+    *   若目标为静止/停止，且生命周期 `> 30`，偏航角判断通过，且绝对速度 `< 0.6 m/s`，则视为静态背景，可能被过滤。
+3.  **特定物体排除**:
+    *   静止的卡车 (`DynProp_Stopped` && `ObjType_Truck`) 会被标记距离滤波。
 
-### 3.2 报警取消条件 (De-warning)
-为防止报警闪烁，采用迟滞逻辑（Hysteresis）：
-1.  **目标速度**: `ObjSpd` < `fRctaObjDeWarningSpd` (0.0 km/h) 或 `ObjSpd` > `fRctaObjDeWarningUpSpd` (200.0 km/h)。
-2.  **目标角度**: 绝对偏航角 < `fRctaObjDeWarningLowYawAngle` (43.0°) 或 > `fRctaObjDeWarningUpYawAngle` (137.0°)。
-    *   *分析*: 消警角度范围比报警范围更宽（43-137 vs 45-135），增加了稳定性。
-3.  **TTM**: `TTM` > `fRctaObjDeWarningTTM` (5.2s)。
-    *   *分析*: 消警时间阈值比报警阈值大 1.0s，提供缓冲。
-4.  **横向距离**:
-    *   `C-DDCI` < `fRctaObjDeWarningLowerCDDCIOffSet` (-0.5m) 或 > `fRctaObjDeWarningUpCDDCIOffSet` (0.5m)。
-    *   `DDCI` < `fRctaObjDeWarningLowerDDCIOffSet` (-1.5m) 或 > `fRctaObjDeWarningUpDDCIOffSet` (3.5m)。
-    *   *分析*: 消警的横向距离容差比报警大得多，意味着目标稍微偏离路径即可停止报警。
+### 3.2 数据关联与门限判断 (Gating Logic)
+在 `AssignGateThd` (隐含在后续代码) 中，计算预测与测量的偏差：
+1.  **横向偏差 (RxDif)**:
+    *   计算预测 `distX` 与聚类 `distXUse` 的差值。
+    *   若目标参考点变化 (`isRefPtChange`) 或为大卡车且高速移动，使用最小距离 (`minDistX`) 进行更严格的关联。
+2.  **纵向偏差 (RyDif)**:
+    *   计算预测 `distY` 与聚类 `distYUse` 的差值。
+3.  **关联门限 (Gate)**:
+    *   若 `RyDifHoz` (横向相对速度/位置偏差) 在 `[-gateYMinRatio * RyGate, gateYMaxRxatio * RyGate]` 范围内。
+    *   且 `RxDifHozAbs` (纵向偏差) 在 `[gateXMin, gateXMax]` 范围内，或目标在聚类距离范围内。
+    *   则 `ifMarkRAll = true`，表示关联成功，目标有效。
+4.  **栅栏/静态干扰排除**:
+    *   若自车低速 (`< 6.0 m/s`)，聚类为静止，且目标为横向移动 (`hozCanFlg`)，若聚类点数少 (`dotNum <= 2`) 且位置在目标后方特定区域，则取消关联 (`ifMarkRAll = false`)，防止将栅栏误判为穿越目标。
 
-### 3.3 制动逻辑 (RCTB 关联)
-虽然主要分析 RCTA，但代码显示 RCTA 和 RCTB 共享开关逻辑（`RCTASwtReq` 和 `RCTABrkSwtReq`）。若 RCTB 功能开启且满足更严格的制动阈值（如更短的 TTM 或更近的距离），系统会输出制动请求 (`RSDS_BrkgReq`)。RCTA 本身通常仅输出警告信号 (`RCTA_warningReqLeft/Right`)。
+### 3.3 报警触发 (推断)
+虽然代码未直接显示 `if (danger) setWarning()`，但逻辑流向为：
+1.  目标通过 `AssignThinFlg` 未被过滤。
+2.  目标通过 `AssignGateThd` 成功关联。
+3.  目标位于 `g_adasRoi.leftRctaRoi` 或 `rightRctaRoi` 区域内。
+4.  目标具有横向速度 (`isMoveFlg`) 且 TTC (Time To Collision) 或距离小于安全阈值。
+5.  设置 `objRctaWarningFlag` 为 `WarningFlag_Warning`。
+6.  更新 `g_adasWarning.bLeftRctaWarning` 或 `bRightRctaWarning`。
 
 ## 4. 关键阈值
-
-| 参数名称 | 变量名 | 值 | 单位 | 说明 |
-| :--- | :--- | :--- | :--- :--- |
-| **系统激活上限速度** | `fRctaActiveUpSpd` | 15.0 | km/h | 车速低于此值且大于下限才激活 |
-| **系统激活下限速度** | `fRctaActiveLowSpd` | 0.0 | km/h | |
-| **系统去激活上限速度** | `fRctaDeactiveUpSpd` | 17.0 | km/h | 车速高于此值退出 Active 状态 (迟滞) |
-| **报警目标速度上限** | `fRctaObjWarningUpSpd` | 200.0 | km/h | 目标速度阈值 |
-| **报警偏航角下限** | `fRctaObjWarningLowYawAngle` | 45.0 | degree | 目标角度范围 (侧后方) |
-| **报警偏航角上限** | `fRctaObjWarningUpYawAngle` | 135.0 | degree | |
-| **消警偏航角下限** | `fRctaObjDeWarningLowYawAngle` | 43.0 | degree | 迟滞范围 |
-| **消警偏航角上限** | `fRctaObjDeWarningUpYawAngle` | 137.0 | degree | |
-| **报警 TTM (Time to Merge)** | `fRctaObjWarningTTM` | 4.2 | s | 碰撞时间阈值 |
-| **消警 TTM** | `fRctaObjDeWarningTTM` | 5.2 | s | 迟滞阈值 |
-| **报警 C-DDCI 偏移** | `fRctaObjWarningLowerCDDCIOffSet` | 0.0 | m | 横向距离预测偏移 (报警) |
-| **报警 C-DDCI 偏移** | `fRctaObjWarningUpCDDCIOffSet` | 0.0 | m | |
-| **消警 C-DDCI 偏移** | `fRctaObjDeWarningLowerCDDCIOffSet` | -0.5 | m | 横向距离预测偏移 (消警) |
-| **消警 C-DDCI 偏移** | `fRctaObjDeWarningUpCDDCIOffSet` | 0.5 | m | |
-| **报警 DDCI 偏移** | `fRctaObjWarningLowerDDCIOffSet` | 0.0 | m | 当前横向距离偏移 (报警) |
-| **报警 DDCI 偏移** | `fRctaObjWarningUpDDCIOffSet` | 2.0 | m | |
-| **消警 DDCI 偏移** | `fRctaObjDeWarningLowerDDCIOffSet` | -1.5 | m | 当前横向距离偏移 (消警) |
-| **消警 DDCI 偏移** | `fRctaObjDeWarningUpDDCIOffSet` | 3.5 | m | |
-| **ROI Y 轴偏移** | `fRctaRoiOffSetY` | 0.3 | m | 感兴趣区域纵向偏移 |
+| 阈值名称 | 值 | 单位 | 含义 |
+| :--- | :--- | :--- | :--- |
+| `TRACK_MaxRCTAEgoCarV` | 6.0 | m/s | RCTA 功能有效的自车最大速度。超过此速度可能退出 RCTA 或切换逻辑。 |
+| `TRACK_BigTurnYawRate` | 5.0 | rad/s | 大转弯横摆角速度阈值。用于判断是否为大转弯场景，影响目标过滤。 |
+| `TRACK_BigTurnYawRateL` | 8.0 | rad/s | 更大转弯阈值，可能用于更严格的过滤。 |
+| `0.6` | 0.6 | m/s | 静止目标速度阈值。低于此速度且生命周期长，视为静态背景。 |
+| `1.5` | 1.5 | m | 距离阈值 (代码注释中提及 `distX > 1.5f`)，可能用于近距离过滤。 |
+| `1.0` | 1.0 | m | 距离阈值 (代码注释中提及 `fabsf(pTemp->distX) < 1.0f`)。 |
+| `0.5` | 0.5 | m/s | 极低速度阈值，用于特定场景（如 `probRxDiff > 900.0f` 时的特殊处理）。 |
+| `30.0` | 30.0 | - | 纵向距离上限 (`absDistYBeginYCal < 30.0f`)。 |
+| `System_LaneWidth` | - | m | 车道宽度，用于计算横向位置比例 (`0.6f * System_LaneWidth`)。 |
+| `TRACK_delayLifeCycle` | 15 | frames | 跟踪生命周期阈值，用于确认目标有效性。 |
+| `TRACK_delayLifeCycleLong` | 30 | frames | 长生命周期阈值，用于静态背景判断。 |
 
 ## 5. 关键变量
-
 | 变量名 | 类型 | 来源 | 含义 |
 | :--- | :--- | :--- | :--- |
-| `rctaSystemState` | `uint8_t` | `adasFunc.c` / `ASWIN_SystemState.c` | RCTA 系统当前状态机状态 (0-6) |
-| `bRCTAEnable` | `bool` | `RteComMapping.c` | 用户/系统使能标志，来自 CAN 信号 `RCTASwtReq` |
-| `fRctaObjWarningTTM` | `float` | `adasFunc.c` | 报警触发时间阈值 (4.2s) |
-| `fRctaObjWarningLowYawAngle` | `float` | `adasFunc.c` | 报警触发角度下限 (45°) |
-| `PERInputUpdate.adasEnable.bRCTAEnable` | `bool` | `RteComMapping.c` | 输入信号映射后的功能使能标志 |
-| `g_RteComMapping_RLWarnSig.RCTAState` | `uint8_t` | `RteComMapping.c` | 发送给网关/仪表的 RCTA 状态 |
-| `RCTA_warningReqLeft` / `Right` | `uint8_t` | `RteComMapping.c` | 左/右侧报警请求等级 (0:无, 1:一级, 2:二级) |
-| `AdasStM.RCTAState` | `uint8_t` | `ASWIN_SystemState.c` | 状态机结构体中的 RCTA 状态副本 |
-| `fRctaRoiOffSetY` | `float` | `adasFunc.c` | RCTA 检测区域的 Y 轴偏移量 |
+| `g_adasEnable.bRCTAEnable` | `bool` | `adasEnableStruct` | RCTA 功能使能标志。 |
+| `g_egoCarAddInfo.carSpd` | `float` | 车辆总线/传感器 | 自车当前速度。 |
+| `g_egoCarInfo.yaw_rate` | `float` | 车辆总线/IMU | 自车横摆角速度。 |
+| `g_crossSceneFlg` | `uint8_t` | 场景识别模块 | 交叉场景标志 (0: 非交叉, 其他: 交叉)。 |
+| `g_jamSceneFlg` | `uint8_t` | 场景识别模块 | 拥堵场景标志 (`JamScene_NotJamScene`, `JamScene_JamStopped`)。 |
+| `pTemp->dynFlg` | `uint8_t` | 目标跟踪模块 | 目标动态属性 (`DynProp_Crossing`, `DynProp_Stationary`, `DynProp_Stopped`, `DynProp_Oncoming`)。 |
+| `pTemp->isMoveFlg` | `uint8_t` | 目标跟踪模块 | 目标移动标志 (0: 静止, 1: 移动)。 |
+| `pTemp->hozCanFlg` | `uint8_t` | 目标跟踪模块 | 横向穿越标志，表示目标是否正在横向穿越车道。 |
+| `pTemp->objType` | `uint8_t` | 目标分类模块 | 目标类型 (Pedestrian, Bike, Car, Truck 等)。 |
+| `pTemp->distX` / `distY` | `float` | 目标跟踪模块 | 目标相对于自车的纵向/横向距离。 |
+| `pTemp->yawAngFilterMoved` | `float` | 目标跟踪模块 | 目标偏航角滤波值。 |
+| `clusterInfo->clusterData[cluCt].isMoveFlg` | `uint8_t` | 聚类模块 | 聚类数据的移动标志。 |
+| `clusterInfo->clusterData[cluCt].curbFlg` | `uint8_t` | 聚类模块 | 路沿标志，用于排除路边静态物体。 |
+| `g_adasWarning.bLeftRctaWarning` | `uint8_t` | 报警输出结构 | 左侧 RCTA 警告状态 (0: Normal, 1: Warning, 2: Critical)。 |
+| `g_adasWarning.bRightRctaWarning` | `uint8_t` | 报警输出结构 | 右侧 RCTA 警告状态。 |
+| `objRctaWarningFlag` | `int8_t` | 目标输出结构 | 单个目标的 RCTA 警告标志。 |
 
 ## 6. 输入信号
 1.  **车辆状态信号**:
-    *   `VehSpd`: 车辆速度 (km/h)。
-    *   `GearPos`: 挡位信息 (需为 R 挡，虽代码未直接显示变量名，但逻辑隐含在 Active 条件中)。
-    *   `SteerWheelSpd`: 方向盘转角速度 (可能用于辅助判断)。
-2.  **功能使能信号 (CAN)**:
-    *   `RCTASwtReq`: 用户开关请求 (来自 `RteComMapping_ReadSignal`)。
-    *   `RCTABrkSwtReq`: 制动功能开关请求 (若配置为合并模式)。
-3.  **系统状态/故障信号**:
-    *   `ESPFUN`: ESP 功能状态 (0: 未激活)。
-    *   `TrailerSts`: 牵引模式状态 (0: 无牵引)。
-    *   `DoorSts`: 车门状态 (需关闭)。
-    *   `DTC`: 故障码状态 (`CheckAnyDtcActive`)。
-    *   `MSRActv`, `VDCActv`, `PTCActv`, `BTCActv`: 其他底盘控制系统状态。
-4.  **雷达感知数据**:
-    *   目标列表 (Track List): 包含目标的距离、速度、角度、加速度、RCS 等。
-    *   自车位置/姿态信息。
+    *   自车速度 (`carSpd`)
+    *   自车横摆角速度 (`yaw_rate`)
+    *   自车位置/姿态 (用于坐标转换)
+2.  **雷达原始数据/聚类数据**:
+    *   聚类中心位置 (`distX`, `distY`)
+    *   聚类速度 (`velX`, `velY`)
+    *   聚类移动/静止标志 (`isMoveFlg`)
+    *   聚类点数 (`dotNum`)
+    *   聚类路沿标志 (`curbFlg`)
+3.  **目标跟踪数据**:
+    *   目标 ID (`objID`)
+    *   目标类型 (`objType`)
+    *   目标动态属性 (`dynFlg`)
+    *   目标生命周期 (`lifeCycle`)
+    *   目标预测位置 (`predictData.distX`, `predictData.distY`)
+4.  **场景识别标志**:
+    *   交叉场景标志 (`g_crossSceneFlg`)
+    *   拥堵场景标志 (`g_jamSceneFlg`)
+5.  **系统配置**:
+    *   RCTA 使能标志 (`bRCTAEnable`)
+    *   ROI 区域定义 (`leftRctaRoi`, `rightRctaRoi`)
 
 ## 7. 输出信号
-1.  **报警请求**:
-    *   `RCTA_warningReqLeft` / `RCTA_warningReqRight`: 发送给仪表或网关的报警等级信号 (0/1/2)。
-    *   `RR_Rcta_Warning` / `RL_Rcta_Warning`: 输出到雷达控制器或网关的布尔报警标志。
-2.  **系统状态**:
-    *   `RCTAState`: 系统当前状态 (Standby/Active/Failure 等)，通过 `RSDS_RCTAResp` 信号反馈。
-    *   `RSDS_RCTAResp`: 功能响应信号 (1: 功能正常/激活，0: 关闭/故障)。
-3.  **制动请求 (若 RCTB 联动)**:
-    *   `RSDS_BrkgReq`: 制动请求标志。
-    *   `RSDS_BrkgReqVal`: 制动压力/减速度请求值。
+1.  **报警标志**:
+    *   `g_adasWarning.bLeftRctaWarning`: 左侧后方交叉交通警告等级。
+    *   `g_adasWarning.bRightRctaWarning`: 右侧后方交叉交通警告等级。
+2.  **目标级警告**:
+    *   `objRctaWarningFlag`: 每个跟踪目标的警告状态，用于调试或上层应用。
+3.  **跟踪状态**:
+    *   更新后的目标跟踪状态 (`ifMarkRAll` 等内部标志)，影响后续帧的跟踪连续性。
 
 ## 8. 与其他功能的交互
 1.  **RCTB (Rear Cross Traffic Braking)**:
-    *   **强耦合**: 代码中 `RCTASwtReq` 和 `RCTABrkSwtReq` 的处理逻辑紧密相关。如果 RCTA 关闭，RCTB 通常也会关闭（见 `RteComMapping.c` 第 766 行）。
-    *   **状态共享**: 两者共用 `rctaSystemState` 和 `rctbSystemState` 的部分状态机逻辑（如 Standby/Active 的转换条件）。
-2.  **BSD (Blind Spot Detection) & LCA (Lane Change Assist)**:
-    *   **硬件共享**: 使用相同的后角雷达硬件。
-    *   **ROI 竞争**: RCTA 和 BSD/LCA 可能共享雷达的 ROI 资源，但在不同车速下激活（BSD/LCA 通常在较高车速，RCTA 在倒车低速）。
-3.  **ESP/Chassis Systems**:
-    *   **抑制逻辑**: 当 ESP (`ESPFUN`), MSR, VDC, PTC, BTC 等底盘稳定系统激活时，RCTA 会进入 **Passive** 状态或抑制报警，避免干扰驾驶员的紧急操控。
-4.  **Trailer Mode (牵引模式)**:
-    *   当检测到牵引模式 (`TrailerSts == 1`) 时，RCTA 功能会被抑制（进入 Passive），因为牵引车的尾部几何形状和雷达视场会发生巨大变化，导致误报。
-5.  **DOW (Door Open Warning)**:
-    *   虽然独立，但共享后角雷达数据。在 `BliStsenable` 函数中，RCTA 和 DOW 的使能状态共同决定了雷达的唤醒/保持策略。
-6.  **FCTA/FCTB**:
-    *   逻辑对称，但由前角雷达处理。代码中 `AswIfSchedule.c` 根据雷达位置（前/后）分别调用更新函数。
+    *   RCTA 是 RCTB 的前置感知模块。RCTA 检测到的危险目标若满足更严格的 TTC 或距离条件，将触发 RCTB 进行自动制动。
+    *   代码中 `bRCTBEnable` 和 `objRctbWarningFlag` 的存在表明两者紧密耦合，共享相同的感知结果和 ROI。
+2.  **BSD (Blind Spot Detection)**:
+    *   BSD 和 RCTA 共享部分感知逻辑（如目标跟踪、ROI 定义）。
+    *   在低速倒车时，BSD 通常退出或降级，RCTA 接管后方侧向监控。
+    *   代码中 `bBSDEnable` 和 `bRCTAEnable` 是独立的使能标志，但可能由上层管理器根据车速和档位协调。
+3.  **LCA (Lane Change Assist)**:
+    *   LCA 在变道时提供警告，与 RCTA 在低速倒车时提供警告，场景不同但感知对象类似（侧后方目标）。
+    *   通常车速高于 RCTA 阈值（如 > 10 km/h）时，LCA 激活，RCTA 退出。
+4.  **DOW (Door Open Warning)**:
+    *   DOW 检测后方接近车辆以警告开门。
+    *   RCTA 和 DOW 都关注后方侧向目标，但 DOW 更关注纵向接近速度，RCTA 更关注横向穿越。
+    *   两者可能共享 `leftRctaRoi` / `rightRctaRoi` 或类似的 ROI 定义。
+5.  **场景识别模块**:
+    *   依赖 `g_crossSceneFlg` 和 `g_jamSceneFlg` 来优化目标过滤逻辑，避免在拥堵或复杂路口产生误报。

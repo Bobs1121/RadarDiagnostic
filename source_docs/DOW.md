@@ -1,146 +1,122 @@
 # DOW 功能分析
 
 ## 1. 功能概述
-DOW (Door Open Warning，开门预警) 功能旨在防止驾驶员或乘客在车辆停驻或低速状态下打开车门时，与后方或侧后方接近的车辆、行人或障碍物发生碰撞。
-该功能主要依赖角雷达（Corner Radar）检测车辆侧后方的动态目标。当检测到有目标进入预设的**感兴趣区域 (ROI)**，且满足特定的**速度**、**角度**及**碰撞时间 (TTC)** 条件时，系统会触发声光报警。
+DOW (Door Open Warning，开门预警) 功能旨在当车辆静止或低速行驶时，监测车辆侧后方盲区内的动态目标（如行人、骑行者、车辆）。当检测到有碰撞风险的目标接近车门区域时，系统通过视觉或听觉报警提醒驾驶员，防止因贸然开门导致交通事故。
 
-根据代码分析，该功能具备以下特点：
-*   **左右独立检测**：通过 `LineDOW` 系列参数定义了左侧和右侧独立的 ROI 区域。
-*   **动态 ROI**：ROI 的边界与自车宽度 (`EGOCARWIDTH`) 及雷达安装位置 (`DISTANCEREAR`, `DISTANCEDRIVER`) 动态关联。
-*   **迟滞控制**：报警触发与取消（De-warning）采用了不同的阈值（如 TTC、速度、角度），防止报警状态频繁跳变。
-*   **特殊模式支持**：支持拖车模式 (`TrailerSts`) 下的功能抑制（进入 Passive 状态）。
-*   **电源管理**：具备特定的断电延时逻辑（185s），确保熄火后一段时间内功能仍可用。
+从提供的源码片段来看，DOW 的核心逻辑依赖于高精度的**目标分类（Object Classification）**和**目标跟踪（Tracking）**。代码主要展示了感知层（Perception）如何根据目标的距离、速度、运动状态（Crossing）以及历史类型置信度，来维持或更新目标的类型（Pedestrian, MotoBike, Car, Truck 等），这是 DOW 判断是否触发报警的基础前提。
 
 ## 2. 状态机
-虽然源码片段未直接展示状态转换的 `switch-case` 逻辑，但根据 `adasFunc.h` 中的定义及 `ASWIN_SystemState.c` 中的逻辑，DOW 状态机定义如下：
+根据 `perception_public_def.h` 中的定义，DOW 功能具有标准的 ADAS 功能状态机：
 
-*   **状态定义 (uint8_t)**:
-    *   `0`: **None** (未初始化/未定义)
-    *   `1`: **Init** (初始化中)
-    *   `2`: **Standby** (就绪，系统正常但条件未满足)
-    *   `3`: **Active** (激活，满足报警条件，输出报警信号)
-    *   `4`: **Off** (关闭，用户关闭或功能禁用)
-    *   `5`: **Failure** (故障，雷达或系统报错)
-    *   `6`: **Passive** (被动/抑制，如拖车模式)
+*   **状态定义**:
+    *   `0`: None (未定义/初始)
+    *   `1`: Init (初始化中)
+    *   `2`: Standby (待机，功能可用但未激活)
+    *   `3`: Active (激活，正在监测并可能报警)
+    *   `4`: Off (关闭)
+    *   `5`: Failure (故障)
+    *   `6`: Passive (被动模式，通常指受限模式)
 
-*   **状态转换逻辑推断**:
-    1.  **Init -> Standby**: 系统初始化完成，无故障，且 `bDOWEnable` 为真。
-    2.  **Standby -> Active**: 检测到目标进入 ROI，且满足 `fDowObjWarningSpd`, `fDowObjWarningYawAngle`, `fDowObjWarningTTC` 等触发条件。
-    3.  **Active -> Standby**: 目标离开 ROI 或不再满足触发条件（需满足 De-warning 阈值，如 TTC > `fDowObjDeWarningTTC`）。
-    4.  **Any -> Off**: 用户通过 `DOWSwtReq` 关闭功能，或系统速度超过阈值（通常 DOW 在高速下不工作，虽代码未显式给出上限，但 `fDowObjWarningUpperSpd` 设为 200km/h 暗示了极宽范围，实际逻辑可能在其他文件限制车速）。
-    5.  **Any -> Passive**: 检测到拖车模式 (`TrailerSts == 1`) 且系统状态正常。
-    6.  **Any -> Failure**: 雷达硬件故障或通信错误 (`ErrSts()` 返回真)。
+*   **状态转换条件** (基于通用 ADAS 逻辑推断，源码中主要体现 `bDOWEnable` 和 `dowSystemState`):
+    *   **Init -> Standby**: 系统自检通过，雷达数据正常，车辆状态满足基本条件（如车速 < 阈值，通常为 0-5 km/h）。
+    *   **Standby -> Active**: 驾驶员未关闭功能，且车辆处于静止或极低速状态（`g_egoCarAddInfo.carSpd < 0.05f` 在代码 L1262 中暗示了静止检测的重要性）。
+    *   **Active -> Standby/Off**: 车速超过阈值（如 > 10-15 km/h），或驾驶员手动关闭，或检测到故障。
+    *   **Any -> Failure**: 雷达硬件故障、信号干扰严重、校准失败。
 
 ## 3. 报警/制动逻辑
-DOW 功能主要输出**报警请求**，通常不直接控制制动（制动通常由 AEB 或 RCTB 等更高级功能接管，DOW 侧重于警示）。
+虽然提供的代码片段主要集中在**目标属性计算（objAttribCal）**而非最终的报警触发逻辑，但可以从变量定义和分类逻辑中推导出 DOW 的报警核心机制：
 
-*   **触发报警条件 (Active)**:
-    1.  **系统状态**: `dowSystemState == 3` (Active)。
-    2.  **目标位置**: 目标位于 DOW ROI 区域内。
-        *   ROI 由 `LineDOWA` ~ `LineDOWL` 定义，基于自车宽度和雷达安装位置计算。
-    3.  **目标速度**: `ObjSpeed` 在 `[fDowObjWarningSpd, fDowObjWarningUpperSpd]` 范围内 (5.0 ~ 200.0 km/h)。
-    4.  **目标角度**: 目标绝对偏航角 `|YawAngle| <= fDowObjWarningYawAngle` (45.0 度)。
-    5.  **碰撞时间**: `TTC <= fDowObjWarningTTC` (3.5 秒)。
+1.  **目标有效性判断**:
+    *   目标必须位于 DOW 的 ROI 区域内 (`leftDowRoi`, `rightDowRoi`)。
+    *   目标类型必须被确认为潜在威胁（行人、自行车、摩托车、汽车、卡车）。代码 L1262 特别关注 `ObjType_Pedestrian` 在静止场景下的处理。
+    *   目标必须是动态的或正在穿越（`DynProp_Crossing`），静态护栏或固定物体通常被过滤（通过 `curbNum` 等逻辑）。
 
-*   **取消报警条件 (De-warning)**:
-    1.  **目标位置**: 目标离开 ROI 区域（需考虑迟滞边界 `fDowObjDeWarning...OffSet`）。
-    2.  **目标速度**: `ObjSpeed < fDowObjDeWarningSpd` (5.0 km/h) 或 `> fDowObjDeWarningUpperSpd` (200.0 km/h)。
-    3.  **目标角度**: `|YawAngle| > fDowObjDeWarningYawAngle` (50.0 度)。
-    4.  **碰撞时间**: `TTC > fDowObjDeWarningTTC` (4.0 秒)。
-    5.  **路缘抑制**: 如果 `bDowCurbDewarningEnable` 为真，且目标被判定为静止路缘，可能不报警或快速取消报警。
+2.  **报警触发条件 (推断)**:
+    *   **距离阈值**: 目标进入车门开启范围（通常横向距离 `distY` 在 1.5m - 3.0m 以内，纵向距离 `distX` 在车身后方一定范围内）。
+    *   **相对速度**: 目标具有向车辆侧方接近的速度分量。
+    *   **类型置信度**: 目标类型分类稳定（`typeUpNum` 和 `typeDownNum` 计数达到阈值，确保不是误检）。
+    *   **状态保持**: 报警通常有防抖逻辑，如 `KEEPWARNINGFRM` (3帧) 或 `LOWSPEEDKEEPWARNINGFRM` (6帧) 来确保持续存在。
 
-*   **输出逻辑**:
-    *   当状态为 Active 时，`PEROutput.adasWarning.bRightDowWarning` (或左侧对应信号) 置为 1。
-    *   在 `ASWOUT_OutCalc.c` 中，该信号被映射到 `g_ASWOUT_RadarWarnSigStrct.RR_Dow_Warning` 或 `RL_Dow_Warning` 发送给车身控制器 (BCM) 或仪表盘。
+3.  **报警取消条件**:
+    *   目标离开 ROI 区域。
+    *   目标消失（跟踪丢失）。
+    *   车辆开始行驶（车速超过 DOW 工作阈值）。
+    *   报警持续时间超过最大限制。
+
+4.  **制动请求**:
+    *   DOW 通常**不直接控制制动**，而是通过 HMI 报警。但在某些高级集成系统中，如果 DOW 检测到极高碰撞风险且驾驶员无反应，可能会联动 AEB 或发出强烈警告。源码中 `fBrakeValue` 和 `fBrakeEventTime` 存在，但 DOW 本身主要输出 `bLeftDowWarning` / `bRightDowWarning`。
 
 ## 4. 关键阈值
+从 `objAttribCal.c` 和 `paraDefine.h` 中提取的关键阈值：
 
-| 参数名称 | 变量名 | 值 | 单位 | 说明 |
-| :--- | :--- | :--- | :--- :--- |
-| **系统激活速度** | `fDowActiveSpd` | 0.7 | km/h | 系统进入 Active 状态的最小车速 |
-| **系统去激活速度** | `fDowDeactiveSpd` | 1.0 | km/h | 系统退出 Active 状态的车速迟滞 |
-| **目标报警速度下限** | `fDowObjWarningSpd` | 5.0 | km/h | 目标触发报警的最小速度 |
-| **目标去报警速度下限** | `fDowObjDeWarningSpd` | 5.0 | km/h | 目标取消报警的速度阈值 |
-| **目标报警速度上限** | `fDowObjWarningUpperSpd` | 200.0 | km/h | 目标触发报警的最大速度 |
-| **目标去报警速度上限** | `fDowObjDeWarningUpperSpd` | 200.0 | km/h | 目标取消报警的最大速度 |
-| **目标报警偏航角** | `fDowObjWarningYawAngle` | 45.0 | deg | 目标相对自车的最大偏航角 |
-| **目标去报警偏航角** | `fDowObjDeWarningYawAngle` | 50.0 | deg | 目标取消报警的偏航角迟滞 |
-| **目标报警 TTC** | `fDowObjWarningTTC` | 3.5 | s | 触发报警的碰撞时间阈值 |
-| **目标去报警 TTC** | `fDowObjDeWarningTTC` | 4.0 | s | 取消报警的碰撞时间迟滞 |
-| **断电延时时间** | `DOW_POWERDOWN_TIME` | 185000 | ms | 熄火后功能保持激活的时间 (185s) |
-| **左侧 ROI 外边界偏移** | `fDowObjDeWarningLeftOuterOffSetY` | 1.0 | m | 左侧 ROI 外边界去报警偏移 |
-| **右侧 ROI 外边界偏移** | `fDowObjDeWarningRightOuterOffSetY` | -1.0 | m | 右侧 ROI 外边界去报警偏移 |
-
-*注：ROI 的具体坐标 (`LineDOWA` ~ `LineDOWL`) 是动态计算的，依赖于 `DISTANCEREAR` (雷达距车尾距离), `DISTANCEDRIVER` (雷达距驾驶员距离), `EGOCARWIDTH` (自车宽度)。*
+| 参数 | 值 | 单位 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `carSpd` (静止判断) | `< 0.05` | m/s (约 0.18 km/h) | L1262: 用于判断车辆是否静止，影响行人分类逻辑 |
+| `distX` (纵向距离) | `<= 5.0` | m | L1261, L1362: 近距离判断，用于行人/近距离目标分类保持 |
+| `distX` (中距离) | `<= 20.0` | m | L1264: 中距离目标分类保持逻辑 |
+| `distY` (横向距离) | `> 25.0` | m | L1259: 远距离条件1 |
+| `distY` (横向距离) | `<= 60.0` | m | L1260: 远距离条件2 |
+| `distY` (横向距离) | `<= 20.0` | m | L1345, L1467: 交叉交通/近距离分类降级逻辑 |
+| `distY` (横向距离) | `> 60.0` | m | L1461: 远距离交叉目标保持 |
+| `distY` (横向距离) | `<= 3.0` | m | L1363: 极近距离条件，用于类型升级判断 |
+| `lifeCycle` | `>= 30` | frames | L1486, L1496: 目标生命周期阈值，用于遮挡/FOV变化时的类型保持 |
+| `KEEPWARNINGFRM` | `3` | frames | L143: 报警保持最小帧数 |
+| `LOWSPEEDKEEPWARNINGFRM` | `6` | frames | L144: 低速报警保持帧数 |
 
 ## 5. 关键变量
 
 | 变量名 | 类型 | 来源 | 含义 |
 | :--- | :--- | :--- | :--- |
-| `dowSystemState` | `uint8_t` | `adasFunc.c` (全局) | DOW 功能当前状态机状态 (0-6) |
-| `bDowEnable` | `bool` | `RteComMapping.c` (CAN 输入) | DOW 功能使能开关 (来自 `DOWSwtReq`) |
-| `LineDOWA` ~ `LineDOWL` | `float` | `adasFunc.c` (计算) | DOW ROI 区域的顶点坐标 (X, Y) |
-| `fDowObjWarningTTC` | `float` | `adasFunc.c` (配置) | 报警 TTC 阈值 |
-| `fDowObjDeWarningTTC` | `float` | `adasFunc.c` (配置) | 去报警 TTC 阈值 |
-| `bDowCurbDewarningEnable` | `bool` | `adasFunc.c` (配置) | 路缘去报警功能开关 |
-| `TrailerSts` | `uint8_t` | `ASWIN_SystemState.c` (CAN 输入) | 拖车状态标志，用于进入 Passive 模式 |
-| `bRightDowWarning` | `bool` | `PEROutput` (内部计算) | 右侧 DOW 报警输出标志 |
-| `bLeftDowWarning` | `bool` | `PEROutput` (内部计算) | 左侧 DOW 报警输出标志 |
-| `DOW_POWERDOWN_TIME` | `uint32_t` | `ASWIN_SystemState.h` (宏定义) | 熄火后功能保持时间 |
+| `bDOWEnable` | `bool` | `adasEnableStruct` | DOW 功能使能标志，由上层应用或用户设置 |
+| `dowSystemState` | `uint8_t` | `adasWarningStruct` | DOW 功能当前状态机状态 (0-6) |
+| `bLeftDowWarning` | `uint8_t` | `adasWarningStruct` | 左侧 DOW 报警级别 (0:正常, 1:一级报警, 2:二级报警) |
+| `bRightDowWarning` | `uint8_t` | `adasWarningStruct` | 右侧 DOW 报警级别 |
+| `leftDowFlag` | `bool` | `adasWarningStruct` | 左侧 DOW 报警触发标志 |
+| `rightDowFlag` | `bool` | `adasWarningStruct` | 右侧 DOW 报警触发标志 |
+| `objDowWarningFlag` | `int8_t` | `objStruct` | 单个目标对象的 DOW 报警标志，用于关联具体目标 |
+| `objType` | `uint8_t` | `objStruct` | 目标类型 (1:Ped, 2:Cyclist, 3:Moto, 4:Car, 5:Truck) |
+| `dynFlg` | `uint8_t` | `objStruct` | 目标动态属性 (如 `DynProp_Crossing` 表示交叉穿越) |
+| `distX` | `float` | `objStruct` | 目标相对于自车的纵向距离 (米) |
+| `distY` | `float` | `objStruct` | 目标相对于自车的横向距离 (米) |
+| `typeUpNum` | `uint8_t` | `objClassAttrib` | 目标类型升级计数，用于提高分类置信度 |
+| `typeDownNum` | `uint8_t` | `objClassAttrib` | 目标类型降级计数，用于降低分类置信度 |
+| `isKeep_far/near` | `bool` | `objHisTypeInf` | 目标类型在远/近处是否保持不变的标志，防止频繁跳变 |
+| `g_egoCarAddInfo.carSpd` | `float` | Global | 自车当前速度，DOW 仅在低速/静止时有效 |
 
 ## 6. 输入信号
-DOW 功能依赖以下输入信号进行逻辑判断：
-
-1.  **车辆状态信号**:
-    *   `DOWSwtReq`: 驾驶员/乘客开启/关闭 DOW 功能的请求 (CAN 信号)。
-    *   `SysPowerMod`: 系统电源模式 (ON/OFF)，用于判断是否进入断电延时逻辑。
-    *   `TrailerSts`: 拖车状态，用于抑制功能。
-    *   `VehcleInfoUpdate.actual_gear`: 当前档位 (虽 DOW 主要在 R/N 档工作，但代码中未显式过滤，可能由上层逻辑处理)。
-    *   `VehcleInfoUpdate.turn_light_left/right`: 转向灯状态 (可能用于辅助判断变道意图，但在 DOW 中主要用于区分场景)。
-    *   `PassengerDoorSts` / `DrvDoorSts`: 车门开启状态 (部分逻辑可能结合车门开启瞬间触发，但核心逻辑是预警，即车门未开但即将开时报警)。
-
-2.  **感知数据 (来自雷达)**:
-    *   `ObjPos` (X, Y): 目标相对于雷达的位置。
-    *   `ObjVel`: 目标相对速度。
-    *   `ObjYaw`: 目标偏航角。
-    *   `ObjTTC`: 目标碰撞时间。
-
-3.  **车辆参数 (Calibration/Config)**:
-    *   `EGOCARWIDTH`: 自车宽度。
-    *   `DISTANCEREAR`: 雷达安装位置距车尾距离。
-    *   `DISTANCEDRIVER`: 雷达安装位置距驾驶员距离。
+1.  **雷达原始数据/跟踪目标**:
+    *   目标 ID (`objID`)
+    *   位置 (`distX`, `distY`)
+    *   速度 (`radialVelMeas`, `velX`, `velY`)
+    *   尺寸 (`length`, `width`)
+    *   航向角 (`yawAng`)
+2.  **自车状态**:
+    *   车速 (`carSpd`)
+    *   转向角 (间接影响 ROI 计算)
+    *   档位 (P/R/N/D，DOW 通常在 P/R 档激活)
+3.  **功能配置**:
+    *   `bDOWEnable`: 功能开关
+    *   `adasROIStruct`: DOW 感兴趣区域 (ROI) 的多边形顶点定义
 
 ## 7. 输出信号
-DOW 功能计算完成后，输出以下信号：
-
-1.  **报警请求**:
-    *   `DOW_warningReqleft` / `DOW_warningReqright`: 左侧/右侧报警请求等级 (0: 无，1: 一级，2: 二级)。
-    *   `RSDS_DOWResp`: DOW 功能响应状态 (1: 激活，0: 未激活)，用于反馈给网关或车身控制器。
-    *   `RR_Dow_Warning` / `RL_Dow_Warning`: 发送给车身控制器 (BCM) 的具体报警信号，用于控制后视镜灯闪烁或蜂鸣器。
-
-2.  **状态信号**:
-    *   `DOWState`: 当前系统状态 (0-6)，用于仪表盘显示功能状态。
-    *   `Fault_Err`: 故障标志位。
-
-3.  **内部状态**:
-    *   `dowSystemState`: 内部状态机变量，供其他模块读取。
+1.  **报警状态**:
+    *   `bLeftDowWarning` / `bRightDowWarning`: 左右侧报警等级。
+    *   `leftDowFlag` / `rightDowFlag`: 报警布尔标志。
+2.  **目标关联信息**:
+    *   `objDowWarningFlag`: 标识哪个具体目标触发了报警，用于 HMI 显示目标位置。
+3.  **系统状态**:
+    *   `dowSystemState`: 当前功能状态，用于诊断和 HMI 显示功能可用性。
 
 ## 8. 与其他功能的交互
-
-1.  **与 BSD (盲区检测) / LCA (变道辅助)**:
-    *   **共用 ROI 逻辑**: 代码中 `LineDOW` 与 `LineLCA` 定义方式类似，都基于自车宽度和雷达位置，但 DOW 的 ROI 更靠近车门区域，且角度阈值更宽。
-    *   **信号复用**: 在 `ASWOUT_OutCalc.c` 中，DOW 报警信号与 BSD/LCA 信号分别映射，但在某些硬件实现中可能共用同一套报警灯逻辑（需根据具体车型配置）。
-
-2.  **与 RCW (后方碰撞预警)**:
-    *   **场景区分**: RCW 主要针对车辆后方直线接近的目标，DOW 针对侧后方。两者在 ROI 定义上有重叠但侧重不同。
-    *   **状态互斥**: 在 `BliStsenable` 函数中，DOW 与 BSD, LCA, RCW 等并列，只要任一功能开启，系统即进入工作状态。
-
-3.  **与 RCTA/RCTB (后方交叉交通)**:
-    *   **逻辑互补**: RCTA 在倒车时检测横向来车，DOW 在停车开门时检测侧向来车。两者都依赖侧向雷达。
-    *   **拖车模式联动**: 在 `DIDTrailerSts` 函数中，DOW 与 BSD, LCA, RCW, RCTA, RCTB 的状态被统一检查。当 `TrailerSts == 1` 时，所有这些功能都会进入 `Passive` (6) 状态，防止误报。
-
-4.  **与电源管理 (Power Management)**:
-    *   **独立延时**: DOW 拥有独立的 `Check_DOW_PowerDown_Delay` 逻辑。即使车辆熄火 (`SYS_POWER_OFF`)，只要 `bDOWEnable` 为真，功能会保持激活 185 秒 (`DOW_POWERDOWN_TIME`)，确保驾驶员熄火后开门的安全。
-
-5.  **与通信映射 (RteComMapping)**:
-    *   DOW 的使能状态 (`bDOWEnable`) 和报警输出 (`DOW_warningReqleft`) 通过 CAN 总线与车身域控制器 (BCM) 和仪表进行交互，实现声光报警。
+1.  **BSD (Blind Spot Detection)**:
+    *   **共享感知数据**: DOW 和 BSD 共享相同的角雷达感知目标列表和 ROI 定义（`leftBsdRoi` vs `leftDowRoi`）。
+    *   **逻辑差异**: BSD 关注行驶中的侧后方目标，DOW 关注静止/低速下的侧后方目标。两者在目标分类（`objType`）和动态属性（`dynFlg`）的判断逻辑上高度复用。
+2.  **LCA (Lane Change Assist)**:
+    *   LCA 是 BSD 的延伸，通常在打转向灯时激活。DOW 与 LCA 在低速下可能存在逻辑互斥或优先级判断，例如在停车开门时，LCA 通常不工作，而 DOW 工作。
+3.  **RCTA/RCTB (Rear Cross Traffic Alert/Brake)**:
+    *   **场景重叠**: RCTA 主要关注倒车时的后方交叉交通。DOW 关注静止停车时的侧方交通。
+    *   **目标分类复用**: 代码中 `DynProp_Crossing` 的处理逻辑（L1330, L1346, L1459）同时服务于 RCTA 和 DOW，确保交叉穿越目标被正确识别和保持。
+4.  **HMI (Human Machine Interface)**:
+    *   DOW 的报警输出直接驱动外后视镜上的指示灯闪烁或仪表盘上的图形提示。
+5.  **标定系统 (Calibration)**:
+    *   DOW 的 ROI 依赖于雷达安装角度的标定结果。如果 `InCalibState` 为 `Failed`，DOW 将进入 `Failure` 状态。

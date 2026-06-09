@@ -1,120 +1,115 @@
 # FCTA 功能分析
 
 ## 1. 功能概述
-**FCTA (Front Cross Traffic Alert)** 即前方交叉交通警报功能。该功能主要利用车辆前角雷达（Front Corner Radar），在车辆低速行驶（如从停车位驶出、通过路口）时，检测横向穿越的障碍物（车辆、行人等）。当系统判断存在碰撞风险时，通过仪表盘、HUD 或声音向驾驶员发出警报，提示驾驶员注意横向来车，避免碰撞。
+**FCTA (Front Cross Traffic Alert)** 即前方交叉交通警报。该功能主要应用于车辆低速行驶或静止状态（如从停车位驶出、通过狭窄路口或环岛时），利用前左（Front Left）和前右（Front Right）角雷达探测横向穿过的车辆或行人。当检测到有目标以一定速度横向穿过本车前方路径，且存在碰撞风险时，系统向驾驶员发出视觉或听觉警告，提示潜在危险。
 
-根据代码分析，FCTA 是角雷达系统（Corner Radar）的核心功能之一，与 FCTB（前方交叉交通制动）紧密关联，通常 FCTA 作为 FCTB 的前置预警阶段。
+根据代码定义，FCTA 属于 ADAS 功能模型之一 (`AdasModelFCTA = 6U`)，其核心逻辑依赖于对目标在 FCTA 感兴趣区域（ROI）内的轨迹预测、相对速度判断以及时间阈值（TTC/TTM）的计算。
 
 ## 2. 状态机
-根据 `ASWIN_SystemState.c` 和 `adasFunc.c` 中的逻辑，FCTA 的状态机主要包含以下状态及转换逻辑：
+根据 `adasWarningStruct` 中的定义，FCTA 系统状态遵循标准的 ADAS 状态机模型：
 
-*   **状态定义 (推测映射)**:
-    *   `0`: **Off/None** (功能关闭或未激活)
-    *   `1`: **Init/Standby** (系统初始化或待机，满足车速条件但未检测到风险)
-    *   `2`: **Active/Standby** (系统激活，正在监测，未报警)
-    *   `3`: **Warning/Active** (系统激活且正在报警)
-    *   *(注：代码中 `fctaSystemState` 取值为 2 或 3 时，`bFCTAEnable` 为 TRUE)*
+*   **状态定义**:
+    *   `0`: **None** (未定义/初始)
+    *   `1`: **Init** (初始化中，雷达自检或参数加载)
+    *   `2`: **Standby** (待机，功能使能但条件不满足，如车速过高或传感器受限)
+    *   `3`: **Active** (激活，功能正常工作，持续监测 ROI 区域)
+    *   `4`: **Off** (关闭，用户手动关闭或系统强制关闭)
+    *   `5`: **Failure** (故障，雷达硬件或软件错误)
+    *   `6`: **Passive** (被动/降级，部分功能受限但仍运行)
 
-*   **状态转换条件**:
-    1.  **进入 Active (State 2)**:
-        *   系统上电且无故障 (`AdasStM.SysPowerMod == SYS_POWER_ON`)。
-        *   功能开关开启 (`PERInputUpdate.adasEnable.bFCTAEnable == 1`)。
-        *   车速在激活范围内：`fFctaActiveLowSpd` (0.5 km/h) <= 车速 <= `fFctaActiveUpSpd` (21.0 km/h)。
-        *   无 DTC 故障 (`CheckAnyDtcActive` 为 false)。
-    2.  **进入 Warning (State 3)**:
-        *   当前状态为 `2` (Active)。
-        *   检测到左侧或右侧存在危险目标：`bLeftFctaWarning != 0` 或 `bRightFctaWarning != 0`。
-        *   代码逻辑：`if ((fctaSystemState == 2) && ((PEROutput.adasWarning.bLeftFctaWarning !=0) || (PEROutput.adasWarning.bRightFctaWarning !=0))) { fctaSystemState=3; }`
-    3.  **退出/复位 (State 2 -> 0 或 1)**:
-        *   车速超出范围：车速 > `fFctaDeactiveUpSpd` (22.0 km/h) 或 车速 < `fFctaDeactiveLowSpd` (0.0 km/h)。
-        *   功能开关关闭。
-        *   检测到系统故障。
-        *   报警条件消失且经过迟滞时间（De-warning logic）。
+*   **状态转换条件 (推断)**:
+    *   `None/Init` -> `Standby`: 系统自检通过，`bFCTAEnable` 为真。
+    *   `Standby` -> `Active`: 满足激活条件（通常包括：车速低于阈值如 30-40km/h，挡位为 D/R/P，无严重故障，雷达视野无遮挡）。
+    *   `Active` -> `Standby`: 不满足激活条件（如车速升高超过阈值，或进入隧道等干扰环境）。
+    *   `Active/Standby` -> `Failure`: 检测到内部错误（如 `InCalibState` 异常，信号丢失）。
+    *   `Any` -> `Off`: 用户通过 HMI 关闭 `bFCTAEnable`。
 
 ## 3. 报警/制动逻辑
-FCTA 仅负责**报警**，不直接控制制动（制动由 FCTB 负责，但两者共享检测逻辑）。
+FCTA 仅提供警报（Alert），不涉及自动制动（制动由 FCTB 负责，但两者逻辑紧密相关）。
 
-*   **报警触发条件 (Warning Trigger)**:
-    当检测到目标满足以下**所有**条件时，触发报警 (`bLeftFctaWarning` 或 `bRightFctaWarning` 置位)：
-    1.  **目标速度**: `fFctaObjWarningSpd` (4.0 km/h) <= 目标相对速度 <= `fFctaObjWarningUpSpd` (70.0 km/h)。
-    2.  **目标角度 (Yaw Angle)**: 目标相对于雷达的绝对偏航角在 `fFctaObjWarningLowYawAngle` (38.0°) 到 `fFctaObjWarningUpYawAngle` (127.0°) 之间。这定义了横向穿越的 ROI 区域。
-    3.  **碰撞时间 (TTM)**:
-        *   X 轴方向 (纵向接近): `TTM_x` <= `fFctaObjWarningBaseTTMX` (2.0s) + `fFctaObjWarningTTMXOffSet` (0.0s)。
-        *   Y 轴方向 (横向穿越): `TTM_y` 在 `fFctaObjWarningLowTTMY` (0.4s) 到 `fFctaObjWarningUpTTMY` (2.5s) 之间。
-    4.  **距离/位置 (DDCI/C-DDCI)**:
-        *   目标在雷达坐标系下的位置需满足特定的 DDCI (Distance to Collision Impact) 偏移量范围，确保目标处于车头前方的有效预警区域。
-        *   `fFctaObjWarningLowerDDCIOffSet` (-1.0m) <= DDCI <= `fFctaObjWarningUpBaseDDCI` (2.8m)。
+*   **触发报警条件**:
+    1.  **功能使能**: `bFCTAEnable` 为 `true`。
+    2.  **系统状态**: `fctaSystemState` 为 `Active` (3)。
+    3.  **目标有效性**: 在 `leftFctaRoi` 或 `rightFctaRoi` 内检测到有效目标。
+    4.  **运动特征**: 目标具有显著的横向速度（`velY` 或 `velAbsY`），表明其正在横向穿越。
+    5.  **风险判断**:
+        *   目标的预测轨迹与本车路径相交。
+        *   时间阈值满足报警条件：通常基于 `fTTM` (Time To Merge/Cross) 或 `fTTC` (Time To Collision)。代码中定义了 `fTTM` 和 `fDDCI` (Distance to Decision Critical Intersection) 作为关键判断参数。
+        *   目标处于 ROI 范围内且距离小于安全阈值。
+    6.  **滤波/迟滞**: 使用 `KEEPWARNINGFRM` (3帧) 或 `LOWSPEEDKEEPWARNINGFRM` (6帧) 进行防抖处理，确保持续 N 帧满足条件才置位报警标志。
 
-*   **报警取消条件 (De-warning)**:
-    当报警触发后，若以下条件满足，则取消报警：
-    1.  **目标速度**: 目标速度 < `fFctaObjDeWarningSpd` (2.2 km/h) 或 > `fFctaObjDeWarningUpSpd` (73.6 km/h)。
-    2.  **目标角度**: 角度超出 `fFctaObjDeWarningLowYawAngle` (33.0°) 到 `fFctaObjDeWarningUpYawAngle` (135.0°) 范围（注意：取消范围比触发范围略宽，形成迟滞）。
-    3.  **碰撞时间 (TTM)**:
-        *   X 轴 TTM > `fFctaObjWarningBaseTTMX` (2.0s) + `fFctaObjDeWarningTTMXOffSet` (0.3s) = 2.3s。
-        *   Y 轴 TTM > `fFctaObjDeWarningUpTTMY` (2.8s)。
-    4.  **位置**: DDCI 超出预警区域。
+*   **取消报警条件**:
+    1.  目标移出 ROI 区域。
+    2.  目标速度变为 0 或方向改变（不再构成横向穿越威胁）。
+    3.  本车启动并加速离开潜在碰撞区域。
+    4.  连续 N 帧不满足报警条件（迟滞解除）。
+    5.  系统状态变为 `Standby`, `Off`, 或 `Failure`。
+
+*   **报警标志输出**:
+    *   `bLeftFctaWarning`: 左侧 FCTA 报警状态 (0: Normal, 1: First Warning, 2: Second Warning - *注：FCTA通常只有单一警告级别，但结构体预留了分级字段，具体取决于标定策略，通常 FCTA 为单一视觉/声音警告*)。
+    *   `bRightFctaWarning`: 右侧 FCTA 报警状态。
 
 ## 4. 关键阈值
-| 参数名 | 变量名 | 数值 | 单位 | 含义 |
-| :--- | :--- | :--- | :--- | :--- |
-| **系统激活上限车速** | `fFctaActiveUpSpd` | 21.0 | km/h | 车辆速度超过此值，FCTA 功能退出激活状态 |
-| **系统激活下限车速** | `fFctaActiveLowSpd` | 0.5 | km/h | 车辆速度低于此值，FCTA 功能不激活 |
-| **系统退出上限车速** | `fFctaDeactiveUpSpd` | 22.0 | km/h | 迟滞阈值，防止在临界速度频繁跳变 |
-| **目标预警速度下限** | `fFctaObjWarningSpd` | 4.0 | km/h | 低于此速度的目标不视为威胁（如静止物体） |
-| **目标预警速度上限** | `fFctaObjWarningUpSpd` | 70.0 | km/h | 高于此速度的目标可能超出雷达处理范围或逻辑判定 |
-| **预警角度下限** | `fFctaObjWarningLowYawAngle` | 38.0 | deg | 目标横向穿越的最小角度 |
-| **预警角度上限** | `fFctaObjWarningUpYawAngle` | 127.0 | deg | 目标横向穿越的最大角度 |
-| **X 轴基础 TTM** | `fFctaObjWarningBaseTTMX` | 2.0 | s | 纵向碰撞时间阈值 |
-| **Y 轴 TTM 范围** | `fFctaObjWarningLowTTMY` / `UpTTMY` | 0.4 / 2.5 | s | 横向穿越碰撞时间窗口 |
-| **ROI Y 轴偏移** | `fFctaRoiOffSetY` | 0.3 | m | 检测区域在 Y 轴上的偏移量 |
+基于 `paraDefine.h` 和 `perception_public_def.h` 的分析：
+
+*   **ROI 定义**:
+    *   `leftFctaRoi`, `rightFctaRoi`: 多边形区域 (`polygonLargerStruct`)，定义了前方左右侧的探测范围。
+*   **时间/距离阈值**:
+    *   `fTTM` (Time To Merge/Cross): 目标到达交叉点所需时间。若 `fTTM` 小于设定阈值（如 1.5s - 2.5s，具体值未在宏中直接给出，但存在于 `objOutEDRStruct` 中），触发报警。
+    *   `fDDCI` (Distance to Decision Critical Intersection): 目标距离关键交叉点的距离。
+    *   `fInterX`, `fInterY`: 预测的交叉点坐标。
+*   **速度/角度阈值**:
+    *   `YAWRATETHERESHOLD` (3.0f): 可能用于判断目标或本车的航向角变化率，排除静止或直线行驶的非威胁目标。
+    *   `velAbsY` / `velY`: 横向速度必须大于最小阈值（通常为 2-5 km/h），以区分静止障碍物和移动威胁。
+*   **报警保持帧数**:
+    *   `KEEPWARNINGFRM`: 3 帧 (正常速度下报警保持/触发迟滞)。
+    *   `LOWSPEEDKEEPWARNINGFRM`: 6 帧 (低速下更长的迟滞，防止误报)。
 
 ## 5. 关键变量
 
 | 变量名 | 类型 | 来源 | 含义 |
 | :--- | :--- | :--- | :--- |
-| `fctaSystemState` | `uint8_t` | `ASWIN_SystemState.c` | FCTA 功能当前状态机状态 (0:Off, 2:Active, 3:Warning) |
-| `bFCTAEnable` | `bool` | `RteComMapping.c` / `adasFunc.c` | FCTA 功能使能标志位，由用户开关或配置决定 |
-| `bLeftFctaWarning` | `uint8_t` | `adasFunc.c` (内部计算) | 左侧 FCTA 报警状态 (0:无, 1:一级, 2:二级) |
-| `bRightFctaWarning` | `uint8_t` | `adasFunc.c` (内部计算) | 右侧 FCTA 报警状态 (0:无, 1:一级, 2:二级) |
-| `fFctaActiveUpSpd` | `float` | `adasFunc.c` | 系统激活的上限车速阈值 |
-| `fFctaObjWarningBaseTTMX` | `float` | `adasFunc.c` | 触发报警的基础 X 轴碰撞时间阈值 |
-| `AdasStM.FCTAState` | `uint8_t` | `ASWIN_SystemState.h` | 全局状态机结构体中的 FCTA 状态副本 |
-| `PERInputUpdate.adasEnable.bFCTAEnable` | `bool` | `RteComMapping.c` | 从 CAN 总线接收的用户开关信号 |
+| `bFCTAEnable` | `bool` | `adasEnableStruct` | FCTA 功能使能开关，由 HMI 或系统配置控制。 |
+| `fctaSystemState` | `uint8_t` | `adasWarningStruct` | FCTA 系统当前状态 (0-6)，决定功能是否处于 Active。 |
+| `leftFctaRoi` / `rightFctaRoi` | `polygonLargerStruct` | `adasROIStruct` | 左侧/右侧 FCTA 感兴趣区域的多边形顶点坐标。 |
+| `bLeftFctaWarning` / `bRightFctaWarning` | `uint8_t` | `adasWarningStruct` | 左/右侧 FCTA 报警输出标志 (0:无, 1:报警)。 |
+| `objFctaWarningFlag` | `int8_t` | `objOutEDRStruct` | 单个目标的 FCTA 报警标志 (-1:始终正常, 0:正常, 1:报警)。 |
+| `fTTM` | `float` | `objOutEDRStruct` | Time To Merge/Cross，目标到达交叉点的时间，核心风险指标。 |
+| `fDDCI` | `float` | `objOutEDRStruct` | Distance to Decision Critical Intersection，目标距交叉点距离。 |
+| `velY` / `velAbsY` | `float` | `objOutEDRStruct` | 目标的横向速度分量，用于判断是否为横向穿越目标。 |
+| `fInterX` / `fInterY` | `float` | `objOutEDRStruct` | 预测的本车与目标轨迹交叉点坐标。 |
+| `AdasModelFCTA` | `enum` | `paraDefine.h` | FCTA 功能模型枚举值 (6U)，用于功能路由。 |
 
 ## 6. 输入信号
 1.  **车辆状态**:
-    *   车速 (Vehicle Speed): 用于判断功能激活/退出。
-    *   档位 (Gear): 通常需处于非 P 档（代码中虽未直接显示，但通常逻辑如此）。
-    *   电源模式 (SysPowerMod): `SYS_POWER_ON`。
-2.  **用户输入**:
-    *   FCTA 功能开关 (`FCTASwtReq` 或 `FCTABrkSwtReq`): 通过 CAN 信号 `FCTASwtReq` 或 `FCTABrkSwtReq` 读取。
-    *   变体配置 (`g_GWMSpecificVariant`): 决定信号映射逻辑 (DID Merge)。
-3.  **雷达感知数据**:
-    *   目标列表 (Object List): 包含目标的距离、速度、角度 (Yaw)、相对速度等。
-    *   雷达自身状态：故障状态 (`ErrSts`)、校准状态 (`inCalibState`)。
-4.  **系统状态**:
-    *   DTC 故障标志 (`CheckAnyDtcActive`)。
+    *   车速 (`egoVel`)：FCTA 通常在低速（< 30-40 km/h）激活。
+    *   挡位信息：通常在 D 挡或 R 挡（若支持前方倒车辅助）激活。
+    *   转向角/航向角 (`yawAng`)：用于坐标变换和 ROI 动态调整。
+2.  **雷达感知数据**:
+    *   目标列表 (`objOutEDRStruct`)：包含距离 (`distX`, `distY`)、速度 (`velX`, `velY`)、航向角、ID、生命周期 (`lifeCycle`)。
+    *   雷达位置信息 (`RadarPos_FrontLeft`, `RadarPos_FrontRight`)。
+3.  **功能配置**:
+    *   `bFCTAEnable`：功能使能信号。
+    *   ROI 参数：`leftFctaRoi`, `rightFctaRoi` 的几何定义。
 
 ## 7. 输出信号
-1.  **报警请求**:
-    *   `bLeftFctaWarning` / `bRightFctaWarning`: 发送给 HMI 或仪表盘，用于点亮图标或发出声音。
-    *   `FCTA_warningReqLeft`: 通过 `RteComMapping` 映射到 CAN 信号 (如 `RSDS_FCTA_Warning` 等)。
+1.  **报警标志**:
+    *   `bLeftFctaWarning`：左侧前方交叉交通报警信号。
+    *   `bRightFctaWarning`：右侧前方交叉交通报警信号。
 2.  **系统状态**:
-    *   `fctaSystemState`: 输出当前功能状态 (Active/Warning)。
-    *   `RSDS_CTA_Actv`: 当 FCTA/FCTB 激活时，可能输出此标志位 (代码中 `RSDS_CTA_Actv` 逻辑主要关联 RCTB，但 FCTA 状态也会更新到 `AdasStM` 并可能映射到总线)。
-    *   `CR_FCTA_Resp`: 功能响应信号，告知上层系统功能是否可用。
-3.  **故障信息**:
-    *   `FR_Fault_Err` / `FL_Fault_Err`: 雷达故障状态。
+    *   `fctaSystemState`：反馈给 HMI 显示功能状态（Active/Standby/Fail）。
+3.  **诊断/调试信息**:
+    *   `objFctaWarningFlag`：每个目标的报警状态，用于调试和 EDR 记录。
+    *   `fTTM`, `fDDCI`：关键风险参数，用于监控和标定。
 
 ## 8. 与其他功能的交互
-1.  **FCTB (Front Cross Traffic Braking)**:
-    *   **强依赖**: FCTA 是 FCTB 的前置阶段。代码中 `fctaSystemState` 和 `fctbSystemState` 逻辑相似。
-    *   **逻辑复用**: 两者共享大部分阈值参数（如角度、速度范围），但 FCTB 的 TTM 阈值更严格，且 FCTB 会输出制动请求 (`fBrakeValue`)。
-    *   **状态联动**: 当 FCTA 报警 (`State 3`) 且风险进一步升级（TTM 更短）时，可能触发 FCTB 介入。
-2.  **RCTA/RCTB (Rear Cross Traffic)**:
-    *   **架构对称**: 代码结构高度相似，但 RCTA 由后角雷达处理，FCTA 由前角雷达处理。
-    *   **资源调度**: 在 `AswIfSchedule.c` 中，前雷达和后雷达的状态更新函数是分开调用的 (`UpdateFctaAndFctbSystemStatus` vs `UpdateRctaAndRctbSystemStatus`)。
-3.  **HMI/仪表盘**:
-    *   通过 `RteComMapping` 将 `bLeftFctaWarning` 等信号转换为 CAN 报文发送给仪表，控制图标闪烁或声音报警。
-4.  **诊断系统**:
-    *   通过 `CheckAnyDtcActive` 读取故障码，若存在故障则强制关闭 FCTA 功能并输出故障状态。
+*   **FCTB (Front Cross Traffic Braking)**:
+    *   FCTA 和 FCTB 共享相同的感知输入和 ROI 定义。
+    *   FCTA 是 FCTB 的前置阶段。通常逻辑为：先触发 FCTA 报警，若驾驶员无反应且风险进一步升级（TTC 更短），则触发 FCTB 制动。
+    *   代码中 `bLeftFctbWarning` 和 `bLeftFctaWarning` 并行存在，表明两者可能独立判断，但 FCTB 的触发阈值通常比 FCTA 更严格。
+*   **BSD/LCA**:
+    *   虽然 BSD/LCA 主要关注侧后方，但在某些实现中，前角雷达的数据也可能用于辅助判断车辆周围的完整态势，但 FCTA 有独立的 ROI (`leftFctaRoi`)，与 BSD ROI (`leftBsdRoi`) 在空间上是分离的。
+*   **RCTA/RCTB**:
+    *   逻辑对称，RCTA 关注后方交叉交通，FCTA 关注前方。两者共用类似的算法框架（ROI 判断、TTM 计算），但雷达源不同（后角雷达 vs 前角雷达）。
+*   **TGU (Traffic Guide Unit / Lane Assist)**:
+    *   `TGUValid` 标志可能影响 ROI 的动态调整。如果车道线识别有效，FCTA 的 ROI 可能会根据车道边界进行微调，以提高准确性。

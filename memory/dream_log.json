@@ -142,5 +142,12 @@
     "code_pairs_learned": 2,
     "code_pairs_skipped": 0,
     "code_warmup_done": true
+  },
+  {
+    "timestamp": "2026-06-09T12:26:33.821964",
+    "summary": "整合了 FCTB 档位抑制与 AEB 信号清零的新根因 (FCTB005)，合并了 LCA 报警晚的多重根因，并补充了 RCTA 数据完整性缺失的诊断模式；清理了重复的 FCTB/LCA 模式条目，更新了项目记忆中的代码学习进度至 v16。",
+    "conflicts": 2,
+    "patterns_added": 2,
+    "patterns_removed": 6
   }
 ]
