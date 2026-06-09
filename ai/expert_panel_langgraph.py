@@ -37,8 +37,8 @@ from typing import Any, Optional
 
 from langgraph.graph import StateGraph, END
 
-from ..model_router import ModelRouter
-from ..utils import parse_json_from_llm
+from .model_router import ModelRouter
+from .utils import parse_json_from_llm
 
 
 # ── State Definition ─────────────────────────────────────────────────────
@@ -841,6 +841,23 @@ CAN信号→内部变量→判断条件→结果 (一条链路一行)
                 opinion += f"\n\n### 补充分析(R2)\n{state[f'{eid}_rebuttal']}"
             parts.append(f"## {edef['emoji']} {edef['name']} ({edef['domain']})\n{opinion}")
         return "\n\n---\n\n".join(parts)
+
+    # ── Backward-compatible aliases (orchestrator calls these) ───────────
+
+    def run_panel(self, **kwargs) -> dict:
+        """Alias for run() — keeps orchestrator import path working."""
+        return self.run(**kwargs)
+
+    @classmethod
+    def select_experts(cls, fail_type: str = "OTHER") -> dict:
+        """Return dict of expert definitions for len() compatibility with orchestrator.
+
+        The orchestrator calls ExpertPanel.select_experts(fail_type) and takes
+        len() of the result — so we return a dict (like the old ExpertPanel did)
+        rather than a list.
+        """
+        ids = select_experts(fail_type)
+        return {eid: EXPERTS[eid] for eid in ids}
 
 
 # ── Backward-compatible alias ────────────────────────────────────────────

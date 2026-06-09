@@ -13,7 +13,7 @@ from pathlib import Path
 from .model_router import ModelRouter
 from .code_learner import CodeLearner
 from .frame_analyzer import FrameAnalyzer
-from .expert_panel import ExpertPanel
+from .expert_panel_langgraph import ExpertPanel
 from .test_window_detector import TestWindowDetector, format_windows
 from .condition_extractor import ConditionExtractor, format_conditions
 from .problem_classifier import ProblemClassifier, ClassificationResult
