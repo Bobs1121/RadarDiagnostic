@@ -43,3 +43,19 @@ cases/**/*.json
 source_docs/*_conditions.json
 radarAnalyze_introduction.html
 radarAnalyze_introduction.md
+
+# Runtime artifacts (generated during diagnosis)
+cases/**/*.md
+cases/**/*.html
+cases/**/*.json
+cases/**/*.jsonl
+source_docs/*.md
+source_docs/*.json
+memory/*.json
+memory/*.db
+memory/*.jsonl
+memory/.dream-lock
+memory/**/*.json
+scripts/*.db
+taskboard.json
+observability_log.json
