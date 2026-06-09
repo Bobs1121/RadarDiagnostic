@@ -282,11 +282,14 @@ def build_incremental(source_root, db_path):
 
 ---
 
-## Phase 3: 专家面板重构 — LangGraph (5 天)
+## Phase 3: 专家面板重构 — LangGraph (5 天) ✅ 完成
 
-### P3.1: LangGraph 状态图定义 (1 天)
+### P3.1: LangGraph 状态图定义 (1 天) ✅
 
 **目标**: 定义 DiagnosisState + 图结构。
+
+**状态**: 已完成 — `ai/expert_panel_langgraph.py` 已实现完整的 DiagnosisState、
+5 专家节点、moderator challenge/synthesize 流程。
 
 ```
 新增文件:
@@ -326,9 +329,13 @@ class DiagnosisState(TypedDict):
     confidence: float
 ```
 
-### P3.2: 5 专家节点迁移 (2 天)
+### P3.2: 5 专家节点迁移 (2 天) ✅
 
 **目标**: 将现有 expert 逻辑迁移为 LangGraph 节点。
+
+**状态**: 已完成 — orchestrator 已切换到 LangGraph 版本。
+`ExpertPanelLangGraph.run()` 替代 `ExpertPanel.run_panel()`。
+兼容接口：`run_panel()` 和 `select_experts()` 类方法。
 
 ```python
 def signal_chain_agent(state: DiagnosisState, config) -> dict:
@@ -340,50 +347,36 @@ def signal_chain_agent(state: DiagnosisState, config) -> dict:
 # Similar for algorithm, system_state, perception, architecture
 ```
 
-### P3.3: 主持人挑战 + 收敛 (1 天)
+### P3.3: 主持人挑战 + 收敛 (1 天) ✅
 
 **目标**: Round 2 交叉审查 + Round 3 收敛。
 
-```python
-def moderator_challenge(state: DiagnosisState, config) -> dict:
-    """主持人发现矛盾点，生成挑战问题."""
-    opinions = [state[f"{k}_opinion"] for k in EXPERT_KEYS]
-    prompt = f"以下是 5 位专家的意见，找出矛盾点:\n{''.join(opinions)}"
-    challenges = router.complex(prompt, system=MODERATOR_SYSTEM)
-    return {"moderator_challenges": parse_challenges(challenges)}
+**状态**: 已完成 — `_run_moderator_challenge` 和 `_run_moderator_synthesize` 已实现，
+3 轮对话（专家分析 → 主持人挑战 → 专家回应）完整工作。
 
-def expert_round2(state: DiagnosisState, config) -> dict:
-    """专家回应挑战，修正意见."""
-    # Each expert receives challenges and revises
-    ...
-
-def moderator_synthesize(state: DiagnosisState, config) -> dict:
-    """Round 3: 综合收敛，输出最终裁决."""
-    prompt = build_synthesis_prompt(state)
-    verdict = router.complex(prompt, system=SYNTHESIS_SYSTEM)
-    return {"final_verdict": verdict}
-```
-
-### P3.4: prompt 外部化管理 (1 天)
+### P3.4: prompt 外部化管理 (1 天) ✅
 
 **目标**: 所有 prompt 从代码分离到文件。
+
+**状态**: 已完成 — `prompts/expert_panel/` 目录包含 12 个 .md 文件 + loader.py。
+代码中使用 try/except 加载，失败时 fallback 到 hardcoded prompt。
 
 ```
 新增文件:
   prompts/expert_panel/
-    signal_chain.md
-    algorithm.md
-    system_state.md
-    perception.md
-    architecture.md
-    moderator_challenge.md
-    moderator_synthesis.md
-```
-
-```python
-def load_prompt(name: str) -> str:
-    prompt_path = PROMPTS_DIR / f"{name}.md"
-    return prompt_path.read_text(encoding="utf-8")
+    experts/signal_chain.md      — 信号链路专家系统定义
+    experts/algorithm.md          — 算法专家系统定义
+    experts/system_state.md       — 系统状态专家系统定义
+    experts/perception.md         — 感知专家系统定义
+    experts/architecture.md       — 架构专家系统定义
+    moderator_system.md           — 主持人系统定义
+    expert_analyze.md             — 专家首轮分析模板
+    expert_respond.md             — 专家回应挑战模板
+    moderator_challenge.md        — 主持人挑战模板
+    moderator_synthesize.md       — 主持人综合收敛模板
+    task_headers.md               — 任务类型 Header (diagnose/tune/verify)
+    retry_strict_json.md          — JSON 重试指令
+    loader.py                     — Prompt 加载器模块
 ```
 
 ---

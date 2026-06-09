@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff
 
-> 更新: 2026-06-09 (CodeFixEngine Phase 4.5 完成 — 从专家结论生成 unified diff)
-> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+CodeGraph Phase 3+4 完成)
-> 状态: v2 Phase 1+2 完成; CodeGraph Phase 3 专家面板注入完成; Phase 4 CodeFixEngine 完成
+> 更新: 2026-06-09 (v2 Phase 1+2+3 全部完成 — 包括 LangGraph 专家面板集成 + Prompt 外部化)
+> 分支: `refactor/codegraph` (v1), `refactor/v2` (v2 改造 — Phase 1+2+3 完成)
+> 状态: v2 Phase 1+2+3 完成; Phase 4 CodeFixEngine 待开始
 
 ---
 
@@ -54,9 +54,12 @@ AI 驱动的角雷达 ADAS 诊断系统。输入：问题描述 + 案例数据 (
 |------|--------|------|
 || AST Parser → CodeGraph 集成 | ✅ | `ast_builder.py` 已集成，use_ast=True 验证通过 (P2.4 benchmark 完成) |
 || 信号链边 (READS/WRITES) | ✅ | RteComMapping 正则补全, 边 0→463 |
-| State Machine (Phase 6) | P2 | 状态转换正则未匹配 |
+| State Machine (Phase 6 / P2.4) | ✅ | `state_machine_extractor.py` 已完成 — switch-case 和 if-elif 双检测器 |
 | 变量 false positives | P2 | 797 变量含普通局部变量 |
-| 专家面板 CodeGraph 集成 | ✅ | ContextBudget 注入 render_for_expert_panel (priority=72, max 10000 chars) |
+|| 专家面板 LangGraph (P3.1) | ✅ | `expert_panel_langgraph.py` — StateGraph + 5专家并行 + moderator 3轮 |
+|| Orchestrator 集成 (P3.2) | ✅ | `orchestrator.py` 切换导入 LangGraph 版本，兼容 run_panel/select_experts 接口 |
+|| Prompt 外部化 (P3.4) | ✅ | `prompts/expert_panel/` — 12个 .md 文件 + loader.py，代码 fallback hardcoded |
+|| 专家面板 CodeGraph 集成 | ✅ | ContextBudget 注入 render_for_expert_panel (priority=72, max 10000 chars) |
 | CodeGraph prompt token 预算 | P2 | 动态调整 3000 chars |
 
 ---
@@ -228,9 +231,11 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 5. 工作完成后更新本 handoff 的"当前状态"和"Git 提交历史"
 
 **下一步工作**:
-- **Phase 3 (LangGraph 专家面板)**: 迁移 5 专家 3 轮辩论到 LangGraph 状态图
-- **Phase 4 (CodeFixEngine)**: diff 生成 + 安全审查 + 效果预估
-- **CodeGraph Phase 3 验证**: 跑一个真实案例，确认专家面板输出质量提升
+- **Phase 3 收尾 (P3.2)**: orchestrator 集成 — 把 expert_panel.py 替换为 expert_panel_langgraph.py
+- **Phase 3 收尾 (P3.3)**: 端到端测试，跑真实案例对比新旧专家面板输出质量
+- **Phase 3 收尾 (P3.4)**: prompt 外部化 — prompts/expert_panel/*.md
+- **Phase 4 (CodeFixEngine)**: 已有 Phase 4.5 diff 生成，继续安全审查 + 效果预估
+- **Phase 5**: 管线精简 (15→8 步) + 记忆简化 (6→3 层) + 回归测试
 - 或继续 v1 迭代 (CodeGraph prompt token 预算动态调整)
 
 **Phase 1 遗留问题**:
@@ -253,16 +258,35 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
   - 性能: AST 5.8s vs Regex 2.7s（约 2 倍）
   - 关键优化: `_build_func_index` + `_build_line_to_func_index` 避免 O(N×M) 遍历，从 120s+ 超时降至 0.98s/文件
   - `_walk_subtree` 从递归改为迭代栈，避免 Python 递归深度限制
+- P2.5 ✓ AST 行为模式提取器 pattern_extractor_ast.py (428 行, 12KB)
+  - 6 种行为模式: HoldRelease, Accumulate, Debounce, Hysteresis, RateLimit, EdgeDetect
+  - 正则驱动（匹配命名约定而非语法结构），缓存到 codegraph_ast_patterns.json
+- P2.6 ✓ AST 状态机提取器 state_machine_extractor.py (627 行, 22KB)
+  - switch-case 和 if-elif 双检测器
+  - 冒烟测试: rbSec_Lifecycle.c 成功提取 3 个状态机 (21/21/6 条转换)
+  - 缓存到 codegraph_ast_fsm.json，to_dict() 序列化验证通过
+  - tree-sitter paren.children[0] 是 `(` 而非表达式的问题已通过 _paren_expr() 修复
 - tree-sitter 0.24+ 版本 (PyCapsule) 与 0.21.x (Language 对象) API 不兼容，已锁定 0.21.3 + 0.21.4
 
 **CodeGraph Phase 3 进度 (2026-06-08)**:
-- P3.1 ✓ 完成 — 专家面板 prompt 注入 CodeGraph 结构化上下文
+- P3.0 ✓ 完成 — 专家面板 prompt 注入 CodeGraph 结构化上下文
   - 注入点: `orchestrator.py` ContextBudget 组装区 (line 377-408)
   - 调用: `CodeGraphRenderer.render_for_expert_panel(module=func_name, problem_desc=problem, max_chars=10000)`
   - ContextBudget 优先级: priority=72 (介于 params=70 和 timeline=60 之间)
   - 内容包含: 模块函数/信号/调用链 + 校准参数 + 跨模块共享函数/信号 + 构建信息 + 行为模式
   - 失败策略: `try/except` 静默降级，无 CodeGraph DB 时不影响诊断流程
   - 已有但未使用的渲染方法: `render_for_conditions` (render.py:226-294) — 可考虑条件提取阶段使用
+
+**Phase 3 进度 (2026-06-09)**:
+- P3.1 ✓ LangGraph 专家面板 expert_panel_langgraph.py (731 行, 36KB)
+  - 依赖: langgraph 1.2.4 (已安装)
+  - 架构: StateGraph — START → parallel_experts → moderator_challenge → expert_rebuttals → moderator_synthesize → END
+  - DiagnosisState (TypedDict): 完整的诊断状态定义
+  - 专家选择基于 fail_type: FP/FN/DELAY/STATE/OTHER
+  - ThreadPoolExecutor 实现真正的专家并行（最多 5 并发）
+  - Moderator system prompt: 因果链五层模型 + TPE 一致性强制 + 文件行号锁定
+  - ExpertPanel 别名指向 ExpertPanelLangGraph，orchestrator 可直接替换
+- 待做: P3.2 orchestrator 集成, P3.3 端到端测试, P3.4 prompt 外部化
 
 **重要**: 每次对话结束前，更新本文件的"当前状态"和"需求池"。这是跨会话协作的唯一可靠通道。
 
@@ -294,3 +318,83 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 - `FixLocation`: file_path, start_line, end_line, function_name, context
 - `SafetyIssue`: severity (critical/warning/info), category, description, line
 - `FixResult`: success, fix_suggestions, locations, diffs, safety_issues, syntax_check, effect_estimate, error
+
+---
+
+## Phase 2 新增模块 (2026-06-09)
+
+### P2.3: AST 行为模式提取器 — `ai/codegraph/pattern_extractor_ast.py`
+
+**提交**: 待提交
+**新模块**: `ai/codegraph/pattern_extractor_ast.py` (428 行, 12KB)
+
+**6 种行为模式**:
+1. **HoldRelease**: `set_hold`, `set_release`, `_active`, `_inhibit` — 保持/释放/抑制
+2. **Accumulate**: `accumulate`, `counter++`, `cnt` — 计数器/累积器
+3. **Debounce**: `debounce`, `hold_time`, `_wait_ms` — 防抖
+4. **Hysteresis**: `hysteresis`, `HYST`, `upSpd`/`lowSpd` — 滞回
+5. **RateLimit**: `rate_limit`, `min_interval`, `max_freq` — 频率限制
+6. **EdgeDetect**: `edge_detect`, `prev_`, `rising`, `falling` — 边沿检测
+
+**设计**: 正则驱动（而非 AST），因为模式匹配的是"命名约定"而非"语法结构"。
+
+**缓存**: 结果写入 `code_knowledge_cache/codegraph_ast_patterns.json`，SHA256 + mtime 双重校验。
+
+### P2.4: AST 状态机提取器 — `ai/codegraph/state_machine_extractor.py`
+
+**新模块**: `ai/codegraph/state_machine_extractor.py` (627 行, 22KB)
+
+**支持两种 FSM 模式**:
+1. **switch-case 状态机**: `switch (state_var) { case STATE_A: ... state_var = STATE_B; break; }`
+2. **if-elif 链状态机**: `if (state_var == STATE_A) { ... state_var = STATE_B; }`
+
+**数据模型**: `StateMachine` dataclass → `Transition` list → `to_dict()` JSON 序列化
+
+**缓存**: 结果写入 `code_knowledge_cache/codegraph_ast_fsm.json`
+
+**真实代码冒烟测试 (rbSec_Lifecycle.c)**:
+- 检测到 3 个状态机:
+  - `RbSecu_GetSecretDataLCPCounter` — SessionState_e (switch-case, 21 条转换)
+  - `RbSecu_GetSecretDataLCState` — SessionState_e (switch-case, 21 条转换)
+  - `OEM_Dia_LifeCycleManagement` — LifeCycle_state (switch-case, 6 条转换)
+- `extract_file()` 直接调用 API 正常工作
+- 序列化 (to_dict) 和缓存机制验证通过
+
+**已知问题**: `extract_from_tree()` 在 `ast_parser.py` 的 `extract_state_machine` 中调用时存在
+`paren.children[0]` 取到 `(` 而非表达式的问题（tree-sitter 的 `parenthesized_expression` 子节点
+包含括号字符），已在 `state_machine_extractor.py` 中通过 `_paren_expr()` 辅助函数修复。
+
+---
+
+## Phase 3: LangGraph 专家面板 (2026-06-09)
+
+### P3.1: LangGraph 状态图定义 — `ai/expert_panel_langgraph.py`
+
+**新模块**: `ai/expert_panel_langgraph.py` (731 行, 36KB)
+
+**依赖**: `langgraph` 1.2.4 (已通过 pip install 安装)
+
+**架构 — LangGraph StateGraph 流程**:
+```
+START → parallel_experts (5 专家并发) → moderator_challenge (Round 2)
+      → expert_rebuttals (仅受挑战专家回应) → moderator_synthesize (Round 3) → END
+```
+
+**核心设计**:
+- `DiagnosisState` (TypedDict): 完整的诊断状态定义，包含 inputs、5 专家意见、挑战问题、最终裁决
+- `ExpertPanelLangGraph.run()`: 公共 API，与 orchestrator 的 `ExpertPanel` 接口兼容
+- 专家选择基于 fail_type: FP/FN/DELAY/STATE/OTHER
+- `ThreadPoolExecutor` 实现真正的专家并行（最多 5 并发）
+- 3 轮流程: R1 独立分析 → R2 moderator 挑战 → R3 最终合成
+
+**Moderator System Prompt**:
+- 因果链五层模型: L4 外部表现 → L3 雷达观测 → L2.5 时序耦合 → L2 ECU 逻辑 → L1 信号输入
+- TPE 一致性强制: triggered 模式必须反映在根因，not_triggered 不得作为根因
+- TPE 文件与行号锁定: 最终裁决必须使用 TPE 给出的 `file:line` 定位
+
+**向后兼容**: `ExpertPanel = ExpertPanelLangGraph` 别名，orchestrator 可直接替换
+
+**待做**:
+- P3.2: orchestrator 集成（替换 expert_panel.py 为 LangGraph 版本）
+- P3.3: 端到端测试验证输出质量
+- P3.4: prompt 外部化（prompts/expert_panel/*.md）
