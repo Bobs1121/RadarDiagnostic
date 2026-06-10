@@ -141,6 +141,73 @@ source_domains:
   output:
     - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
 
+# ── Variable Filter (Phase 5B) ────────────────────────────────────────────
+# Filter rules for CodeGraph variable extraction.  Variables that don't
+# match any include rule are discarded.  C keywords, library functions,
+# and short local variables are excluded by default.
+variable_filter:
+  # Minimum name length — variables shorter than this are excluded
+  min_name_length: 4
+
+  # Exclude patterns — regex patterns; if name matches, variable is excluded
+  exclude_patterns:
+    # C keywords
+    - "^(for|while|if|else|return|break|continue|switch|case|default)$"
+    # C types
+    - "^(int|float|double|bool|char|void|static|const|unsigned|signed|short|long|struct|typedef|enum|sizeof|extern|volatile)$"
+    # Common literals
+    - "^(true|false|TRUE|FALSE|NULL)$"
+    # Standard library functions (common noise from function calls mistaken as vars)
+    - "^(fabs|fabsf|fmodf|floorf|ceilf|sinf|cosf|tanf|sqrtf|powf|abs|max|min)$"
+    # Memory/string ops
+    - "^(memcpy|memset|strcpy|strcmp|strncpy|sprintf|snprintf|malloc|free|calloc|realloc)$"
+    # I/O
+    - "^(printf|fprintf|scanf|sscanf)$"
+    # Generic noise
+    - "^(noise|bias|num|pts|res|tmp|idx|cnt|p|next|prev)$"
+
+  # Include patterns — regex patterns; if name matches any, variable is KEPT
+  # (takes precedence over default exclusion of local variables)
+  include_patterns:
+    # RTE / signal variables
+    - "^Rte_"
+    # Calibration parameters
+    - "^Calib"
+    # State/mode/flag variables (diagnostic value)
+    - "(State|Mode|Status|Flag|Flg)[A-Z]"
+    - "[A-Z](State|Mode|Status|Flag|Flg)"
+    - "Flg$"
+    # Distance/gap/speed/angle — core ADAS measurements
+    - "(Distance|Gap|Speed|Vel|Angle|YawAng)[A-Z]"
+    - "[A-Z](Distance|Gap|Speed|Vel|Angle|YawAng)"
+    # Object/target tracking
+    - "(Object|Target|Track|Clu|Obj|Tar)"
+    # Brake/steer/alarm/warning
+    - "(Brake|Steer|Alarm|Warn|Bld)[A-Z]"
+    - "[A-Z](Brake|Steer|Alarm|Warn|Bld)"
+    # Direction/location keywords
+    - "(Front|Rear|Left|Right|Corner|Blind|Lane|Road)[A-Z]"
+    - "[A-Z](Front|Rear|Left|Right|Corner|Blind|Lane|Road)"
+    # Vehicle/pedestrian/cross
+    - "(Vehicle|Pedestrian|Cross|Traffic|Sign|Light|Emergency)"
+    # TTC — time-to-critical
+    - "TTC"
+    # Enable/disable/active
+    - "(Enable|Disable|Active|Passive)[A-Z]"
+    # FIFO ring buffer (common in ADAS for temporal filtering)
+    - "^FIFO"
+    # ADAS Hungarian naming: f(b)ool, (b)ool, n(umber) prefix
+    # Only keep if name length > min_name_length (configured above)
+    - "^[fbnFBNR][A-Z]"
+
+  # Scope filtering — which scopes to include
+  scopes:
+    - "global"
+    - "file_static"
+    # "local" is excluded by default — local variables are diagnostic noise
+    # Uncomment to include local variables (not recommended):
+    # - "local"
+
 # ── Auto-Dream 代码学习增强 ─────────────────────────────────────────────
 # 每次 dream 时自动读取上述源码，按“功能 × 焦点”网格增量学习并固化为知识。
 # 首次全量学习需 N = len(priority_functions) × len(rotation_focuses) 轮；

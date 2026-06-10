@@ -1408,6 +1408,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         try:
             from .codegraph import CodeGraphBuilder
             from .code_learner import FUNC_KEYWORDS
+            from config import get_variable_filter
 
             source_root = Path(self.config["paths"]["source_code"])
             key_files = self.config.get("paths", {}).get("key_source_files", [])
@@ -1419,6 +1420,9 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 if "paraDefine" in p or "structDefine" in p or "globalVarDefine" in p
             ]
 
+            # Phase 5B: variable filter
+            variable_filter = get_variable_filter(self.config)
+
             builder = CodeGraphBuilder(
                 db_path=db_path,
                 source_root=source_root,
@@ -1426,6 +1430,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 func_keywords=FUNC_KEYWORDS,
                 calib_files=calib_files,
                 source_docs_dir=self.source_docs_dir,
+                variable_filter=variable_filter,
             )
             result = builder.build()
 

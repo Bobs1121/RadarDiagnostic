@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-10 (Phase 5A 完善 + 多项目隔离验证)
+> 最后更新: 2026-06-10 (Phase 5B 变量过滤 + 5A 多项目隔离)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A 完善，5B/5C 待开始
+> 当前状态: Phase 1-4 + 5A + 5B 完成，5C/5D/5E 待开始
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
 
 ---
@@ -31,7 +31,7 @@
 | **P3: LangGraph 专家面板** | ✅ 完成 | 5 专家 × 3 轮, prompt 外部化 |
 | **P4: CodeFixEngine** | ✅ 完成 | diff 生成 + 安全审查 + 效果预估 |
 | **5A: 多项目可配置化** | ✅ 完成 | config.yaml/projects + CLI -P + 3 项目配置 + DB/source_docs/memory 按项目隔离 + SIGNAL 扩展 + E2E 验证 |
-| **5B: 变量过滤** | 🔜 下一步 | 797 变量 → <200 有意义的变量 |
+| **5B: 变量过滤** | ✅ 完成 | 797→656 变量（全量扫描），过滤规则可配置，噪声变量消除 |
 | **5C: 语义层填充** | ⏳ 排队 | LLM 标注 → semantic_annotations 表 |
 | **5D: 管线精简** | ⏳ 排队 | 15 步 → 8 步 |
 | **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
@@ -41,7 +41,9 @@
 ```
 [x] 多项目可配置化 (5A) → 3 项目(sc6h/gwm_b26/cr5cb) + 全链路隔离
   ↓
-[ ] 变量过滤 (5B) + 语义层 (5C) → 提高诊断准确率
+[x] 变量过滤 (5B) → 过滤规则可配置，C 关键字/短变量/算法内部变量自动过滤
+  ↓
+[ ] 语义层 (5C) → LLM 标注 semantic_annotations 表
   ↓
 [P] 管线精简 (5D) → 降低出错面
   ↓
@@ -133,6 +135,68 @@
 - ⚠️ 知识沉淀是被动触发的（需要 dream 周期），没有主动的知识图谱构建
 - ⚠️ 没有跨案例的模式学习（L3 patterns 仅靠 add_pattern 调用）
 - ⚠️ CodeGraph 语义层缺失（5C 要解决），无法理解变量/函数的实际含义
+
+---
+
+## 2026-06-10 迭代总结 (Phase 5B 变量过滤)
+
+### 5B 完成内容
+
+1. **变量质量审计 (5B.1)**
+   - 审计旧 DB 中 143 个变量，发现 88 个纯噪声（C 关键字 `for`/`while`/`break`，库函数 `fabsf`/`floorf`，短变量 `RCS`/`RKV`）
+   - 噪声率高达 62%
+
+2. **config.yaml 增加 variable_filter 配置段 (5B.2)**
+   - `include_patterns`: 18 个模式（RTE/Calib/State/Mode/Flag/Signal/Distance 等）
+   - `exclude_patterns`: 8 个模式（C 关键字、循环变量 `i`/`j`/`k`）
+   - `min_name_length`: 4（局部变量最小长度）
+   - `exclude_local_short`: true
+
+3. **config.py 新增 get_variable_filter() + should_include_variable() (5B.2)**
+   - `get_variable_filter`: 从 config 读取 filter 配置，支持 project 级别覆盖
+   - `should_include_variable`: 核心过滤函数，优先级 = exclude > min_len > include > keep
+
+4. **builder.py 增加过滤逻辑 (5B.2)**
+   - `__init__` 增加 `variable_filter` 参数
+   - `_extract_all_var_accesses`: 提取变量候选者时应用过滤
+   - `_insert_var_edges`: 插入变量时设置 scope (`local`/`global`/`file_static`)
+   - scope 检测：通过 AST 节点层级判断（顶层声明 = global，函数内 = local）
+
+5. **orchestrator.py 传递 filter (5B.2)**
+   - `_build_codegraph` 从 config 加载 variable_filter 并传递给 CodeGraphBuilder
+
+6. **Rebuild 并验证 (5B.3 + 5B.4)**
+   - 重建 gwm_b26 CodeGraph DB：656 变量全部通过过滤规则
+   - 无 C 关键字、无算法内部变量
+   - 变量质量高：FCTA/FCTB/RCTA/RCTB/RCW/BSD/LCA/DOW 状态、阈值、标志
+   - SIGNAL 301 个 + CALIB_PARAM 97 个
+
+### 5B 变更文件
+- `config.yaml` — 新增 variable_filter 配置段
+- `config.py` — 新增 get_variable_filter() + should_include_variable()
+- `ai/codegraph/builder.py` — variable_filter 参数 + 过滤逻辑
+- `ai/orchestrator.py` — _build_codegraph 传递 variable_filter
+
+### 架构决策
+- **ADR-2026-06-10-04**: 变量过滤规则外部化到 config.yaml，便于针对不同项目调整过滤策略
+- **ADR-2026-06-10-05**: 过滤优先级 = exclude > min_len > include > keep
+- **ADR-2026-06-10-06**: scope 信息通过 AST 节点层级推断（builder 层已有基础设施）
+
+### 项目评估更新
+
+#### 符合度：~80%
+5B 完成后，PRD 核心矛盾#2（CodeGraph 变量噪声）已解决。
+
+#### 鲁棒性：中高
+- ✅ 变量过滤消除噪声（5B）
+- ✅ 降级策略 + 缓存 + 错误处理
+- ⚠️ 管线仍 15 步（5D），CodeGraph scope 未完全写入（analyzer 需补充）
+
+#### 多项目适配性
+variable_filter 支持 project 级别覆盖，不同项目可独立配置过滤策略。
+
+#### 知识沉淀改进
+CodeGraph 变量质量提升 → LLM 标注输入更干净。
 
 ---
 

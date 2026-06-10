@@ -71,6 +71,7 @@ class CodeGraphBuilder:
         calib_files: Optional[list[str]] = None,
         use_ast: bool = False,
         source_docs_dir: Optional[Path] = None,
+        variable_filter: Optional[dict] = None,
     ):
         self.db_path = Path(db_path)
         self.source_root = Path(source_root)
@@ -79,6 +80,7 @@ class CodeGraphBuilder:
         self.calib_files = calib_files or []
         self.use_ast = use_ast and AST_AVAILABLE
         self.source_docs_dir = source_docs_dir
+        self.variable_filter = variable_filter  # Phase 5B: variable filter config
         self.conn: Optional[sqlite3.Connection] = None
         self._ast_results_by_file: dict = {}
 
@@ -437,6 +439,8 @@ class CodeGraphBuilder:
         1. SIGNAL nodes (already extracted in phase 5)
         2. Global variables from globalVarDefine.h
         3. Common variable naming patterns (fXXX, bXXX, nXXX)
+
+        Phase 5B: Applies variable_filter to reduce noise.
         """
         # Collect known variables from existing VARIABLE nodes
         existing_vars = set()
@@ -447,6 +451,14 @@ class CodeGraphBuilder:
             existing_vars = {r["name"] for r in rows}
         except Exception:
             pass
+
+        # Phase 5B: filter existing vars through the filter rules
+        if self.variable_filter:
+            from config import should_include_variable
+            existing_vars = {
+                v for v in existing_vars
+                if should_include_variable(v, None, self.variable_filter)
+            }
 
         # Also collect variables matching common ADAS naming patterns
         # f = float, b = bool, n = int, FGap = Front Gap, etc.
@@ -466,6 +478,14 @@ class CodeGraphBuilder:
             except (OSError, PermissionError):
                 candidates = existing_vars
 
+            # Phase 5B: filter candidates through the filter rules
+            if self.variable_filter:
+                from config import should_include_variable
+                candidates = {
+                    c for c in candidates
+                    if should_include_variable(c, None, self.variable_filter)
+                }
+
             # Merge with existing known vars
             known = existing_vars | candidates
             accesses = analyzer.phase4_variable_access(fi["full_path"], fns, known)
@@ -481,6 +501,12 @@ class CodeGraphBuilder:
             edge_type = "WRITES_VAR" if a["access_type"] == "write" else "READS_VAR"
             edge_id = f"{func_id}->{var_id}:{edge_type}:{a['line']}"
 
+            # Phase 5B: skip variables filtered by variable_filter
+            if self.variable_filter:
+                from config import should_include_variable
+                if not should_include_variable(a["var_name"], None, self.variable_filter):
+                    continue
+
             # Ensure FUNCTION node exists
             func_exists = self.conn.execute(
                 "SELECT 1 FROM nodes WHERE id=?", (func_id,)
@@ -488,11 +514,13 @@ class CodeGraphBuilder:
             if not func_exists:
                 continue  # skip if function wasn't extracted (not in our codebase)
 
-            # Create VARIABLE node if needed
+            # Create VARIABLE node if needed (Phase 5B: include scope field)
+            var_scope = a.get("scope")
+            var_data_type = a.get("data_type")
             self.conn.execute(
-                """INSERT OR IGNORE INTO nodes (id, type, name)
-                   VALUES (?, 'VARIABLE', ?)""",
-                (var_id, a["var_name"]),
+                """INSERT OR IGNORE INTO nodes (id, type, name, scope, data_type)
+                   VALUES (?, 'VARIABLE', ?, ?, ?)""",
+                (var_id, a["var_name"], var_scope, var_data_type),
             )
 
             self.conn.execute(

@@ -143,3 +143,67 @@ def resolve_memory_dir(config: dict, project_root: Path) -> Path:
     """Resolve memory directory from config, with fallback."""
     proj = config.get("project", {})
     return Path(proj.get("memory_dir", project_root / "memory"))
+
+
+# ── Variable Filter (Phase 5B) ─────────────────────────────────────────────
+import re as _variable_re
+
+def get_variable_filter(config: dict) -> dict:
+    """Return the variable filter configuration with defaults.
+
+    Returns a dict with keys:
+      min_name_length (int)
+      exclude_patterns (list[str])  — precompiled regex
+      include_patterns (list[str])  — precompiled regex
+      scopes (list[str])
+    """
+    vf = config.get("variable_filter", {})
+    min_len = int(vf.get("min_name_length", 4))
+
+    exclude_raw = vf.get("exclude_patterns", [])
+    include_raw = vf.get("include_patterns", [])
+    scopes = vf.get("scopes", ["global", "file_static"])
+
+    return {
+        "min_name_length": min_len,
+        "exclude_patterns": [_variable_re.compile(p) for p in exclude_raw],
+        "include_patterns": [_variable_re.compile(p) for p in include_raw],
+        "scopes": scopes,
+    }
+
+
+def should_include_variable(name: str, scope: str | None, filter_cfg: dict) -> bool:
+    """Check if a variable should be included in CodeGraph.
+
+    Args:
+        name: Variable identifier name.
+        scope: Variable scope ("global", "file_static", "local", "parameter").
+        filter_cfg: Output of get_variable_filter().
+
+    Returns:
+        True if the variable should be kept, False if it should be filtered out.
+    """
+    min_len = filter_cfg["min_name_length"]
+    allowed_scopes = filter_cfg["scopes"]
+
+    # 1. Scope filter
+    if scope and scope not in allowed_scopes:
+        return False
+
+    # 2. Length filter — short names are almost always noise
+    if len(name) < min_len:
+        return False
+
+    # 3. Exclude patterns (hard exclusion)
+    for pattern in filter_cfg["exclude_patterns"]:
+        if pattern.search(name):
+            return False
+
+    # 4. Include patterns (whitelist — if any matches, keep it)
+    for pattern in filter_cfg["include_patterns"]:
+        if pattern.search(name):
+            return True
+
+    # 5. Default: reject variables that don't match any include pattern
+    #    This ensures we only keep diagnostically meaningful variables
+    return False
