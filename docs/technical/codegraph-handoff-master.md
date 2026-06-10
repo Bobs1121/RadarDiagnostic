@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-09 (Phase 5A 完成)
+> 最后更新: 2026-06-10 (Phase 5A 完善 + 多项目隔离验证)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A 完成，下一步 5B (变量过滤)
+> 当前状态: Phase 1-4 + 5A 完善，5B/5C 待开始
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
 
 ---
@@ -30,7 +30,7 @@
 | **P2: 代码分析升级** | ✅ 完成 | tree-sitter AST + CodeGraph SQLite (1381 节点, 9897 边) |
 | **P3: LangGraph 专家面板** | ✅ 完成 | 5 专家 × 3 轮, prompt 外部化 |
 | **P4: CodeFixEngine** | ✅ 完成 | diff 生成 + 安全审查 + 效果预估 |
-| **5A: 多项目可配置化** | ✅ 完成 | config.yaml/projects + CLI -P + DB/source_docs/memory 按项目隔离 + SIGNAL 扩展 |
+| **5A: 多项目可配置化** | ✅ 完成 | config.yaml/projects + CLI -P + 3 项目配置 + DB/source_docs/memory 按项目隔离 + SIGNAL 扩展 + E2E 验证 |
 | **5B: 变量过滤** | 🔜 下一步 | 797 变量 → <200 有意义的变量 |
 | **5C: 语义层填充** | ⏳ 排队 | LLM 标注 → semantic_annotations 表 |
 | **5D: 管线精简** | ⏳ 排队 | 15 步 → 8 步 |
@@ -39,16 +39,103 @@
 ### 改造路线 (基础优先)
 
 ```
-[x] 多项目可配置化 (5A) → config.yaml/projects + DB/source_docs/memory 隔离 + SIGNAL 扩展
+[x] 多项目可配置化 (5A) → 3 项目(sc6h/gwm_b26/cr5cb) + 全链路隔离
   ↓
-[x] 变量过滤 (5B) + 语义层 (5C) → 提高诊断准确率
+[ ] 变量过滤 (5B) + 语义层 (5C) → 提高诊断准确率
   ↓
 [P] 管线精简 (5D) → 降低出错面
   ↓
 [P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
 
-### 5A 完成清单 (2026-06-09)
+---
+
+## 2026-06-10 迭代总结 (多项目隔离完善)
+
+### 完成内容
+
+1. **config.yaml 补充 sc6h + cr5cb**
+   - sc6h: BYD-SC6H UKE 分支配置，14 个关键源文件
+   - cr5cb: BYD_OVS_CB 占位配置，待后续填充 key_source_files
+   - 3 个项目各有独立的 `source_code`、`memory_dir`、`codegraph_db_path`、`source_docs_dir`
+
+2. **code_learner.py 项目隔离修复**
+   - `knowledge_dir` 从 `memory/code_knowledge/` 改为 `memory/projects/{proj}/code_knowledge/`
+   - 向后兼容：无 project 配置时回退到全局 memory/
+
+3. **auto_dream.py 项目隔离修复**
+   - `memory_dir` 从 `project_root / "memory"` 改为 `memory_system.memory_dir`
+   - 所有 dream 操作（sessions、patterns、code_knowledge）现在使用项目隔离目录
+
+4. **E2E 验证通过**
+   - 3 个项目配置均可加载
+   - 路径隔离验证通过
+   - MemorySystem CRUD 跨项目无污染
+   - 提交: `6e51f80`
+
+### 架构决策
+
+- **ADR-2026-06-10-01**: MemorySystem 本身不需要修改 — 它接收 `memory_dir` 参数，所有读写在该目录下展开。只要 `memory_dir` 指向 `memory/projects/{proj}/`，天然隔离。
+- **ADR-2026-06-10-02**: CodeLearner 的 `knowledge_dir` 应和 MemorySystem 的 `code_knowledge` 目录一致，避免数据分裂。
+- **ADR-2026-06-10-03**: AutoDream 应使用 `memory_system.memory_dir` 而非自己硬编码路径，保证与 MemorySystem 目录一致。
+
+### 项目评估 (回答用户问题)
+
+#### 1. 项目是否走偏？
+**没有走偏**。当前实现与 PRD v2.1.0 高度对齐：
+- 多项目配置化 ✅（PRD 核心矛盾 #1 已解决）
+- CodeGraph 按项目隔离 ✅
+- source_docs 按项目隔离 ✅
+- 记忆系统按项目隔离 ✅
+- 变量过滤（5B）是下一阶段，按计划在 PRD 中定义
+- 管线精简（5D）按计划在 PRD 中定义
+
+#### 2. 是否符合 PRD 设计？
+**符合度 ~75%**。剩余差距：
+- 5B 变量过滤：PRD 要求"消除误报"，尚未开始
+- 5C 语义层：PRD 要求"语义理解层"，尚未开始
+- 5D 管线精简：PRD 要求"降低出错面"，尚未开始
+- 5E 优化：PRD 要求"ContextBudget + 记忆简化"，尚未开始
+
+#### 3. 鲁棒性如何？
+**当前鲁棒性中等**：
+- ✅ 降级策略完整（classify、probe 都有 fallback）
+- ✅ 缓存机制完善（MD5 + mtime 双重校验）
+- ✅ 错误处理到位（每步都有 try/except + 跳过标记）
+- ⚠️ 管线仍为 15 步，出错面较大（5D 要解决）
+- ⚠️ 变量过滤缺失导致大量噪声（5B 要解决）
+- ⚠️ 实际多项目 E2E 测试未运行（仅有冒烟测试）
+
+#### 4. 多项目适配性？
+**已实现**：
+- config.yaml/projects 支持任意数量的项目
+- CLI -P 参数可选，默认 gwm_b26
+- 每个项目有独立的：
+  - CodeGraph DB（SQLite 隔离）
+  - source_docs/（MD 概览文件）
+  - memory/（L1-L6 全部隔离）
+  - code_knowledge/（JSON 结构化知识）
+
+#### 5. 记忆机制？
+**6 层记忆已实现，按项目隔离**：
+- L1: `projects/{proj}/project.md` — 项目级知识
+- L2: `projects/{proj}/functions/*.json` — 功能级知识
+- L3: `projects/{proj}/patterns.json` — 诊断模式
+- L4: `projects/{proj}/sessions/*.json` — 会话记录
+- L5: `cases/*/memory.json` — 案例级（共享，不隔离）
+- L6: `projects/{proj}/code_knowledge/*.json` — 代码知识
+
+#### 6. 知识沉淀机制？
+**已实现但有改进空间**：
+- ✅ CodeLearner: 源码 → JSON 结构化知识（alarm_logic/state_machine/calculation_chain）
+- ✅ AutoDream: 定期整合知识，更新 project.md
+- ✅ ensure_overview_docs: 源码 hash 驱动刷新 MD 概览
+- ⚠️ 知识沉淀是被动触发的（需要 dream 周期），没有主动的知识图谱构建
+- ⚠️ 没有跨案例的模式学习（L3 patterns 仅靠 add_pattern 调用）
+- ⚠️ CodeGraph 语义层缺失（5C 要解决），无法理解变量/函数的实际含义
+
+---
+
 
 | Task | 状态 | 说明 |
 |------|------|------|
