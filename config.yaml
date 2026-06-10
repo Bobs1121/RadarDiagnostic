@@ -43,7 +43,7 @@ ai:
 projects:
   gwm_b26:
     display_name: "GWM_B26 (CR60Light)"
-    source_code: "D:\\cr60_light"
+    source_code: "D:\\BYD-SC6H-cr60light\\cr60_light"
     dbc_files:
       - "CR_DBC_V3.2_20260331.dbc"
       - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
@@ -74,6 +74,39 @@ projects:
       # RteLite - 信号接口声明 (GWM_B26)
       - "coem\\GWM_B26\\components\\com\\AutoGen\\PriCan\
 teLite_PriCan.h"
+  sc6h:
+    display_name: "BYD-SC6H-cr60light (6代角雷达)"
+    source_code: "D:\\BYD-SC6H-cr60light\\cr60_light"
+    dbc_files:
+      - "CR_DBC_V3.2_20260331.dbc"
+      - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+      - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+    key_source_files:
+      # 算法层
+      - "coem\\BYD_UKE\\components\\AswPerception\\func\\adasFunc.c"
+      - "coem\\BYD_UKE\\components\\AswPerception\\func\\adasFunc.h"
+      # 平台状态机
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
+      # 信号链路
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\RteComMapping.c"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\RteComMapping.h"
+      # 输出协调
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
+      # 感知层 (与 gwm_b26 共享)
+      - "adas\\symmetry\\perception\\src\\objAttribCal.c"
+      - "adas\\symmetry\\perception\\src\\track.c"
+      - "adas\\symmetry\\perception\\src\\postProcess.c"
+      # 定义文件
+      - "adas\\symmetry\\perception\\include\\perception_public_def.h"
+      - "adas\\symmetry\\perception\\include\\structDefine.h"
+      - "adas\\symmetry\\perception\\include\\paraDefine.h"
+      - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
+  cr5cb:
+    display_name: "BYD_OVS_CB (5代角雷达)"
+    source_code: "C:\\BYD_OVS_CB"
+    dbc_files: []
+    key_source_files: []
 
 default_project: "gwm_b26"
 
@@ -84,6 +117,13 @@ functions:
   rear:  [BSD, LCA, DOW, RCW, RCTA, RCTB]
   front: [FCTA, FCTB]
 
+# ── source_domains ─────────────────────────────────────────────────────
+# Per-project domain definitions.  Use projects.<key>.source_domains.
+# Legacy global `source_domains` is deprecated but kept for backward compat.
+# (Orchestrator now reads from get_project() which merges these in.)
+
+# Legacy global source_domains — deprecated.  Kept for backward compat.
+# New projects should define source_domains inside projects.<key>.source_domains
 source_domains:
   system_state:
     - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"

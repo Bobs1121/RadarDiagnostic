@@ -412,7 +412,10 @@ class CodeLearner:
         self.key_source_files: list[str] = list(
             config.get("paths", {}).get("key_source_files", [])
         )
-        self.knowledge_dir = project_root / "memory" / "code_knowledge"
+        # Per-project knowledge dir (falls back to legacy global for backward compat)
+        proj = config.get("project", {})
+        memory_dir = proj.get("memory_dir", project_root / "memory")
+        self.knowledge_dir = Path(memory_dir) / "code_knowledge"
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.knowledge_dir / "learning_state.json"
         self.overview_dir = resolve_source_docs_dir(config, project_root)

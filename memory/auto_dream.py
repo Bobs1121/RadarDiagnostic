@@ -94,7 +94,8 @@ class AutoDream:
         self.router = router
         self.project_root = project_root
         self.config = config or {}
-        self.memory_dir = project_root / "memory"
+        # Use MemorySystem's memory_dir (already project-scoped via config)
+        self.memory_dir = memory_system.memory_dir
         self.lock_path = self.memory_dir / LOCK_FILE
         self.log_path = self.memory_dir / DREAM_LOG_FILE
 
