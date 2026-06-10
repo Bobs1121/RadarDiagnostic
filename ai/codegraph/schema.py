@@ -6,7 +6,7 @@ Versioned — bump SCHEMA_VERSION when tables change.
 """
 from __future__ import annotations
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 INIT_SQL = """
 -- 版本管理
@@ -52,10 +52,15 @@ CREATE TABLE IF NOT EXISTS nodes (
 
     -- SIGNAL
     direction    TEXT,               -- Rx/Tx
-    can_name     TEXT,
-    can_id       TEXT,
-    rte_read_fn  TEXT,
-    rte_write_fn TEXT,
+    can_name     TEXT,               -- CAN signal name (DBC)
+    can_id       TEXT,               -- CAN message ID (hex)
+    dbc_name     TEXT,               -- DBC file name
+    dbc_id       TEXT,               -- DBC signal ID
+    dbc_signal_name TEXT,            -- DBC signal name
+    internal_var TEXT,               -- C 内部变量名 (data-variable mapping)
+    rte_port_id  TEXT,               -- AUTOSAR Rte port identifier
+    rte_read_fn  TEXT,               -- Rte read function name
+    rte_write_fn TEXT,               -- Rte write function name
 
     -- STATE
     state_id     INTEGER,

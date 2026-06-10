@@ -20,6 +20,7 @@ import time
 import datetime
 from pathlib import Path
 from typing import Optional
+from config import resolve_source_docs_dir
 
 # ── Configuration ───────────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ class AutoDream:
             if source_code:
                 trace_variable_chains(
                     Path(source_code),
-                    self.project_root / "source_docs",
+                    resolve_source_docs_dir(self.config, self.project_root),
                 )
         except Exception:
             pass
@@ -332,7 +333,7 @@ class AutoDream:
             parts.append(f"## L3 模式库 ({len(patterns)} 条)\n{json.dumps(patterns, ensure_ascii=False, indent=1)[:3000]}")
 
         # Source docs summary (*.md)
-        docs_dir = self.project_root / "source_docs"
+        docs_dir = resolve_source_docs_dir(self.config, self.project_root)
         for md in docs_dir.glob("*.md"):
             try:
                 content = md.read_text(encoding="utf-8")

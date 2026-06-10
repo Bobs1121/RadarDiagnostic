@@ -151,7 +151,8 @@ def main() -> int:
         extract_signal_mapping, trace_variable_chains, load_variable_chains,
     )
     source_root = Path(config["paths"]["source_code"])
-    docs_dir = PROJECT_ROOT / "source_docs"
+    from config import resolve_source_docs_dir
+    docs_dir = resolve_source_docs_dir({}, PROJECT_ROOT)
     try:
         sig_mapping = extract_signal_mapping(source_root, docs_dir)
     except Exception as exc:

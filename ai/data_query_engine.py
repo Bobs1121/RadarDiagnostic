@@ -219,8 +219,9 @@ class DataQueryEngine:
 
     def _build_knowledge_context(self, question: str) -> str:
         """Load signal mapping, radar knowledge, and function docs relevant to the question."""
+        from config import resolve_source_docs_dir
         parts: list[str] = []
-        docs_dir = self.project_root / "source_docs"
+        docs_dir = resolve_source_docs_dir(self.config, self.project_root)
 
         sig_map_path = docs_dir / "signal_mapping.json"
         if sig_map_path.exists():
@@ -584,7 +585,8 @@ class DataQueryEngine:
 
     def _get_transform_note(self, signal_name: str) -> str:
         """Look up signal_mapping.json for transform info on a CAN signal."""
-        sig_map_path = self.project_root / "source_docs" / "signal_mapping.json"
+        from config import resolve_source_docs_dir
+        sig_map_path = resolve_source_docs_dir(self.config, self.project_root) / "signal_mapping.json"
         if not sig_map_path.exists():
             return ""
         try:

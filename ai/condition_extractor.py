@@ -141,8 +141,9 @@ class ConditionExtractor:
     def __init__(self, router: ModelRouter, project_root: Path, config: dict):
         self.router = router
         self.project_root = project_root
+        from config import resolve_source_docs_dir
         self.source_root = Path(config["paths"]["source_code"])
-        self.cache_dir = project_root / "source_docs"
+        self.cache_dir = resolve_source_docs_dir(config, project_root)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._domain_sources = config.get("source_domains", _DEFAULT_DOMAIN_SOURCES)
 
@@ -279,7 +280,8 @@ class ConditionExtractor:
         result = []
         try:
             from .codegraph import CodeGraph
-            cg_path = self.project_root / "memory" / "codegraph.db"
+            from config import resolve_codegraph_db
+            cg_path = resolve_codegraph_db(self.config, self.project_root)
             if not cg_path.exists():
                 return result
 

@@ -162,7 +162,7 @@ def test_pattern_extractor_on_real_adas_func() -> None:
 
     extractor = PatternExtractor(
         source_root=source_root,
-        cache_dir=PROJECT_ROOT / "source_docs",
+        cache_dir=PROJECT_ROOT / "source_docs"  # TODO: use resolve_source_docs_dir,
     )
     patterns = extractor.extract_all(use_cache=False)
     print(summarise_patterns(patterns))
@@ -325,7 +325,7 @@ def test_tpe_facade_end_to_end_on_fcatb001() -> None:
     store = _build_mock_store_for_fcatb001()
     engine = TemporalPatternEngine(
         source_root=source_root,
-        cache_dir=PROJECT_ROOT / "source_docs",
+        cache_dir=PROJECT_ROOT / "source_docs"  # TODO: use resolve_source_docs_dir,
         signal_mapping=SYNTH_SIGNAL_MAPPING,
         variable_chains={},
     )

@@ -188,10 +188,11 @@ class QueryPlan:
 class VariableQueryPlanner:
     """Produce a list of :class:`QueryPlan` for the Expert Panel to consume."""
 
-    def __init__(self, router, memory_system, project_root: Path):
+    def __init__(self, router, memory_system, project_root: Path, config: dict | None = None):
         self.router = router
         self.memory = memory_system
         self.project_root = project_root
+        self.config = config or {}
 
     # ------------------------------------------------------------------
 
@@ -274,7 +275,8 @@ class VariableQueryPlanner:
         codegraph_md = ""
         try:
             from .codegraph import CodeGraph, CodeGraphRenderer
-            cg_path = self.project_root / "memory" / "codegraph.db"
+            from config import resolve_codegraph_db
+            cg_path = resolve_codegraph_db(self.config, self.project_root)
             if cg_path.exists():
                 cg = CodeGraph(cg_path)
                 renderer = CodeGraphRenderer(cg)

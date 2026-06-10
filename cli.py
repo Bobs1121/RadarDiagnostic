@@ -52,29 +52,42 @@ def _resolve_env(value):
     return value
 
 
-def load_config() -> dict:
+def load_config(project_key: str | None = None) -> dict:
+    """Load config.yaml, resolve env vars, and merge in project config.
+
+    Backward compat: code that reads config["paths"]["source_code"] still
+    works — the default project's values are backfilled.
+    """
     global _config_cache
     if _config_cache is not None:
         return _config_cache
-    config_path = PROJECT_ROOT / "config.yaml"
-    if not config_path.exists():
-        console.print("[red]config.yaml not found![/red]")
-        sys.exit(1)
-    with open(config_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-    cfg = _resolve_env(cfg)
+
+    from config import load_config as _load_config_base
+    from config import get_project
+
+    cfg = _load_config_base(PROJECT_ROOT / "config.yaml")
+    proj = get_project(cfg, project_key)
+
+    # Inject project paths into top-level config for backward compat
     cfg["paths"]["project_root"] = str(PROJECT_ROOT)
-    cfg["paths"]["source_docs"] = str(PROJECT_ROOT / "source_docs")
+    cfg["paths"]["source_docs"] = proj["source_docs_dir"]
+    cfg["paths"]["source_code"] = proj["source_code"]
+    cfg["paths"]["key_source_files"] = proj.get("key_source_files", [])
+    cfg["paths"]["dbc_files"] = proj.get("dbc_files", [])
+    cfg["project"] = proj
+
     _config_cache = cfg
     return cfg
 
 
-def get_router():
+def get_router(config: dict | None = None):
     global _router_cache
     if _router_cache is not None:
         return _router_cache
     from ai.model_router import ModelRouter
-    _router_cache = ModelRouter(load_config())
+    if config is None:
+        config = load_config()
+    _router_cache = ModelRouter(config)
     return _router_cache
 
 
@@ -90,6 +103,7 @@ Examples:
         """,
     )
     parser.add_argument("case_dir", nargs="?", help="Case folder containing .bag/.blf files")
+    parser.add_argument("-P", "--project", default=None, help="Project key from config.yaml (default: uses default_project)")
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--query", "-q", help="Data query (natural language question)")
@@ -110,24 +124,27 @@ Examples:
     )
     args = parser.parse_args()
 
+    # ── Load config early (needed by all sub-commands) ──────────────
+    config = load_config(args.project)
+
     if args.query and args.expected:
         parser.error("-e/--expected is only used with -p/--problem (diagnosis mode)")
 
     # ── Learn-constants only mode ───────────────────────────────────────
     if args.learn_constants:
-        _run_learn_constants()
+        _run_learn_constants(config)
         if not args.case_dir:
             return
 
     # ── CodeGraph stats (debug only) ────────────────────────────────────
     if args.codegraph_stats:
-        _show_codegraph_stats()
+        _show_codegraph_stats(config)
         if not args.case_dir:
             return
 
     # ── Dream-only mode ─────────────────────────────────────────────────
     if args.dream:
-        _run_dream(force=True)
+        _run_dream(force=True, config=config)
         if not args.case_dir:
             return
 
@@ -168,7 +185,7 @@ Examples:
 
     # ── Auto-dream (only when case_dir is present, not forced) ──────────
     if not args.dream:
-        _run_dream(force=False)
+        _run_dream(force=False, config=config)
 
     # ── Determine mode ──────────────────────────────────────────────────
     mode = None
@@ -193,7 +210,7 @@ Examples:
 
     # ── Route ───────────────────────────────────────────────────────────
     if mode == "query":
-        _run_query(case_dir, args.query)
+        _run_query(case_dir, args.query, config)
     else:
         problem = args.problem
         expected = args.expected
@@ -206,17 +223,22 @@ Examples:
             sys.exit(1)
         console.print(f"\n[dim]Problem:  {problem}[/dim]")
         console.print(f"[dim]Expected: {expected}[/dim]\n")
-        _run_diagnosis(case_dir, problem, expected)
+        _run_diagnosis(case_dir, problem, expected, config)
 
 
 # ── Dream ───────────────────────────────────────────────────────────────
 
-def _run_dream(force: bool = False):
+def _run_dream(force: bool = False, config: dict | None = None):
     from memory.memory_system import MemorySystem
     from memory.auto_dream import AutoDream
 
-    memory = MemorySystem(PROJECT_ROOT)
-    dreamer = AutoDream(memory, get_router(), PROJECT_ROOT, config=load_config())
+    if config is None:
+        config = load_config()
+    proj = config.get("project", {})
+    memory_root = Path(proj.get("memory_dir", PROJECT_ROOT / "memory"))
+
+    memory = MemorySystem(PROJECT_ROOT, memory_dir=memory_root)
+    dreamer = AutoDream(memory, get_router(config), PROJECT_ROOT, config=config)
 
     if force:
         console.print(Panel(
@@ -264,11 +286,14 @@ def _run_dream(force: bool = False):
             console.print(f"  [yellow]Conflicts resolved: {len(conflicts)}[/yellow]")
 
 
-def _show_codegraph_stats():
+def _show_codegraph_stats(config: dict | None = None):
     """Show CodeGraph statistics (debug only)."""
     from ai.codegraph import CodeGraph, CodeGraphRenderer
 
-    db_path = PROJECT_ROOT / "memory" / "codegraph.db"
+    if config is None:
+        config = load_config()
+    from config import resolve_codegraph_db
+    db_path = resolve_codegraph_db(config, PROJECT_ROOT)
     cg = CodeGraph(db_path)
     renderer = CodeGraphRenderer(cg)
     md = renderer.render_stats()
@@ -277,27 +302,22 @@ def _show_codegraph_stats():
     cg.close()
 
 
-def _run_learn_constants():
-    """Re-learn the global numeric-constants table.
-
-    This is the fast, standalone path (1 AI call, ~15s on a warm remote).
-    It bypasses the full dream gate/lock so users can update the table
-    immediately after a source change without waiting for the next dream.
-    Hash-driven skip still applies: if the source files haven't changed
-    since the last learn, no LLM call is made.
-    """
+def _run_learn_constants(config: dict | None = None):
+    """Re-learn the global numeric-constants table."""
     from ai.code_learner import CodeLearner
+
+    if config is None:
+        config = load_config()
 
     console.print(Panel(
         "[bold]Numeric Constants Learning[/bold]\n"
-        "[dim]Reading paraDefine.h / dotCalibDefine.h / globalVarDefine.h /"
+        "[dim]Reading paraDefine.h / dotCalibDefine.h / globalVarDefine.h /\n"
         " adasFunc.c …[/dim]",
         border_style="magenta",
     ))
 
-    config = load_config()
     try:
-        learner = CodeLearner(get_router(), config, PROJECT_ROOT)
+        learner = CodeLearner(get_router(config), config, PROJECT_ROOT)
     except Exception as e:
         console.print(f"[red]CodeLearner init failed: {e}[/red]")
         return
@@ -324,12 +344,13 @@ def _run_learn_constants():
 
 # ── Query Mode ──────────────────────────────────────────────────────────
 
-def _run_query(case_dir: Path, question: str):
+def _run_query(case_dir: Path, question: str, config: dict | None = None):
     """Lightweight data query pipeline."""
     from ai.data_query_engine import DataQueryEngine
 
-    config = load_config()
-    engine = DataQueryEngine(get_router(), config, PROJECT_ROOT)
+    if config is None:
+        config = load_config()
+    engine = DataQueryEngine(get_router(config), config, PROJECT_ROOT)
 
     steps_display = {
         "parse": "Parsing data",
@@ -374,11 +395,12 @@ def _run_query(case_dir: Path, question: str):
 
 # ── Diagnosis Mode ──────────────────────────────────────────────────────
 
-def _run_diagnosis(case_dir: Path, problem: str, expected: str):
+def _run_diagnosis(case_dir: Path, problem: str, expected: str, config: dict | None = None):
     """Full diagnosis pipeline."""
     from ai.orchestrator import Orchestrator
 
-    config = load_config()
+    if config is None:
+        config = load_config()
     orchestrator = Orchestrator(config, PROJECT_ROOT)
 
     steps_display = {

@@ -40,10 +40,10 @@ from typing import Optional, Any
 class MemorySystem:
     """Multi-layer persistent memory for the radar analysis system."""
 
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, memory_dir: Path | None = None):
         self.root = project_root
-        self.memory_dir = project_root / "memory"
-        self.memory_dir.mkdir(exist_ok=True)
+        self.memory_dir = memory_dir or (project_root / "memory")
+        self.memory_dir.mkdir(parents=True, exist_ok=True)
         (self.memory_dir / "functions").mkdir(exist_ok=True)
         (self.memory_dir / "sessions").mkdir(exist_ok=True)
         (self.memory_dir / "code_knowledge").mkdir(exist_ok=True)

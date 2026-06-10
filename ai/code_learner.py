@@ -389,6 +389,7 @@ class CodeLearner:
     """
 
     def __init__(self, router: ModelRouter, config: dict, project_root: Path):
+        from config import resolve_source_docs_dir
         self.router = router
         self.config = config
         self.project_root = project_root
@@ -414,7 +415,7 @@ class CodeLearner:
         self.knowledge_dir = project_root / "memory" / "code_knowledge"
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.knowledge_dir / "learning_state.json"
-        self.overview_dir = project_root / "source_docs"
+        self.overview_dir = resolve_source_docs_dir(config, project_root)
         self.overview_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Public API ──────────────────────────────────────────────────────

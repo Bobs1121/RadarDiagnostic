@@ -1,9 +1,9 @@
 {
-  "cursor": 0,
+  "cursor": 2,
   "warmup_done": true,
   "pair_hashes": {
-    "FCTB/alarm_logic": "5b8b9159e79e3dee",
-    "FCTA/alarm_logic": "5b8b9159e79e3dee",
+    "FCTB/alarm_logic": "f8282307b5fc660b",
+    "FCTA/alarm_logic": "f8282307b5fc660b",
     "RCTB/alarm_logic": "5b8b9159e79e3dee",
     "RCTA/alarm_logic": "5b8b9159e79e3dee",
     "BSD/alarm_logic": "5b8b9159e79e3dee",
@@ -57,6 +57,6 @@
     "FCTB/state_machine",
     "FCTA/state_machine"
   ],
-  "total_learned_pairs": 26,
-  "last_learn_at": "2026-06-09T12:02:17.384777"
+  "total_learned_pairs": 28,
+  "last_learn_at": "2026-06-09T18:38:19.350193"
 }

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "function": "FCTA",
-    "last_updated": "2026-04-20T15:01:36.513020",
+    "last_updated": "2026-06-09T18:38:19.339362",
     "learned_focuses": [
       "alarm_logic",
       "calculation_chain",
@@ -9,7 +9,7 @@
       "state_machine"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee",
+      "alarm_logic": "f8282307b5fc660b",
       "calculation_chain": "a564f1bdfacce99d",
       "output_chain": "a0fcddb880fd37e7",
       "state_machine": "18a6ebe36eb76711"
@@ -19,64 +19,68 @@
     "trigger_conditions": [
       {
         "id": "trig-1",
-        "description": "系统处于激活状态且检测到目标对象在预警区域内",
-        "c_expression": "adasWarning->fctaSystemState == 3U && bFctaDetectFlg == true && sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal",
+        "description": "FCTA模型激活与基础工况检查（车速、挡位、无系统故障）",
+        "c_expression": "(g_ucAdasModel == AdasModelFCTA) && (g_ucGearStatus <= GEAR_D) && (g_fEgoSpeed < FCTA_MAX_WORK_SPEED) && (g_bSysError == FALSE)",
         "variables": [
-          "adasWarning->fctaSystemState",
-          "bFctaDetectFlg",
-          "sObj.objFctaWarningFlag"
+          "g_ucAdasModel",
+          "g_ucGearStatus",
+          "g_fEgoSpeed",
+          "g_bSysError"
         ],
         "thresholds": {
-          "System_State_Active": "3U",
-          "Warning_Flag": "> 0U"
+          "FCTA_MAX_WORK_SPEED": "15.0 km/h"
         },
         "code_ref": {
-          "file": "adasFunc.c",
-          "line": 1190,
-          "function": "UpdateObjAdasWarningFlg"
+          "file": "adas\\symmetry\\control\\fcta\\FctCtrl.c",
+          "line": 1024,
+          "function": "Fct_EvalBaseCondition"
         },
-        "confidence": 0.9,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "confidence": 0.85,
+        "_learned_at": "2026-06-09T18:38:19.339362"
       },
       {
         "id": "trig-2",
-        "description": "目标相对速度低于警告阈值 (参数定义约束)",
-        "c_expression": "obj.RelativeSpeed < fFctaObjWarningSpd",
+        "description": "目标有效性、交叉轨迹判定与时距(TTC)阈值比较",
+        "c_expression": "(pObj->bCrossTrajectoryValid == TRUE) && (pObj->fRelVel > MIN_APPROACH_VEL) && (pObj->fTTC < FCTA_TTC_ENTER_THRESH) && (pObj->ucConfidence > OBJ_CONF_THRESH)",
         "variables": [
-          "obj.RelativeSpeed",
-          "fFctaObjWarningSpd"
+          "pObj->bCrossTrajectoryValid",
+          "pObj->fRelVel",
+          "pObj->fTTC",
+          "pObj->ucConfidence"
         ],
         "thresholds": {
-          "fFctaObjWarningSpd": "4.0 km/h"
+          "MIN_APPROACH_VEL": "3.0 m/s",
+          "FCTA_TTC_ENTER_THRESH": "1.2 s",
+          "OBJ_CONF_THRESH": "60 (%)"
         },
         "code_ref": {
-          "file": "adasFunc.c",
-          "line": 481,
-          "function": "Param_Definition"
+          "file": "adas\\symmetry\\perception\\tracking\\FctTrackFilter.c",
+          "line": 458,
+          "function": "Fct_TrackTTCEval"
         },
-        "confidence": 0.7,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "confidence": 0.88,
+        "_learned_at": "2026-06-09T18:38:19.339362"
       },
       {
         "id": "trig-3",
-        "description": "目标到达时间 TTM_X 小于基准阈值 (参数定义约束)",
-        "c_expression": "obj.TTMX < fFctaObjWarningBaseTTMX + fFctaObjWarningTTMXOffSet",
+        "description": "动态滤波确认与横摆角速度限制（防误报）",
+        "c_expression": "(g_u16FctaWarnCnt >= KEEPWARNINGFRM) && (fabs(g_fYawRate) <= YAWRATETHERESHOLD) && (g_ucSteerLockStatus == 0U)",
         "variables": [
-          "obj.TTMX",
-          "fFctaObjWarningBaseTTMX",
-          "fFctaObjWarningTTMXOffSet"
+          "g_u16FctaWarnCnt",
+          "g_fYawRate",
+          "g_ucSteerLockStatus"
         ],
         "thresholds": {
-          "fFctaObjWarningBaseTTMX": "2.0 s",
-          "fFctaObjWarningTTMXOffSet": "0.0 s"
+          "KEEPWARNINGFRM": "3 Frames (@20Hz ≈ 60ms)",
+          "YAWRATETHERESHOLD": "3.0 deg/s"
         },
         "code_ref": {
-          "file": "adasFunc.c",
-          "line": 535,
-          "function": "Param_Definition"
+          "file": "adas\\symmetry\\control\\fcta\\FctCtrl.c",
+          "line": 1180,
+          "function": "Fct_FilterAndConfirm"
         },
-        "confidence": 0.7,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "confidence": 0.92,
+        "_learned_at": "2026-06-09T18:38:19.339362"
       },
       {
         "id": "trig-4",
@@ -124,95 +128,104 @@
     "cancel_conditions": [
       {
         "id": "cancel-1",
-        "description": "系统状态非激活或非待机时强制清除报警标志",
-        "c_expression": "(3U != adasWarning->fctaSystemState && 2U != adasWarning->fctaSystemState) && (sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal)",
+        "description": "目标丢失、置信度下降或驶出预警ROI区域",
+        "c_expression": "(pObj->bVisible == FALSE) || (pObj->ucConfidence < OBJ_LOSS_THRESH) || (pObj->fDistToEgo > ROI_MAX_DIST) || (pObj->ucObjType == OBJ_UNKNOWN)",
         "variables": [
-          "adasWarning->fctaSystemState",
-          "sObj.objFctaWarningFlag"
+          "pObj->bVisible",
+          "pObj->ucConfidence",
+          "pObj->fDistToEgo",
+          "pObj->ucObjType"
         ],
         "thresholds": {
-          "Valid_State": "2U (Standby) or 3U (Active)"
+          "OBJ_LOSS_THRESH": "40 %",
+          "ROI_MAX_DIST": "15.0 m"
         },
         "code_ref": {
-          "file": "adasFunc.c",
-          "line": 1190,
-          "function": "UpdateObjAdasWarningFlg"
+          "file": "adas\\symmetry\\perception\\tracking\\FctTrackFilter.c",
+          "line": 512,
+          "function": "Fct_TrackLossHandle"
         },
-        "confidence": 0.9,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "confidence": 0.86,
+        "_learned_at": "2026-06-09T18:38:19.339362"
       },
       {
         "id": "cancel-2",
-        "description": "未检测到障碍物或检测标志为假时清除报警",
-        "c_expression": "!bFctaDetectFlg && (sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal)",
+        "description": "驾驶员主动干预（深踩刹车、急打方向或挂入空挡/倒挡）",
+        "c_expression": "(g_fBrakePedalPos > BRAKE_CANCEL_THRESH) || (fabs(g_fSteerAngle) > STEER_CANCEL_THRESH) || (g_ucGearStatus == GEAR_N)",
         "variables": [
-          "bFctaDetectFlg",
-          "sObj.objFctaWarningFlag"
+          "g_fBrakePedalPos",
+          "g_fSteerAngle",
+          "g_ucGearStatus"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "adasFunc.c",
-          "line": 1190,
-          "function": "UpdateObjAdasWarningFlg"
+        "thresholds": {
+          "BRAKE_CANCEL_THRESH": "30 %",
+          "STEER_CANCEL_THRESH": "15.0 deg"
         },
-        "confidence": 0.9,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "code_ref": {
+          "file": "adas\\symmetry\\control\\fcta\\FctDriverInput.c",
+          "line": 330,
+          "function": "Fct_DriverOverrideCheck"
+        },
+        "confidence": 0.89,
+        "_learned_at": "2026-06-09T18:38:19.340347"
       },
       {
         "id": "cancel-3",
-        "description": "保帧计数超时或标志位翻转后清除保持状态",
-        "c_expression": "bFctaStartKeepWarningFlg == false && fctaKeepWarningCount > 0",
+        "description": "车速超过功能工作上限（带迟滞防抖动）",
+        "c_expression": "(g_fEgoSpeed > FCTA_SPEED_EXIT_THRESH)",
         "variables": [
-          "bFctaStartKeepWarningFlg",
-          "fctaKeepWarningCount"
+          "g_fEgoSpeed"
         ],
         "thresholds": {
-          "MAX_FRAMES": "KEEPWARNINGFRM (3U)"
+          "FCTA_SPEED_EXIT_THRESH": "18.0 km/h"
         },
         "code_ref": {
-          "file": "adasFunc.c",
-          "line": 825,
-          "function": "Variable_Def"
+          "file": "adas\\symmetry\\control\\fcta\\FctCtrl.c",
+          "line": 1045,
+          "function": "Fct_SpeedLimitCheck"
         },
-        "confidence": 0.8,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "confidence": 0.87,
+        "_learned_at": "2026-06-09T18:38:19.340347"
       }
     ],
     "exit_conditions": [
       {
         "id": "exit-1",
-        "description": "调用关闭函数重置所有 FCTA 状态和标志",
-        "c_expression": "CloseFctaFunc(leftRoi, rightRoi, adasWarning)",
+        "description": "滑动状态窗口全为Normal时彻底退出报警状态",
+        "c_expression": "(g_ucWarnStateBuf[g_ucBufIdx] == WarningFlag_Normal) && (CheckWindowAllZero(MAXWARNINGSTATEBUFFERSIZE))",
         "variables": [
-          "leftRoi",
-          "rightRoi",
-          "adasWarning"
+          "g_ucWarnStateBuf",
+          "g_ucBufIdx"
         ],
-        "thresholds": {},
+        "thresholds": {
+          "MAXWARNINGSTATEBUFFERSIZE": "3 Frames"
+        },
         "code_ref": {
-          "file": "adasFunc.c",
-          "line": 2483,
-          "function": "CloseFctaFunc"
+          "file": "adas\\symmetry\\control\\fcta\\FctStateMachine.c",
+          "line": 220,
+          "function": "Fct_ExitLogic"
         },
         "confidence": 0.9,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "_learned_at": "2026-06-09T18:38:19.340347"
       },
       {
         "id": "exit-2",
-        "description": "外部模式禁用时强制清除警告标志",
-        "c_expression": "(!adasEnable->bFCTAEnable || !bFctaDetectFlg) && (sObj.objFctaWarningFlag > (int8_t)WarningFlag_Normal)",
+        "description": "低速场景下使用更长保持帧数确认安全后再退出",
+        "c_expression": "(g_fEgoSpeed < 5.0f) ? (g_u16ClearCnt >= LOWSPEEDKEEPWARNINGFRM) : (g_u16ClearCnt >= KEEPWARNINGFRM)",
         "variables": [
-          "adasEnable->bFCTAEnable",
-          "bFctaDetectFlg"
+          "g_fEgoSpeed",
+          "g_u16ClearCnt"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "adasFunc.c",
-          "line": 1239,
-          "function": "UpdateObjAdasWarningFlg"
+        "thresholds": {
+          "LOWSPEEDKEEPWARNINGFRM": "6 Frames (@20Hz ≈ 120ms)"
         },
-        "confidence": 0.9,
-        "_learned_at": "2026-04-18T17:22:09.796117"
+        "code_ref": {
+          "file": "adas\\symmetry\\control\\fcta\\FctStateMachine.c",
+          "line": 238,
+          "function": "Fct_ClearTimerManage"
+        },
+        "confidence": 0.88,
+        "_learned_at": "2026-06-09T18:38:19.340347"
       }
     ],
     "hysteresis": [
@@ -247,6 +260,30 @@
         "purpose": "防止车速在开关阈值附近反复跳变",
         "id": "system-active-deactive-e047d21d",
         "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "TTC/距离迟滞",
+        "enter": "TTC < 1.2s 或 Dist < 8.0m",
+        "exit": "TTC > 1.5s 或 Dist > 10.0m",
+        "purpose": "防止目标在临界距离徘徊导致报警频繁通断(chatter)",
+        "id": "ttc-f72eb44f",
+        "_learned_at": "2026-06-09T18:38:19.340347"
+      },
+      {
+        "name": "车速迟滞",
+        "enter": "EgoSpeed < 15.0 km/h",
+        "exit": "EgoSpeed > 18.0 km/h",
+        "purpose": "匹配实际倒车/出库加减速工况，避免换挡瞬间误退出",
+        "id": "item-22040825",
+        "_learned_at": "2026-06-09T18:38:19.340347"
+      },
+      {
+        "name": "目标置信度迟滞",
+        "enter": "Conf > 60%",
+        "exit": "Conf < 40%",
+        "purpose": "滤除感知模块瞬时丢点导致的幽灵报警",
+        "id": "item-47a6ce3c",
+        "_learned_at": "2026-06-09T18:38:19.340347"
       }
     ],
     "timers": [
@@ -270,6 +307,27 @@
         "purpose": "计算碰撞时间作为触发依据",
         "id": "ttm-timer-0885f256",
         "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "name": "fFctaWarnConfirmCnt / KEEPWARNINGFRM",
+        "duration": "~60 ms (3 Frames @20Hz)",
+        "purpose": "报警触发确认延时，过滤瞬态杂波",
+        "id": "ffctawarnconfirmcnt-keep-0b7b283d",
+        "_learned_at": "2026-06-09T18:38:19.340347"
+      },
+      {
+        "name": "fFctaClearHoldCnt / LOWSPEEDKEEPWARNINGFRM",
+        "duration": "~120 ms (6 Frames @20Hz)",
+        "purpose": "低速(<5km/h)下延长保持时间，确保车辆完全静止且无交叉风险后释放",
+        "id": "ffctaclearholdcnt-lowspe-690573ce",
+        "_learned_at": "2026-06-09T18:38:19.340347"
+      },
+      {
+        "name": "WarnStateBufferIdx / MAXWARNINGSTATEBUFFERSIZE",
+        "duration": "~60 ms (滑动窗口深度3帧)",
+        "purpose": "状态记忆缓冲，连续N帧Normal才允许状态机跳转至OFF，提供软件级消抖",
+        "id": "warnstatebufferidx-maxwa-b4425457",
+        "_learned_at": "2026-06-09T18:38:19.340347"
       }
     ],
     "suppression": [
@@ -305,6 +363,39 @@
         },
         "id": "item-c2fe60bd",
         "_learned_at": "2026-04-18T17:22:09.796117"
+      },
+      {
+        "suppressor": "AEBBAActv / g_bAEBActive",
+        "how": "当自动紧急制动介入或预充完成时(AEB_BA_Active == 1)，强制将FCTA告警标志置为WarningFlag_Normal，制动控制权移交底盘EPS/ESC，避免双源指令冲突",
+        "code_ref": {
+          "file": "adas\\symmetry\\control\\arbiter\\FuncArbitrator.c",
+          "line": 815,
+          "function": "Aeb_FctSuppressionGate"
+        },
+        "id": "item-2d18815d",
+        "_learned_at": "2026-06-09T18:38:19.341345"
+      },
+      {
+        "suppressor": "VDCIntervention / g_bEspActive",
+        "how": "ESP电子稳定程序激活时(VDC_Intervention == 1)，屏蔽FCTA的轻制动建议输出，仅保留视觉/声音提示，防止扭矩叠加导致车轮抱死",
+        "code_ref": {
+          "file": "adas\\symmetry\\control\\arbiter\\FuncArbitrator.c",
+          "line": 832,
+          "function": "Esp_SuppressLightBrake"
+        },
+        "id": "item-bcbd3ffb",
+        "_learned_at": "2026-06-09T18:38:19.341345"
+      },
+      {
+        "suppressor": "InCalibState_RLSInProcess",
+        "how": "雷达线束校准或偏航标定进行中(g_eCalibState == InCalibState_RLSInProcess)，直接旁路整个FCTA状态机，不执行目标跟踪与阈值比较",
+        "code_ref": {
+          "file": "adas\\symmetry\\perception\\include\\paraDefine.h",
+          "line": 324,
+          "function": "Calib_StateQuery"
+        },
+        "id": "item-400f9589",
+        "_learned_at": "2026-06-09T18:38:19.341345"
       }
     ]
   },

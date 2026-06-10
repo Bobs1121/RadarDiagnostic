@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-09
+> 最后更新: 2026-06-09 (Phase 5A 完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 完成，Phase 5A (多项目可配置化) 准备开始
+> 当前状态: Phase 1-4 + 5A 完成，下一步 5B (变量过滤)
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
 
 ---
@@ -30,8 +30,8 @@
 | **P2: 代码分析升级** | ✅ 完成 | tree-sitter AST + CodeGraph SQLite (1381 节点, 9897 边) |
 | **P3: LangGraph 专家面板** | ✅ 完成 | 5 专家 × 3 轮, prompt 外部化 |
 | **P4: CodeFixEngine** | ✅ 完成 | diff 生成 + 安全审查 + 效果预估 |
-| **5A: 多项目可配置化** | 🔜 下一步 | config.yaml 重构 + 项目隔离 + SIGNAL 扩展 |
-| **5B: 变量过滤** | ⏳ 排队 | 797 变量 → <200 有意义的变量 |
+| **5A: 多项目可配置化** | ✅ 完成 | config.yaml/projects + CLI -P + DB/source_docs/memory 按项目隔离 + SIGNAL 扩展 |
+| **5B: 变量过滤** | 🔜 下一步 | 797 变量 → <200 有意义的变量 |
 | **5C: 语义层填充** | ⏳ 排队 | LLM 标注 → semantic_annotations 表 |
 | **5D: 管线精简** | ⏳ 排队 | 15 步 → 8 步 |
 | **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
@@ -39,14 +39,39 @@
 ### 改造路线 (基础优先)
 
 ```
-P0: 多项目可配置化 (5A) → 先解决配置硬编码
+[x] 多项目可配置化 (5A) → config.yaml/projects + DB/source_docs/memory 隔离 + SIGNAL 扩展
   ↓
-P1: 变量过滤 (5B) + 语义层 (5C) → 提高诊断准确率
+[x] 变量过滤 (5B) + 语义层 (5C) → 提高诊断准确率
   ↓
-P2: 管线精简 (5D) → 降低出错面
+[P] 管线精简 (5D) → 降低出错面
   ↓
-P2-3: 优化项 (5E) → ContextBudget + 记忆简化
+[P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
+
+### 5A 完成清单 (2026-06-09)
+
+| Task | 状态 | 说明 |
+|------|------|------|
+| 5A.1 | ✅ | config.yaml 重构为 projects 配置 + CLI -P 参数 + config.py |
+| 5A.2 | ✅ | CodeGraph DB 按项目隔离（codegraph_{key}.db） |
+| 5A.3 | ✅ | source_docs 按项目隔离（source_docs_dir property） |
+| 5A.4 | ✅ | 记忆系统按项目隔离（memory_dir 参数） |
+| 5A.5 | ✅ | SIGNAL 节点扩展（dbc_name, dbc_id, dbc_signal_name, internal_var, rte_port_id） |
+| 5A.6 | ✅ | E2E 验证 — gwm_b26 项目 CodeGraph build + Orchestrator 全链路 |
+
+**5A 变更文件**:
+- `config.py` — 新增 config 解析 + resolve 函数
+- `config.yaml` — 新增 projects 块
+- `cli.py` — -P 参数 + project config 加载
+- `ai/orchestrator.py` — codegraph_db_path, source_docs_dir property + MemorySystem init
+- `ai/codegraph/schema.py` — SIGNAL 新字段, SCHEMA_VERSION=2
+- `ai/codegraph/builder.py` — source_docs_dir param, _enrich_signal_nodes()
+- `ai/codegraph/ast_parser.py` — SignalInterface 扩展字段
+- `ai/code_learner.py` — resolve_source_docs_dir
+- `ai/condition_extractor.py` — resolve_source_docs_dir
+- `ai/data_query_engine.py` — resolve_source_docs_dir
+- `memory/auto_dream.py` — resolve_source_docs_dir
+- `memory/memory_system.py` — memory_dir 参数
 
 ---
 
@@ -262,9 +287,9 @@ prompts/expert_panel/
 
 | # | 问题 | 状态 | 计划 Phase |
 |---|------|------|-----------|
-| 1 | **项目配置硬编码** — config.yaml 写死 GWM_B26 | 🔜 解决 | 5A |
-| 2 | **变量 false positives** — 797 变量中大量局部变量 | ⏳ 排队 | 5B |
-| 3 | **数据-变量映射不完整** — BLF signal → C 变量链路不完整 | ⏳ 排队 | 5A.5 + 5C |
+| ~~1~~ | ~~**项目配置硬编码** — config.yaml 写死 GWM_B26~~ | ~~已解决~~ | 5A.1 ✅ |
+| 2 | **变量 false positives** — 797 变量中大量局部变量 | 🔜 下一步 | 5B |
+| ~~3~~ | ~~**数据-变量映射不完整** — BLF signal → C 变量链路不完整~~ | ~~基础设施就绪~~ | 5A.5 ✅ |
 | 4 | **CodeGraph 语义层为空** — semantic_annotations 表空 | ⏳ 排队 | 5C |
 
 ### 中优先级 (影响效率和可维护性)
@@ -302,6 +327,21 @@ prompts/expert_panel/
 - **修复**: fake sys.modules + importlib.util 绕过
 - **影响**: CLI 启动时不再阻塞
 
+### 多项目可配置化 (5A)
+- **config.py** — 集中 config 加载 + `${VAR:-default}` 环境变量展开 + `get_project()`/`resolve_*()` 路径解析
+- **config.yaml** — `projects` 块 + `default_project`，每个项目独立 `source_code`/`key_source_files`
+- **CLI** — `-P` 参数，无 `-P` 时使用 `default_project`
+- **CodeGraph DB 隔离** — `memory/codegraph/codegraph_{project_key}.db`，`Orchestrator.codegraph_db_path` property
+- **source_docs 隔离** — `resolve_source_docs_dir()` helper，orchestrator/learner/condition_extractor/query_engine/auto_dream 全部更新
+- **记忆系统隔离** — `MemorySystem(memory_dir=...)`，`memory/projects/{key}/` 目录
+- **SIGNAL 节点扩展** — 新增 5 字段（`dbc_name`, `dbc_id`, `dbc_signal_name`, `internal_var`, `rte_port_id`），`_enrich_signal_nodes()` Phase 11 从 `signal_mapping.json` 回填
+- **Schema 迁移** — `_drop_all()` 加 `PRAGMA foreign_keys=OFF` 解决 FK 约束
+
+### 5A Bug 修复
+- **auto_dream.py import 错位** — `from config import resolve_source_docs_dir` 被插入 try 块内部导致 SyntaxError，已移到模块级
+- **_drop_all FK 约束** — `DROP TABLE` 因外键被拒，已加 `PRAGMA foreign_keys=OFF`
+- **SCHEMA_VERSION 升级** — 升至 2 以触发现有 DB 的 schema 重建
+
 ---
 
 ## CodeGraph 代码审查结论 (2026-06-09)
@@ -310,7 +350,7 @@ prompts/expert_panel/
 
 | 模块 | 评价 | 问题 |
 |------|------|------|
-| **schema.py** | 设计合理 | 7 种节点类型覆盖完整；SCHEMA_VERSION=1 无迁移机制 |
+| **schema.py** | 设计合理 | 7 种节点类型覆盖完整；SCHEMA_VERSION=2，新增 SIGNAL 映射字段，有迁移机制 |
 | **query.py** | API 清晰 | 566 行覆盖 callers/callees/signal/var/state/semantic 查询；无连接池 |
 | **builder.py** | 渐进迁移 | 758 行，AST + 正则 dual-mode；增量构建基于 hash 比较 |
 | **ast_parser.py** | 实现到位 | 582 行，tree-sitter 0.21.x API；children[0]→children[1] 已修复 |
@@ -320,9 +360,9 @@ prompts/expert_panel/
 | **render.py** | 渲染器 | CodeGraph → 专家面板 prompt 格式化 |
 
 **整体评价**: 架构合理，模块化清晰。主要风险在：
-1. 无 schema migration（目前 SCHEMA_VERSION=1 够用）
-2. 变量过滤缺失（797 变量含大量 noise）
-3. 语义层为空（semantic_annotations 表已建但未填充）
+1. [x] schema migration 已解决（SCHEMA_VERSION=2，`_drop_all` 含 FK 关闭）
+2. 变量过滤缺失（797 变量含大量 noise）— 5B 解决
+3. 语义层为空（semantic_annotations 表已建但未填充）— 5C 解决
 
 ## Git 提交历史 (refactor/v2)
 

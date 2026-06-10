@@ -68,13 +68,23 @@ class FunctionCall:
 
 @dataclass
 class SignalInterface:
-    """AUTOSAR/RTE signal read/write."""
+    """AUTOSAR/RTE signal read/write with data-variable mapping."""
     direction: str        # "read" or "write"
     signal_name: str
     rte_function: str     # full function name e.g. Rte_Read_BSM_BSDObjectLeft
     line: int
     column: int
-    pattern: str = ""     # "Rte_Read", "RteLite_Read", "ReadSignal", "RteComMapping_ReadSignal", etc.
+    pattern: str = ""     # "Rte_Read", "RteLite_Read", "ReadSignal", etc.
+    # Data-variable mapping fields (populated from DBC/RTE config)
+    can_name: str = ""
+    can_id: str = ""
+    dbc_name: str = ""
+    dbc_id: str = ""
+    dbc_signal_name: str = ""
+    internal_var: str = ""
+    rte_port_id: str = ""
+    rte_read_fn: str = ""
+    rte_write_fn: str = ""
 
 
 @dataclass

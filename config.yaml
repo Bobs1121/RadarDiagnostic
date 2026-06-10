@@ -32,38 +32,53 @@ ai:
     max_chars: 6000       # 渲染进 prompt 的最大字符数
     use_thinking: false   # planner 是轻量任务，默认不开 thinking
 
+# ── Project Configuration ──────────────────────────────────────────────
+# Multi-project support.  Each project defines its own source code root,
+# key files, and the orchestrator scopes CodeGraph / memory / source_docs
+# per project.
+#
+# CLI: python cli.py -P <project_key> <case_dir> ...
+# When -P is omitted, `default_project` is used.
+#
+projects:
+  gwm_b26:
+    display_name: "GWM_B26 (CR60Light)"
+    source_code: "D:\\cr60_light"
+    dbc_files:
+      - "CR_DBC_V3.2_20260331.dbc"
+      - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+      - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+    key_source_files:
+      # 算法层 - 报警判断
+      - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
+      - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h"
+      # 平台状态机 - 第二套状态机
+      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
+      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
+      # 信号链路 - CAN映射
+      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c"
+      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.h"
+      # 输出协调 - 左右雷达合并
+      - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
+      # 调度入口
+      - "coem\\GWM_B26\\components\\AswIfSchedule\\AswIfSchedule.c"
+      # 感知层
+      - "adas\\symmetry\\perception\\src\\objAttribCal.c"
+      - "adas\\symmetry\\perception\\src\\track.c"
+      - "adas\\symmetry\\perception\\src\\postProcess.c"
+      # 定义文件
+      - "adas\\symmetry\\perception\\include\\perception_public_def.h"
+      - "adas\\symmetry\\perception\\include\\structDefine.h"
+      - "adas\\symmetry\\perception\\include\\paraDefine.h"
+      - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
+      # RteLite - 信号接口声明 (GWM_B26)
+      - "coem\\GWM_B26\\components\\com\\AutoGen\\PriCan\
+teLite_PriCan.h"
+
+default_project: "gwm_b26"
+
 paths:
-  source_code: "D:\\cr60_light"
-  dbc_files:
-    - "CR_DBC_V3.2_20260331.dbc"
-    - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
-    - "GWM_RearCorner_Pri_V3.0 (1).dbc"
   cases_dir: "./cases"
-  key_source_files:
-    # 算法层 - 报警判断
-    - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
-    - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h"
-    # 平台状态机 - 第二套状态机
-    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
-    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
-    # 信号链路 - CAN映射
-    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c"
-    - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.h"
-    # 输出协调 - 左右雷达合并
-    - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
-    # 调度入口
-    - "coem\\GWM_B26\\components\\AswIfSchedule\\AswIfSchedule.c"
-    # 感知层
-    - "adas\\symmetry\\perception\\src\\objAttribCal.c"
-    - "adas\\symmetry\\perception\\src\\track.c"
-    - "adas\\symmetry\\perception\\src\\postProcess.c"
-    # 定义文件
-    - "adas\\symmetry\\perception\\include\\perception_public_def.h"
-    - "adas\\symmetry\\perception\\include\\structDefine.h"
-    - "adas\\symmetry\\perception\\include\\paraDefine.h"
-    - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
-    # RteLite - 信号接口声明 (GWM_B26)
-    - "coem\\GWM_B26\\components\\com\\AutoGen\\PriCan\\rteLite_PriCan.h"
 
 functions:
   rear:  [BSD, LCA, DOW, RCW, RCTA, RCTB]

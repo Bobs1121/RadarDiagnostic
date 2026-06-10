@@ -74,9 +74,22 @@ class Orchestrator:
         self.router = ModelRouter(config)
 
         from memory.memory_system import MemorySystem
-        self.memory = MemorySystem(project_root)
+        from config import resolve_memory_dir
+        self.memory = MemorySystem(project_root, memory_dir=resolve_memory_dir(config, project_root))
 
         self._last_tpe_result = None
+
+    @property
+    def codegraph_db_path(self) -> Path:
+        """Path to the per-project CodeGraph database."""
+        from config import resolve_codegraph_db
+        return resolve_codegraph_db(self.config, self.project_root)
+
+    @property
+    def source_docs_dir(self) -> Path:
+        """Path to the per-project source_docs directory."""
+        from config import resolve_source_docs_dir
+        return resolve_source_docs_dir(self.config, self.project_root)
 
     def run_diagnosis(
         self,
@@ -191,7 +204,7 @@ class Orchestrator:
 
         # ── Phase 3: Data evidence extraction (window-aware) ─────────────
         status("analyze", f"Extracting evidence for {func_name} within windows...")
-        var_path = self.project_root / "source_docs" / "variables.json"
+        var_path = self.source_docs_dir / "variables.json"
         analyzer = FrameAnalyzer(self.router, var_path if var_path.exists() else None)
         frame_analysis = self._run_frame_analysis_with(analyzer, store, func_name, func_info, status)
 
@@ -268,7 +281,7 @@ class Orchestrator:
         if probe_enabled and store is not None:
             try:
                 status("probe", "Planning variable queries based on problem + L6 knowledge...")
-                planner = VariableQueryPlanner(self.router, self.memory, self.project_root)
+                planner = VariableQueryPlanner(self.router, self.memory, self.project_root, self.config)
                 probe_plans = planner.plan(
                     problem=problem,
                     expected=expected,
@@ -341,7 +354,7 @@ class Orchestrator:
                 status("params", "Scanning ADAS thresholds and running sensitivity analysis...")
                 param_report_obj = analyze_sensitivity(
                     source_root=Path(self.config["paths"]["source_code"]),
-                    cache_dir=self.project_root / "source_docs",
+                    cache_dir=self.source_docs_dir,
                     store=store,
                     func_name=func_name,
                     focus_categories=classification.focus_parameters or None,
@@ -382,7 +395,7 @@ class Orchestrator:
         codegraph_section = ""
         try:
             from .codegraph import CodeGraph, CodeGraphRenderer
-            cg_path = self.project_root / "memory" / "codegraph.db"
+            cg_path = self.codegraph_db_path
             if cg_path.exists():
                 cg = CodeGraph(cg_path)
                 renderer = CodeGraphRenderer(cg)
@@ -683,7 +696,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             return "", {}
 
         source_root = Path(self.config["paths"]["source_code"])
-        docs_dir = self.project_root / "source_docs"
+        docs_dir = self.source_docs_dir
         knowledge_dir = self.project_root / "memory" / "code_knowledge"
 
         try:
@@ -797,7 +810,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
         out_mapping = extract_output_signal_mapping(
             Path(self.config["paths"]["source_code"]),
-            self.project_root / "source_docs",
+            self.source_docs_dir,
         )
         target_signals = get_output_signals_for_function(func_name)
         if not target_signals:
@@ -938,13 +951,13 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
         sig_mapping = extract_signal_mapping(
             Path(self.config["paths"]["source_code"]),
-            self.project_root / "source_docs",
+            self.source_docs_dir,
         )
-        chains = load_variable_chains(self.project_root / "source_docs")
+        chains = load_variable_chains(self.source_docs_dir)
         if not chains.get("struct_aliases"):
             chains = trace_variable_chains(
                 Path(self.config["paths"]["source_code"]),
-                self.project_root / "source_docs",
+                self.source_docs_dir,
             )
         alias_count = len(chains.get("struct_aliases", {}))
         status("suppression", f"Signal mapping loaded: {sig_mapping.get('mapping_count', 0)} entries, {alias_count} struct aliases")
@@ -1239,7 +1252,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
     def _load_threshold_reference(self, func_name: str) -> str:
         """Load authoritative thresholds from source_docs/{func}.md for cross-validation."""
-        doc_path = self.project_root / "source_docs" / f"{func_name}.md"
+        doc_path = self.source_docs_dir / f"{func_name}.md"
         if not doc_path.exists():
             return ""
         try:
@@ -1313,7 +1326,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         functions (BSD/LCA/DOW/RCW/RCTA/RCTB) have very different speed
         ranges than front ones, so a shared threshold list loses signal.
         """
-        docs_dir = self.project_root / "source_docs"
+        docs_dir = self.source_docs_dir
         cond_path = docs_dir / f"{func_name.upper()}_conditions.json"
         if not cond_path.exists():
             return []
@@ -1367,7 +1380,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
     # ── Phase implementations ───────────────────────────────────────────
 
     def _ensure_source_docs(self, status):
-        docs_dir = self.project_root / "source_docs"
+        docs_dir = self.source_docs_dir
         learner = CodeLearner(self.router, self.config, self.project_root)
         result = learner.ensure_overview_docs(
             funcs=ALL_FUNCTIONS,
@@ -1399,13 +1412,12 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             source_root = Path(self.config["paths"]["source_code"])
             key_files = self.config.get("paths", {}).get("key_source_files", [])
 
-            # calib_source_files: header files with calibration params
+            db_path = self.codegraph_db_path
+            db_path.parent.mkdir(parents=True, exist_ok=True)
             calib_files = [
                 p for p in key_files
                 if "paraDefine" in p or "structDefine" in p or "globalVarDefine" in p
             ]
-
-            db_path = self.project_root / "memory" / "codegraph.db"
 
             builder = CodeGraphBuilder(
                 db_path=db_path,
@@ -1413,6 +1425,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 key_files=key_files,
                 func_keywords=FUNC_KEYWORDS,
                 calib_files=calib_files,
+                source_docs_dir=self.source_docs_dir,
             )
             result = builder.build()
 
@@ -1444,7 +1457,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             status("code_fix", f"CodeFixEngine unavailable: {e}")
             return ""
 
-        cg_path = self.project_root / "memory" / "codegraph.db"
+        cg_path = self.codegraph_db_path
         if not cg_path.exists():
             status("code_fix", "CodeGraph DB not found; skipping code fix generation")
             return ""
@@ -1480,7 +1493,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             prefilter_note = f"（问题中识别到: {', '.join(matched_funcs)}）"
 
         source_summaries = ""
-        docs_dir = self.project_root / "source_docs"
+        docs_dir = self.source_docs_dir
         for fn in matched_funcs:
             md = docs_dir / f"{fn}.md"
             if not md.exists():
@@ -1495,7 +1508,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         codegraph_md = ""
         try:
             from .codegraph import CodeGraph, CodeGraphRenderer
-            cg_path = self.project_root / "memory" / "codegraph.db"
+            cg_path = self.codegraph_db_path
             if cg_path.exists():
                 cg = CodeGraph(cg_path)
                 renderer = CodeGraphRenderer(cg)

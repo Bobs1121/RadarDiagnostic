@@ -70,6 +70,7 @@ class CodeGraphBuilder:
         func_keywords: dict[str, list[str]],
         calib_files: Optional[list[str]] = None,
         use_ast: bool = False,
+        source_docs_dir: Optional[Path] = None,
     ):
         self.db_path = Path(db_path)
         self.source_root = Path(source_root)
@@ -77,6 +78,7 @@ class CodeGraphBuilder:
         self.func_keywords = func_keywords
         self.calib_files = calib_files or []
         self.use_ast = use_ast and AST_AVAILABLE
+        self.source_docs_dir = source_docs_dir
         self.conn: Optional[sqlite3.Connection] = None
         self._ast_results_by_file: dict = {}
 
@@ -177,6 +179,9 @@ class CodeGraphBuilder:
             # Phase 10: Behaviour Patterns (label edges)
             self._insert_behaviour_patterns(all_functions)
 
+            # Phase 11: Signal Enrichment — backfill DBC/variable mapping
+            self._enrich_signal_nodes()
+
             # Update file hashes
             self._update_file_hashes(file_infos)
 
@@ -235,11 +240,13 @@ class CodeGraphBuilder:
 
     def _drop_all(self):
         """Drop all tables for schema migration."""
+        self.conn.execute("PRAGMA foreign_keys=OFF")
         tables = self.conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         ).fetchall()
         for t in tables:
             self.conn.execute(f"DROP TABLE IF EXISTS {t['name']}")
+        self.conn.execute("PRAGMA foreign_keys=ON")
 
     def _log_build(self, result: BuildResult):
         self.conn.execute(
@@ -535,12 +542,19 @@ class CodeGraphBuilder:
             sig_key = f"{s.get('signal_module', '')}_{s['signal_name']}" if s.get('signal_module') else s['signal_name']
             sig_id = f"SIGNAL:{sig_key}"
 
-            # Create SIGNAL node
+            # Create SIGNAL node with data-variable mapping fields
+            rte_fn = s.get("rte_call", "")
             self.conn.execute(
                 """INSERT OR IGNORE INTO nodes
-                   (id, type, name, direction, rte_read_fn, rte_write_fn)
-                   VALUES (?,?,?,?,?,?)""",
-                (sig_id, "SIGNAL", sig_key, None, None, None),
+                   (id, type, name, direction, can_name, can_id,
+                    dbc_name, dbc_id, dbc_signal_name, internal_var,
+                    rte_port_id, rte_read_fn, rte_write_fn)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (sig_id, "SIGNAL", sig_key, s.get("access_type"),
+                 s.get("can_name"), s.get("can_id"),
+                 s.get("dbc_name"), s.get("dbc_id"), s.get("dbc_signal_name"),
+                 s.get("internal_var"), s.get("rte_port_id"),
+                 s.get("rte_read_fn"), s.get("rte_write_fn")),
             )
 
             if func_id:
@@ -687,6 +701,76 @@ class CodeGraphBuilder:
                         (p["pattern_type"], edge_id_w),
                     )
         self.conn.commit()
+
+    def _enrich_signal_nodes(self):
+        """Phase 11: Enrich SIGNAL nodes with DBC/variable mapping from signal_mapping.json."""
+        if not self.source_docs_dir:
+            return
+        mapping_path = self.source_docs_dir / "signal_mapping.json"
+        if not mapping_path.exists():
+            return
+        try:
+            import json as _json
+            mapping_data = _json.loads(mapping_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+
+        # Build lookup: CAN signal name -> {internal_var, can_name, can_id, ...}
+        mappings = mapping_data.get("mappings", [])
+        can_to_var: dict[str, str] = {}
+        can_to_info: dict[str, dict] = {}
+        for m in mappings:
+            can_sig = m.get("can_signal", "")
+            int_var = m.get("internal_var", "")
+            if can_sig and int_var:
+                can_to_var[can_sig.lower()] = int_var
+                can_to_info[can_sig.lower()] = m
+
+        # Update existing SIGNAL nodes
+        rows = self.conn.execute(
+            "SELECT id, name FROM nodes WHERE type='SIGNAL'"
+        ).fetchall()
+
+        updated = 0
+        for row in rows:
+            sig_id = row["id"]
+            sig_name = row["name"] or ""
+            # Try to match by signal name (case-insensitive)
+            info = can_to_info.get(sig_name.lower())
+            if not info:
+                # Try matching on signal_name part (after module prefix)
+                for k, v in can_to_info.items():
+                    if k in sig_name.lower() or sig_name.lower() in k:
+                        info = v
+                        break
+
+            if info:
+                int_var = info.get("internal_var", "")
+                dbc_name = info.get("dbc_file", "")
+                dbc_signal = info.get("dbc_signal_name", sig_name)
+                can_name = info.get("can_name", sig_name)
+                can_id = info.get("can_id", "")
+                rte_port = info.get("rte_port_id", "")
+                rte_read = info.get("rte_read_fn", "")
+                rte_write = info.get("rte_write_fn", "")
+                self.conn.execute(
+                    """UPDATE nodes SET internal_var=COALESCE(NULLIF(?, ''), internal_var),
+                       can_name=COALESCE(NULLIF(?, ''), can_name),
+                       can_id=COALESCE(NULLIF(?, ''), can_id),
+                       dbc_name=COALESCE(NULLIF(?, ''), dbc_name),
+                       dbc_signal_name=COALESCE(NULLIF(?, ''), dbc_signal_name),
+                       rte_port_id=COALESCE(NULLIF(?, ''), rte_port_id),
+                       rte_read_fn=COALESCE(NULLIF(?, ''), rte_read_fn),
+                       rte_write_fn=COALESCE(NULLIF(?, ''), rte_write_fn)
+                       WHERE id=?""",
+                    (int_var, can_name, can_id, dbc_name, dbc_signal,
+                     rte_port, rte_read, rte_write, sig_id),
+                )
+                updated += 1
+
+        self.conn.commit()
+        if updated:
+            log.info("CodeGraph: enriched %d SIGNAL nodes with data-variable mapping", updated)
 
     # ── Internal: Purge Changed ─────────────────────────────────────────
 
