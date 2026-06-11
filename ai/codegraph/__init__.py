@@ -7,5 +7,6 @@ CodeGraph: 确定性代码知识图谱 — 用户无感的后台静态分析引�
 from .builder import CodeGraphBuilder
 from .query import CodeGraph
 from .render import CodeGraphRenderer
+from .semantic_annotator import SemanticAnnotator
 
-__all__ = ["CodeGraphBuilder", "CodeGraph", "CodeGraphRenderer"]
+__all__ = ["CodeGraphBuilder", "CodeGraph", "CodeGraphRenderer", "SemanticAnnotator"]

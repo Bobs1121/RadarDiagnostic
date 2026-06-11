@@ -105,13 +105,14 @@ CREATE TABLE IF NOT EXISTS edges (
 );
 
 -- LLM 语义层 (code_knowledge 的新存法)
+-- 每个 node 可以有多个 focus（alarm_logic, calculation_chain, output_chain, state_machine）
 CREATE TABLE IF NOT EXISTS node_semantics (
-    node_id      TEXT PRIMARY KEY REFERENCES nodes(id),
+    node_id      TEXT NOT NULL REFERENCES nodes(id),
     focus        TEXT NOT NULL,       -- alarm_logic/calculation_chain/output_chain/state_machine
     semantic_json TEXT NOT NULL,
     source_hash  TEXT,
     learned_at   TEXT DEFAULT (datetime('now')),
-    UNIQUE(node_id, focus)
+    PRIMARY KEY (node_id, focus)
 );
 
 -- 构建日志

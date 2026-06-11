@@ -364,7 +364,95 @@ class CodeGraphRenderer:
 
         return result
 
-    # ── Render: Stats (for --codegraph-stats) ───────────────────────────
+    def render_semantics_for_panel(
+        self, module: str, max_chars: int = 5000
+    ) -> str:
+        """Render semantic annotations for the given module for expert panel."""
+        if not self.cg.conn:
+            return ""
+
+        import json as _json
+
+        focus_order = ["alarm_logic", "calculation_chain", "state_machine", "output_chain"]
+        focus_labels = {
+            "alarm_logic": "告警逻辑",
+            "calculation_chain": "计算链路",
+            "state_machine": "状态机",
+            "output_chain": "输出链路",
+        }
+
+        parts = []
+        patterns = [f"%{module}%", f"%{module.capitalize()}%", f"%{module.title()}%"]
+
+        for focus in focus_order:
+            wheres = " OR ".join([f"n.name LIKE ?" for _ in patterns])
+            query = f"""
+                SELECT ns.node_id, ns.semantic_json
+                FROM node_semantics ns
+                JOIN nodes n ON n.id = ns.node_id
+                WHERE ns.focus = ? AND n.type = 'FUNCTION' AND ({wheres})
+                LIMIT 20
+            """
+            params = [focus] + patterns
+            rows = self.cg.conn.execute(query, params).fetchall()
+            if not rows:
+                continue
+
+            label = focus_labels.get(focus, focus)
+            parts.append(f"\n### {label} ({len(rows)} 个函数)\n")
+            for row in rows:
+                try:
+                    sem = _json.loads(row["semantic_json"]) if isinstance(row["semantic_json"], str) else row["semantic_json"]
+                    parts.append(self._render_semantic_block(focus, sem))
+                except Exception:
+                    pass
+
+        result = "\n".join(parts)
+        if len(result) > max_chars:
+            result = result[:max_chars] + "\n... (truncated)"
+        return result
+
+    def _render_semantic_block(self, focus: str, sem: dict) -> str:
+        """Render a single semantic annotation block."""
+        lines = []
+        if focus == "alarm_logic":
+            triggers = sem.get("trigger_conditions", [])[:3]
+            cancels = sem.get("cancel_conditions", [])[:3]
+            if triggers:
+                lines.append(f"  - 触发条件: {', '.join(str(t) for t in triggers)}")
+            if cancels:
+                lines.append(f"  - 取消条件: {', '.join(str(c) for c in cancels)}")
+        elif focus == "calculation_chain":
+            vars_ = sem.get("key_variables", [])[:5]
+            chain = sem.get("derivation_chain", [])[:3]
+            if vars_:
+                lines.append(f"  - 关键变量: {', '.join(str(v) for v in vars_)}")
+            if chain:
+                lines.append(f"  - 推导链: {' -> '.join(str(c) for c in chain)}")
+        elif focus == "state_machine":
+            states = sem.get("states", [])[:5]
+            transitions = sem.get("transitions", [])[:3]
+            if states:
+                lines.append(f"  - 状态: {', '.join(str(s) for s in states)}")
+            for t in transitions:
+                if isinstance(t, dict):
+                    fr = t.get("from", "?")
+                    to = t.get("to", "?")
+                    cond = t.get("condition", "")
+                    lines.append(f"    {fr} -> {to} [{cond}]")
+                else:
+                    lines.append(f"    {t}")
+        elif focus == "output_chain":
+            outputs = sem.get("outputs", [])[:5]
+            gating = sem.get("external_gating", [])[:3]
+            if outputs:
+                lines.append(f"  - 输出信号: {', '.join(str(o) for o in outputs)}")
+            if gating:
+                lines.append(f"  - 外部门控: {', '.join(str(g) for g in gating)}")
+        lines.append("")
+        return "\n".join(lines)
+
+    # ── Render: Stats (for --codegraph-stats) ────────────────────────────
 
     def render_stats(self) -> str:
         """Render CodeGraph statistics as human-readable text."""
