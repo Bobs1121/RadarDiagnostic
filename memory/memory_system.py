@@ -30,6 +30,7 @@ Inspired by Claude Code's tiered memory architecture:
        during auto-dream cycles: alarm logic, calculation chains,
        output chains, state machines. Grows incrementally.
 """
+import glob
 import json
 import hashlib
 import datetime
@@ -191,6 +192,112 @@ class MemorySystem:
             session["completed_at"] = datetime.datetime.now().isoformat()
             session["result_summary"] = result_summary
             self._write_session(session_id, session)
+
+    def query_sessions(self, func_name: str, keywords: list[str],
+                       max_results: int = 5) -> list[dict]:
+        """查询历史诊断 session，按相关性排序返回。
+
+        匹配策略：
+        1. **func 匹配** — case_id 包含 func_name（不区分大小写）
+        2. **关键词匹配** — problem 描述中包含 keywords
+        3. **去重** — 同一 case 只保留最近的 session
+
+        返回字段：session_id, case_id, problem, expected, status,
+                  completed_at, steps_count, relevance_score
+        """
+        sessions_dir = self.memory_dir / "sessions"
+        if not sessions_dir.exists():
+            return []
+
+        func_upper = func_name.upper()
+        kw_lower = [k.lower() for k in keywords if len(k) > 1]
+
+        candidates: list[dict] = []
+        for fp in sessions_dir.glob("*.json"):
+            try:
+                s = json.loads(fp.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+
+            case_id = s.get("case_id", "")
+            # 过滤：case_id 应包含 func_name
+            if func_upper not in case_id.upper():
+                continue
+
+            problem = s.get("problem", "")
+            # 关键词得分
+            kw_score = sum(1 for k in kw_lower if k in problem.lower())
+            # 时间得分（越新越好）
+            completed = s.get("completed_at", s.get("created_at", ""))
+            time_score = 1.0 if completed else 0.5
+            # 状态加分（completed > started）
+            status = s.get("status", "started")
+            status_score = 1.0 if status == "completed" else 0.3
+
+            score = (kw_score * 2.0) + time_score + status_score
+            candidates.append({
+                "session_id": s.get("session_id", fp.stem),
+                "case_id": case_id,
+                "problem": problem,
+                "expected": s.get("expected", ""),
+                "status": status,
+                "completed_at": completed,
+                "created_at": s.get("created_at", ""),
+                "steps_count": len(s.get("steps", [])),
+                "findings_count": len(s.get("findings", [])),
+                "result_summary": s.get("result_summary", "")[:200],
+                "relevance_score": round(score, 2),
+                "file_path": str(fp),
+            })
+
+        # 按分数降序
+        candidates.sort(key=lambda x: x["relevance_score"], reverse=True)
+
+        # 同一 case 只保留最新的一条
+        seen_cases: dict[str, dict] = {}
+        for c in candidates:
+            cid = c["case_id"]
+            if cid not in seen_cases:
+                seen_cases[cid] = c
+        deduped = list(seen_cases.values())
+
+        return deduped[:max_results]
+
+    def get_session_details(self, session_id: str,
+                            max_steps: int = 10) -> dict:
+        """获取单个 session 的详细步骤摘要，用于注入专家面板。
+
+        只提取关键步骤（understand, classify, conditions, expert_panel），
+        避免把全部 steps dump 进 prompt。
+        """
+        session = self._read_session(session_id)
+        if not session:
+            return {}
+
+        # 关键步骤名称
+        key_steps = {"understand", "classify", "conditions", "tpe",
+                     "expert_panel", "suppression_check", "output_signal_analysis"}
+        summary_steps = []
+        for step in session.get("steps", [])[:max_steps]:
+            name = step.get("step", "")
+            detail = step.get("detail", {})
+            if name in key_steps:
+                if isinstance(detail, dict):
+                    # 只取前 300 字
+                    detail_str = json.dumps(detail, ensure_ascii=False)[:300]
+                else:
+                    detail_str = str(detail)[:300]
+                summary_steps.append(f"  [{name}] {detail_str}")
+
+        return {
+            "session_id": session.get("session_id"),
+            "case_id": session.get("case_id"),
+            "problem": session.get("problem"),
+            "status": session.get("status"),
+            "completed_at": session.get("completed_at"),
+            "key_steps": summary_steps,
+            "result_summary": session.get("result_summary", ""),
+        }
 
     def _read_session(self, session_id: str) -> Optional[dict]:
         path = self.memory_dir / "sessions" / f"{session_id}.json"
@@ -457,6 +564,25 @@ class MemorySystem:
             parts.append(f"## 相似历史案例 ({len(similar)} 条)")
             for p in similar[:3]:
                 parts.append(f"- 症状: {p.get('symptom', '?')} -> 根因: {p.get('root_cause', '?')}")
+
+        # L4 — 历史诊断 Session（完整诊断记录）
+        session_history = self.query_sessions(func_name, keywords, max_results=3)
+        if session_history:
+            l4_lines = [f"## 历史诊断记录 ({len(session_history)} 条相关 session)"]
+            for sh in session_history:
+                l4_lines.append(f"### Case: {sh['case_id']} (session: {sh['session_id']})")
+                l4_lines.append(f"- 问题描述: {sh['problem']}")
+                l4_lines.append(f"- 期望: {sh['expected']}")
+                l4_lines.append(f"- 状态: {sh['status']} | 步骤数: {sh['steps_count']} | 相关度: {sh['relevance_score']}")
+                if sh.get("result_summary"):
+                    l4_lines.append(f"- 结论: {sh['result_summary']}")
+                # 附加关键步骤摘要
+                details = self.get_session_details(sh["session_id"])
+                if details.get("key_steps"):
+                    l4_lines.append("- 关键步骤摘要:")
+                    for ks in details["key_steps"][:5]:
+                        l4_lines.append(f"  {ks}")
+            parts.append("\n".join(l4_lines))
 
         # L5
         if case_dir:

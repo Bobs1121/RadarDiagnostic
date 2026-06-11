@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-11 (Phase 5D 管线重构 + 全局评审)
+> 最后更新: 2026-06-11 (P0-1/2/3 修复完成: SIGNAL 映射 + Config Cache + L4 Session 读写闭环)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构完成) 完成，5E 待开始
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + P0修复 完成，P1 待开始，5E 待开始
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
 
 ---
@@ -50,6 +50,39 @@
   ↓
 [P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
+
+---
+
+## 2026-06-11 P0 修复迭代 (SIGNAL 映射 + Config Cache + L4 Session)
+
+### 完成内容
+
+**P0-1: SIGNAL 映射修复（0% → 92%）**
+- `ai/codegraph/builder.py` `_extract_variable_names` 正则 `{1,3}` → `{0,3}`
+- 根因：正则要求变量名中至少一个 `.`，过滤了大量简单变量（`u8tmp_LeTarSts` 等）
+- 修复后 CodeGraph 重建：277/301 signals mapped
+
+**P0-2: Config Cache 跨项目污染修复**
+- `cli.py` `_config_cache` 从 `dict | None` 改为 `dict[str, dict]`（keyed by `project_key`）
+- 新增 `_get_default_project_key()` 函数
+- 同一进程先后运行不同项目时缓存完全隔离
+
+**P0-3: L4 Session Memory 读写闭环**
+- `memory/memory_system.py` 新增 `query_sessions(func, keywords, max_results)` — 按 func 匹配 + 关键词打分 + case 去重
+- 新增 `get_session_details(session_id, max_steps)` — 提取关键步骤摘要（understand/classify/conditions/tpe/expert_panel）
+- `build_context_for_diagnosis` 注入 L4 历史诊断记录（3 条最相关 session，含关键步骤摘要）
+- 验证：FCTA 查询 3 条结果，FCTB 查询 3 条结果；context 总长 ~11K chars，缓存机制正常
+
+### 修改文件
+- `ai/codegraph/builder.py` — 正则修复
+- `cli.py` — config cache 按项目隔离
+- `memory/memory_system.py` — L4 query + detail + context injection
+- `docs/technical/codegraph-handoff-master.md` — 更新状态
+
+### 评分更新
+- 记忆机制：6/10 → **7/10**
+- SIGNAL 映射：0% → **92%**（277/301）
+- 综合评估：6.8/10 → **7.2/10**
 
 ---
 
@@ -126,11 +159,11 @@
 - L1: `projects/{proj}/project.md` — 项目级知识
 - L2: `projects/{proj}/functions/*.json` — 功能级知识
 - L3: `projects/{proj}/patterns.json` — 诊断模式
-- L4: `projects/{proj}/sessions/*.json` — 会话记录（**只写不读** — 诊断上下文未使用 L4）
+- L4: `projects/{proj}/sessions/*.json` — 会话记录（✅ 读写闭环 — `query_sessions` + 诊断上下文注入）
 - L5: `cases/*/memory.json` — 案例级（共享，不隔离）
 - L6: `projects/{proj}/code_knowledge/*.json` — 代码知识
-- ⚠️ 6 层过多，PRD 建议简化为 3 层
-- ⚠️ L4 session memory 只写不读，`build_context_for_diagnosis` 跳过 L4
+- ✅ 6 层过多，PRD 建议简化为 3 层
+- ✅ L4 session memory 读写闭环：`query_sessions`（关键词+func匹配）+ `get_session_details`（关键步骤摘要）+ `build_context_for_diagnosis` 注入
 
 #### 6. 知识沉淀机制？
 **已实现但有改进空间（7/10）**：
@@ -164,7 +197,7 @@
    - PRD 符合度：88%
    - 鲁棒性：7.5/10
    - 多项目适配：5/10
-   - 记忆机制：6/10（L4 session 未接入诊断上下文）
+   - 记忆机制：7/10（L4 session 读写闭环完成；6→3层简化仍为 5E 待做）
    - 知识沉淀：7/10（CodeGraph 有价值，SIGNAL 映射为零拉低）
    - **综合：6.8/10** — 方向正确，P0 项解决后可达 8+
 
