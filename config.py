@@ -128,19 +128,43 @@ def get_project(config: dict, project_key: str | None = None) -> dict:
     return proj
 
 
-def resolve_codegraph_db(config: dict, project_root: Path) -> Path:
-    """Resolve CodeGraph DB path from config, with fallback."""
+def resolve_codegraph_db(config: dict, project_root: Path, project_key: str | None = None) -> Path:
+    """Resolve CodeGraph DB path from config, with fallback.
+
+    If project_key is given, uses get_project(config, project_key) to find
+    the per-project DB path.  Otherwise falls back to config["project"]
+    (injected by cli.load_config) or the global default.
+    """
+    if project_key:
+        proj = get_project(config, project_key)
+        return Path(proj.get("codegraph_db_path", project_root / "memory" / "codegraph.db"))
     proj = config.get("project", {})
     return Path(proj.get("codegraph_db_path", project_root / "memory" / "codegraph.db"))
 
 
-def resolve_source_docs_dir(config: dict, project_root: Path) -> Path:
-    """Resolve source_docs directory from config, with fallback."""
+def resolve_source_docs_dir(config: dict, project_root: Path, project_key: str | None = None) -> Path:
+    """Resolve source_docs directory from config, with fallback.
+
+    If project_key is given, uses get_project(config, project_key) to find
+    the per-project source_docs_dir.  Otherwise falls back to config["paths"]
+    (injected by cli.load_config) or the global default.
+    """
+    if project_key:
+        proj = get_project(config, project_key)
+        return Path(proj.get("source_docs_dir", project_root / "source_docs"))
     return Path(config.get("paths", {}).get("source_docs", project_root / "source_docs"))
 
 
-def resolve_memory_dir(config: dict, project_root: Path) -> Path:
-    """Resolve memory directory from config, with fallback."""
+def resolve_memory_dir(config: dict, project_root: Path, project_key: str | None = None) -> Path:
+    """Resolve memory directory from config, with fallback.
+
+    If project_key is given, uses get_project(config, project_key) to find
+    the per-project memory_dir.  Otherwise falls back to config["project"]
+    (injected by cli.load_config) or the global default.
+    """
+    if project_key:
+        proj = get_project(config, project_key)
+        return Path(proj.get("memory_dir", project_root / "memory"))
     proj = config.get("project", {})
     return Path(proj.get("memory_dir", project_root / "memory"))
 
