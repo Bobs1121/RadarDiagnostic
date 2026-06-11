@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-11 (P0-1/2/3 修复完成: SIGNAL 映射 + Config Cache + L4 Session 读写闭环)
+> 最后更新: 2026-06-11 (P0-1/2/3 + P1-1/2 全部完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + P0修复 完成，P1 待开始，5E 待开始
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + P0/P1修复 完成，5E 待开始
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
 
 ---
@@ -83,6 +83,25 @@
 - 记忆机制：6/10 → **7/10**
 - SIGNAL 映射：0% → **92%**（277/301）
 - 综合评估：6.8/10 → **7.2/10**
+
+---
+
+## 2026-06-11 P1 修复迭代
+
+### P1-1: config.py resolve 函数支持显式 `project_key`
+- `resolve_codegraph_db()` / `resolve_source_docs_dir()` / `resolve_memory_dir()` 新增 `project_key` 可选参数
+- 传入 `project_key` 时，直接调用 `get_project(config, project_key)` 解析，不依赖 `cli.py` 的 `load_config()` 注入
+- 向后兼容：不传 `project_key` 时行为不变，走 `config["project"]` / `config["paths"]` fallback
+- 解决风险：非 CLI 调用路径（如 `run_tpe_smoke.py` 传空 dict）无法指定项目
+
+### P1-2: CLI `steps_display` 匹配 8 步管线
+- 移除旧管线 step 名称（`understand`、`parse`、`detect_window`、`analyze`、`conditions`、`probe`、`expert_panel`、`report`、`done`）
+- 新增 8 步管线名称：`classify`、`extract`、`evidence`、`signals`、`fix`、`deliver`
+- 保留内部子步骤名称：`source_docs`、`tpe`、`suppression`、`output_signals`
+
+### 评分更新
+- 多项目适配性：5/10 → **6/10**（resolve 函数隔离性提升）
+- 综合评估：7.2/10 → **7.3/10**
 
 ---
 
