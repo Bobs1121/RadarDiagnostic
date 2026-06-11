@@ -29,7 +29,7 @@ PROJECT_ROOT = Path(__file__).parent
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-_config_cache: dict | None = None
+_config_cache: dict[str, dict] = {}  # project_key -> config (fixes cross-project pollution)
 _router_cache = None
 
 _ENV_PATTERN = re.compile(r"\$\{([^}]+)\}")
@@ -52,6 +52,14 @@ def _resolve_env(value):
     return value
 
 
+def _get_default_project_key() -> str:
+    """Get the default project key from config.yaml without loading full config."""
+    import yaml
+    with open(PROJECT_ROOT / "config.yaml", "r") as f:
+        raw = yaml.safe_load(f)
+    return raw.get("default_project", "gwm_b26")
+
+
 def load_config(project_key: str | None = None) -> dict:
     """Load config.yaml, resolve env vars, and merge in project config.
 
@@ -59,8 +67,9 @@ def load_config(project_key: str | None = None) -> dict:
     works — the default project's values are backfilled.
     """
     global _config_cache
-    if _config_cache is not None:
-        return _config_cache
+    effective_key = project_key or _get_default_project_key()
+    if effective_key in _config_cache:
+        return _config_cache[effective_key]
 
     from config import load_config as _load_config_base
     from config import get_project
@@ -76,7 +85,7 @@ def load_config(project_key: str | None = None) -> dict:
     cfg["paths"]["dbc_files"] = proj.get("dbc_files", [])
     cfg["project"] = proj
 
-    _config_cache = cfg
+    _config_cache[effective_key] = cfg
     return cfg
 
 
@@ -406,19 +415,16 @@ def _run_diagnosis(case_dir: Path, problem: str, expected: str, config: dict | N
     steps_display = {
         "init": "Checking prerequisites",
         "source_docs": "Generating source docs",
-        "understand": "Understanding problem",
-        "parse": "Parsing data",
-        "detect_window": "Detecting test windows",
-        "analyze": "Analyzing frames",
-        "conditions": "Extracting conditions",
-        "tpe": "Temporal Pattern Engine",
-        "probe": "Variable probe (dynamic query planner)",
+        "classify": "Understanding problem and classifying task",
+        "extract": "Parsing data and extracting features",
+        "evidence": "Gathering evidence (conditions + TPE + probe)",
+        "signals": "Analyzing CAN signals",
         "suppression": "Checking suppression signals",
         "output_signals": "Analyzing output signals",
+        "tpe": "Temporal Pattern Engine",
         "diagnose": "Expert panel diagnosis",
-        "expert_panel": "Expert panel",
-        "report": "Generating report",
-        "done": "Complete",
+        "fix": "Generating code fix suggestions",
+        "deliver": "Generating report and delivering results",
     }
 
     def on_status(step, detail=""):
