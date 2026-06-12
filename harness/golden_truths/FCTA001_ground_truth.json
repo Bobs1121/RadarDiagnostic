@@ -1,0 +1,121 @@
+{
+  "case_id": "FCTA001",
+  "version": "1.0.0",
+  "created": "2026-06-12",
+  "project": "gwm_b26",
+  
+  "problem_statement": {
+    "function": "FCTA",
+    "description": "FCTA功能在60km/h速度下没有触发",
+    "expected": "FCTA应该在车辆后方有接近目标时触发告警",
+    "actual": "L4告警未触发，状态机滞留Standby(2)"
+  },
+  
+  "ground_truth_root_cause": {
+    "primary_cause": "目标相对纵向速度(rel_vel_x)接近0，导致TTC计算返回inf",
+    "causal_chain": [
+      "目标相对纵向速度(rel_vel_x)≈0，来源雷达解算",
+      "触发adasFunc.c运动学除零保护，TTC返回inf，阈值≤2.0s不满足",
+      "目标准入速度多帧<4.0km/h，来源trc_N.vel_x，未达准入门限",
+      "内部告警标志(bLeft/RightFctaWarningFlg)持续置FALSE",
+      "状态机滞留Standby(2)，来源fcta_system_state",
+      "L4告警未触发"
+    ],
+    "key_signals": [
+      {"signal": "trc_N.ttc", "value": "inf s", "significance": "TTC发散导致阈值不满足"},
+      {"signal": "trc_N.vel_x", "value": "0~14.4 km/h，大量帧<4.0", "significance": "低于准入速度门限"},
+      {"signal": "fcta_system_state", "value": "6→2 (Passive→Standby)", "significance": "状态跳变后滞留Standby"},
+      {"signal": "left/right_fcta_warning", "value": "恒0", "significance": "告警标志未翻转"}
+    ]
+  },
+  
+  "condition_checks": [
+    {
+      "condition": "自车激活车速",
+      "threshold": "[1.0, 20.0] km/h",
+      "actual": "≈11.3 km/h",
+      "satisfied": true,
+      "data_source": "帧分析数据(R2修正)"
+    },
+    {
+      "condition": "目标准入速度",
+      "threshold": ">4.0 km/h",
+      "actual": "0~14.4 km/h (大量帧<4.0)",
+      "satisfied": false,
+      "data_source": "帧分析数据"
+    },
+    {
+      "condition": "TTC碰撞时间",
+      "threshold": "≤2.0 s",
+      "actual": "inf s (rel_vel_x≈0致溢出)",
+      "satisfied": false,
+      "data_source": "观测层/算法逻辑层"
+    },
+    {
+      "condition": "外部抑制信号",
+      "threshold": "Acc≥80/ESP≠0等",
+      "actual": "Acc_max=74, ESP=0",
+      "satisfied": true,
+      "data_source": "抑制信号实测",
+      "note": "未触发抑制，即抑制条件不成立"
+    }
+  ],
+  
+  "key_fix_recommendations": [
+    "修正RteComMapping中VEHICLE_SPEED缩放因子(Factor=3.6)",
+    "优化track.c/adasFunc.c低动态解算策略，增加基于横向距离与偏航角的静态/蠕行旁路",
+    "对rel_vel_x≈0场景采用距离衰减替代TTC判定",
+    "补充GEAR_POS CAN注入并核对接收滤波器Watchdog周期"
+  ],
+  
+  "data_chains": [
+    {
+      "chain": "CAN/Radar相对纵向速度(rel_vel_x≈0) → 运动学滤波/除法保护 → TTC计算返回inf → adasFunc.c(TTC≤2.0判断)拦截 → bLeft/RightFctaWarningFlg=F → fcta_system_state阻塞于2态",
+      "description": "主拦截链路：TTC发散导致告警标志未翻转"
+    },
+    {
+      "chain": "CAN车身速度(VEHICLE_SPEED) → RteComMapping(ScalingFactor配置偏差) → 原始日志显示3.1 vs 实际11.3 km/h",
+      "description": "车速缩放因子配置偏差导致显示与实际不符"
+    }
+  ],
+  
+  "confidence": {
+    "value": 85,
+    "uncertainty_factors": [
+      "TPE变量链(bFctaStartKeepWarningFlg等)解析失败，无法精确量化防抖计数器",
+      "GEAR_POS缺失依赖推断"
+    ],
+    "certain_factors": [
+      "核心物理拦截链路(TTC发散+低速过滤)数据支撑充分"
+    ]
+  },
+  
+  "test_windows": [
+    {"id": 1, "start": 1775962915.8, "end": 1775962919.9, "event": "目标出现"},
+    {"id": 2, "start": 1775962927.7, "end": 1775962931.7, "event": "报警变化"},
+    {"id": 3, "start": 1775962936.5, "end": 1775962940.5, "event": "报警变化"},
+    {"id": 4, "start": 1775962948.9, "end": 1775962959.2, "event": "报警变化 + 状态跳变 + 目标出现 + 速度变化"},
+    {"id": 5, "start": 1775962959.4, "end": 1775962963.4, "event": "报警变化"}
+  ],
+  
+  "scenario_analysis": {
+    "reported_speed": "60km/h",
+    "actual_speed": "≈11.3km/h",
+    "discrepancy": "申报工况与实际CAN解码数据严重偏离",
+    "fcta_design_range": "低速泊车/窄路会车（激活上限通常20km/h）",
+    "scenario_essence": "低速平行/蠕动交叉，多普勒分量极弱导致TTC发散"
+  },
+  
+  "evaluation_criteria": {
+    "structural_minimum": 0.90,
+    "semantic_target": 0.70,
+    "required_elements": [
+      "root_cause_with_causal_chain",
+      "condition_check_table",
+      "evidence_chain_with_signals",
+      "fix_recommendations",
+      "confidence_score",
+      "data_chain_analysis"
+    ]
+  }
+}
