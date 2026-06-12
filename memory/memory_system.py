@@ -337,6 +337,16 @@ class MemorySystem:
                 pass
         return {}
 
+    def write_code_knowledge(self, func_name: str, data: dict) -> None:
+        """写入某功能的深度代码知识（L6）。
+
+        由 CodeLearner（auto-dream）或诊断管线（_precipitate_knowledge）写入。
+        """
+        d = self.memory_dir / "code_knowledge"
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"{func_name.upper()}.json"
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
     def list_code_knowledge_funcs(self) -> list[str]:
         """列出已有代码知识的功能名。"""
         d = self.memory_dir / "code_knowledge"

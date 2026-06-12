@@ -99,39 +99,46 @@ class Orchestrator:
         on_status=None,
     ) -> str:
         """
-        Full automated diagnosis pipeline. Returns path to report.
+        Full automated diagnosis pipeline (V2 — 8-step consolidated).
+        Returns path to report.
 
         Pipeline:
-          Phase 0   — Ensure source docs
-          Phase 1   — Understand problem
-          Phase 2   — Parse data
-          Phase 2.5 — Detect test windows
-          Phase 3   — Extract evidence (window-aware)
-          Phase 3.5 — Extract conditions from source code
-          Phase 3.55 — Temporal Pattern Engine (TPE) causal alignment  [NEW]
-          Phase 3.57 — Variable Query Probe (LLM plans, DataProbe executes)
-          Phase 3.6 — External suppression signal check
-          Phase 3.7 — Output signal analysis
-          Phase 4   — Expert panel diagnosis
-          Phase 4.5 — CodeFixEngine: generate unified diffs for fixes     [NEW]
-          Phase 5   — Report + memory
+          1. init      — Ensure source docs + CodeGraph (deterministic)
+          2. classify  — Understand problem + classify task (1 LLM)
+          3. extract   — Parse data + detect windows (deterministic)
+          4. evidence  — Conditions(LLM) + TPE(det) + probe(LLM) — parallel
+          5. signals   — Suppression + output signals (deterministic)
+          6. diagnose  — Expert panel (LangGraph, multi-LLM)
+          7. fix       — CodeFixEngine diff generation (1 LLM)
+          8. deliver   — Report + visualize + memory (deterministic)
         """
+        from concurrent.futures import ThreadPoolExecutor
+
+        # Ensure case_dir is a Path object (caller may pass str)
+        case_dir = Path(case_dir)
+
         def status(step, detail=""):
             if on_status:
                 on_status(step, detail)
 
-        # P1.4: Observability — wrap status with step logging
+        # Observability wrapper
         step_logger = StepLogger()
         token_tracker = TokenTracker()
         obs_status = ObservableStatus(on_status, step_logger)
 
-        # ── Phase 0: Ensure prerequisites ────────────────────────────────
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 1: INIT — Ensure prerequisites
+        # ═══════════════════════════════════════════════════════════════════
         status("init", "Checking prerequisites...")
         self._ensure_source_docs(status)
 
-        # ── Phase 1: Understand the problem ──────────────────────────────
-        status("understand", "AI is understanding the problem...")
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 2: CLASSIFY — Understand + classify (merged, 1 LLM call)
+        # ═══════════════════════════════════════════════════════════════════
+        status("classify", "Understanding problem and classifying task...")
         session_id = self.memory.create_session(case_dir.name, problem, expected)
+
+        # Understand problem (LLM)
         func_info = safe_llm_call(
             "understand",
             lambda **kw: self._understand_problem(kw.get("problem", ""), kw.get("expected", ""), kw.get("case_dir")),
@@ -142,10 +149,8 @@ class Orchestrator:
         )
         func_name = func_info.get("function", "UNKNOWN")
         self.memory.log_step(session_id, "understand", func_info)
-        status("understand", f"Identified function: {func_name}")
 
-        # ── Phase 1.5: Classify task type (diagnose / tune / verify / query)
-        status("classify", "Classifying task type...")
+        # Classify task type (LLM)
         classifier = ProblemClassifier(router=self.router)
         classification = classifier.classify(
             problem=problem, expected=expected,
@@ -165,8 +170,10 @@ class Orchestrator:
         )
         self.memory.log_step(session_id, "classify", classification.to_dict())
 
-        # ── Phase 2: Parse data ──────────────────────────────────────────
-        status("parse", "Parsing data files...")
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 3: EXTRACT — Parse data + detect windows (deterministic)
+        # ═══════════════════════════════════════════════════════════════════
+        status("extract", "Parsing data files...")
         store, bag_meta, blf_meta, sync = self._parse_case_data(case_dir, status)
         parse_summary = {
             "bag_frames": bag_meta.get("message_count") if bag_meta else 0,
@@ -174,15 +181,14 @@ class Orchestrator:
         }
         self.memory.log_step(session_id, "parse", parse_summary)
 
-        # ── Phase 2.5: Detect test windows ───────────────────────────────
-        status("detect_window", "Detecting test-active time windows...")
+        # Detect test windows
+        status("extract", "Detecting test-active time windows...")
         detector = TestWindowDetector()
         speed_thresholds = self._collect_speed_thresholds(func_name)
-        # de-duplicate for pretty-printing; the detector already dedupes internally
         unique_thresholds = sorted({round(float(v), 3) for v in speed_thresholds}) if speed_thresholds else []
         if unique_thresholds:
-            status("detect_window",
-                   f"Using per-func speed thresholds for {func_name}: "
+            status("extract",
+                   f"Speed thresholds for {func_name}: "
                    f"{', '.join(f'{t:g}' for t in unique_thresholds)} km/h")
         windows = detector.detect(store, func_name,
                                   speed_thresholds=speed_thresholds or None)
@@ -191,9 +197,9 @@ class Orchestrator:
                 f"[{w.t_start:.1f}s~{w.t_end:.1f}s] {w.trigger_reason}"
                 for w in windows
             )
-            status("detect_window", f"Found {len(windows)} window(s): {window_desc}")
+            status("extract", f"Found {len(windows)} window(s): {window_desc}")
         else:
-            status("detect_window", "No windows detected, using full data")
+            status("extract", "No windows detected, using full data")
         self.memory.log_step(session_id, "windows", {
             "count": len(windows),
             "windows": [
@@ -202,13 +208,11 @@ class Orchestrator:
             ],
         })
 
-        # ── Phase 3: Data evidence extraction (window-aware) ─────────────
-        status("analyze", f"Extracting evidence for {func_name} within windows...")
+        # Frame analysis + evidence extraction
+        status("extract", f"Extracting evidence for {func_name}...")
         var_path = self.source_docs_dir / "variables.json"
         analyzer = FrameAnalyzer(self.router, var_path if var_path.exists() else None)
         frame_analysis = self._run_frame_analysis_with(analyzer, store, func_name, func_info, status)
-
-        status("analyze", "Extracting target speeds, CAN values, ego speed (windowed)...")
         evidence = analyzer.extract_evidence(store, func_name, windows=windows or None)
         self.memory.log_step(session_id, "evidence", {
             "keys": list(evidence.keys()),
@@ -217,27 +221,62 @@ class Orchestrator:
             "transition_count": len(evidence.get("state_transitions", [])),
         })
 
-        # ── Phase 3.5: Extract activation conditions from source ─────────
-        status("conditions", f"Extracting {func_name} activation conditions from code...")
-        cond_extractor = ConditionExtractor(self.router, self.project_root, self.config)
-        conditions = cond_extractor.extract(func_name)
-        conditions_text = format_conditions(conditions)
-        if "error" not in conditions:
-            status("conditions", f"Extracted conditions (cached to source_docs/{func_name}_conditions.json)")
-        else:
-            status("conditions", f"Condition extraction: {conditions.get('error', '?')}")
-        self.memory.log_step(session_id, "conditions", {
-            "has_conditions": "error" not in conditions,
-            "preview": conditions_text[:300],
-        })
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 4: EVIDENCE — conditions + TPE + probe (parallel)
+        # ═══════════════════════════════════════════════════════════════════
+        status("evidence", "Gathering evidence: conditions + TPE + probe...")
 
-        # ── Phase 3.55: Temporal Pattern Engine causal alignment ─────────
-        status("tpe", "Running Temporal Pattern Engine...")
-        tpe_text, tpe_report = self._run_tpe(
-            store, evidence, func_name, windows, status,
-        )
+        # Load numeric constants (used by both evidence and probe)
+        constants_section = ""
+        try:
+            constants_section = self.memory.render_constants_for_context(
+                func_name, max_chars=2000,
+            )
+        except Exception:
+            pass
+        if not constants_section:
+            constants_section = (
+                "## 已学数值常量（全局）\n"
+                "_暂无常量表 — 请运行 `python cli.py --learn-constants`。_\n"
+                "_在此之前，遇到 ROI/阈值相关判定时请明确标注\n"
+                "'阈值未知、不做数值判断'，不要用经验值猜。_"
+            )
+
+        # --- Parallel phase: conditions (LLM) + TPE (deterministic) ---
+        evidence_results = {}
+
+        def _extract_conditions():
+            status("evidence", f"Extracting {func_name} conditions from code...")
+            cond_extractor = ConditionExtractor(self.router, self.project_root, self.config)
+            conditions = cond_extractor.extract(func_name)
+            conditions_text = format_conditions(conditions)
+            if "error" not in conditions:
+                status("evidence", f"Conditions extracted (cached to source_docs/{func_name}_conditions.json)")
+            else:
+                status("evidence", f"Condition extraction: {conditions.get('error', '?')}")
+            return {"conditions": conditions, "conditions_text": conditions_text}
+
+        def _run_tpe_parallel():
+            status("evidence", "Running Temporal Pattern Engine...")
+            tpe_text, tpe_report = self._run_tpe(
+                store, evidence, func_name, windows, status,
+            )
+            if tpe_report:
+                FrameAnalyzer.append_tpe_block(evidence, tpe_text, tpe_report)
+            return {"tpe_text": tpe_text or "", "tpe_report": tpe_report}
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            conditions_future = executor.submit(_extract_conditions)
+            tpe_future = executor.submit(_run_tpe_parallel)
+
+            evidence_results["conditions"] = conditions_future.result()
+            evidence_results["tpe"] = tpe_future.result()
+
+        # Log parallel results
+        conditions = evidence_results["conditions"]["conditions"]
+        conditions_text = evidence_results["conditions"]["conditions_text"]
+        tpe_report = evidence_results["tpe"]["tpe_report"]
         if tpe_report:
-            FrameAnalyzer.append_tpe_block(evidence, tpe_text, tpe_report)
             self.memory.log_step(session_id, "tpe", {
                 "pattern_count": tpe_report.get("pattern_count", 0),
                 "triggered_count": tpe_report.get("triggered_count", 0),
@@ -245,42 +284,20 @@ class Orchestrator:
                 "missing_can_signals": tpe_report.get("missing_can_count", 0),
                 "has_triggers": tpe_report.get("triggered_count", 0) > 0,
             })
+        self.memory.log_step(session_id, "conditions", {
+            "has_conditions": "error" not in conditions,
+            "preview": conditions_text[:300],
+        })
 
-        # ── Phase 3.56: Numeric constants table (global, cross-function) ──
-        # 把 auto-dream 学到的 `EGOCARWIDTH=1.976`、`LineBSDLCAL=-4.288` 这类
-        # 具体数字加进 Expert Panel 的可见上下文，让专家不再用"约 ±3.3m" 这种
-        # 猜测阈值，而是能做真数值对比。Planner 也会用这张表（见 Phase 3.57）。
-        constants_section = ""
-        try:
-            constants_section = self.memory.render_constants_for_context(
-                func_name, max_chars=2000,
-            )
-        except Exception as e:  # noqa: BLE001
-            status("constants", f"Load constants failed: {e}")
-        if not constants_section:
-            # 友好提示：告诉专家"没学过就不给，别乱猜"
-            constants_section = (
-                "## 已学数值常量（全局）\n"
-                "_暂无常量表 — 请运行 `python cli.py --learn-constants`。_\n"
-                "_在此之前，遇到 ROI/阈值相关判定时请明确标注"
-                "'阈值未知、不做数值判断'，不要用经验值猜。_"
-            )
-
-        # ── Phase 3.57: Variable Query Probe (dynamic evidence gathering) ──
-        # Let the LLM decide which variables/expressions to probe for *this*
-        # specific problem, then run those queries over the SQLite store. This
-        # breaks the "we only see what we hard-coded" trap: e.g. when a case
-        # is actually caused by `objectRightCutIn = dist_y + 0.25 * width`
-        # exceeding an ROI threshold, the planner can ask for that exact
-        # derived statistic without anyone wiring it in.
+        # --- Sequential phase: probe (depends on conditions + TPE) ---
         probe_section = ""
         probe_plans: list = []
-        probe_results: list = []
+        probe_results_list: list = []
         probe_cfg = (self.config.get("ai", {}) or {}).get("variable_probe", {}) or {}
         probe_enabled = probe_cfg.get("enabled", True)
         if probe_enabled and store is not None:
             try:
-                status("probe", "Planning variable queries based on problem + L6 knowledge...")
+                status("evidence", "Planning variable queries...")
                 planner = VariableQueryPlanner(self.router, self.memory, self.project_root, self.config)
                 probe_plans = planner.plan(
                     problem=problem,
@@ -293,18 +310,18 @@ class Orchestrator:
                     use_thinking=bool(probe_cfg.get("use_thinking", False)),
                 )
                 if probe_plans:
-                    status("probe", f"Executing {len(probe_plans)} probe queries...")
+                    status("evidence", f"Executing {len(probe_plans)} probe queries...")
                     probe = DataProbe(store, windows=windows or [])
                     for qp in probe_plans:
                         try:
-                            probe_results.append(probe.query(**qp.to_query_args()))
+                            probe_results_list.append(probe.query(**qp.to_query_args()))
                         except Exception as e:
-                            probe_results.append({
+                            probe_results_list.append({
                                 "field": qp.field, "table": qp.table,
                                 "row_count": 0, "error": f"probe exec error: {e}",
                             })
                     probe_section = render_probe_results_for_prompt(
-                        probe_plans, probe_results,
+                        probe_plans, probe_results_list,
                         max_chars=int(probe_cfg.get("max_chars", 6000)),
                     )
                     self.memory.log_step(session_id, "variable_probe", {
@@ -313,13 +330,18 @@ class Orchestrator:
                         "result_preview": probe_section[:500],
                     })
             except Exception as e:
-                status("probe", f"Variable probe skipped: {e}")
+                status("evidence", f"Variable probe skipped: {e}")
 
-        # ── Phase 3.6: External suppression signal check ─────────────────
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 5: SIGNALS — suppression + output signals (deterministic)
+        # ═══════════════════════════════════════════════════════════════════
+        status("signals", "Analyzing CAN signals...")
+
+        # Suppression signals
         suppression_text = ""
         suppression_signals = conditions.get("external_suppression", [])
         if suppression_signals and store.get_can_ids():
-            status("suppression", f"Checking {len(suppression_signals)} external suppression signals in CAN data...")
+            status("signals", f"Checking {len(suppression_signals)} suppression signals...")
             suppression_text = self._check_suppression_signals(
                 store, suppression_signals, windows, func_name, status,
             )
@@ -328,12 +350,12 @@ class Orchestrator:
                 "result_preview": suppression_text[:500],
             })
         elif suppression_signals:
-            status("suppression", "No CAN data available for suppression check")
+            status("signals", "No CAN data for suppression check")
 
-        # ── Phase 3.7: Output signal analysis (brake/warning/TTC on CAN) ──
+        # Output signals
         output_signal_text = ""
         if store.get_can_ids():
-            status("output_signals", f"Analyzing output signals for {func_name} from BLF...")
+            status("signals", f"Analyzing output signals for {func_name}...")
             output_signal_text = self._analyze_output_signals(
                 store, func_name, windows, status,
             )
@@ -342,16 +364,16 @@ class Orchestrator:
                     "result_preview": output_signal_text[:500],
                 })
 
-        # ── Phase 3.8: Load authoritative threshold reference ────────────
+        # Threshold reference
         threshold_ref = self._load_threshold_reference(func_name)
 
-        # ── Phase 3.9: Parameter sensitivity (tune/verify path) ────────────
+        # Parameter sensitivity (tune/verify only)
         param_section_md = ""
         param_report_obj = None
         whatif_entries: list = []
         if task_type in ("tune", "verify"):
             try:
-                status("params", "Scanning ADAS thresholds and running sensitivity analysis...")
+                status("signals", "Running parameter sensitivity analysis...")
                 param_report_obj = analyze_sensitivity(
                     source_root=Path(self.config["paths"]["source_code"]),
                     cache_dir=self.source_docs_dir,
@@ -360,39 +382,37 @@ class Orchestrator:
                     focus_categories=classification.focus_parameters or None,
                 )
                 param_section_md = render_sensitivity_markdown(param_report_obj)
-                status(
-                    "params",
-                    f"Parameters scanned: {param_report_obj.total_parameters}, "
-                    f"observable: {param_report_obj.parameters_analyzed}",
-                )
+                status("signals",
+                    f"Parameters: {param_report_obj.total_parameters} scanned, "
+                    f"{param_report_obj.parameters_analyzed} observable")
                 self.memory.log_step(session_id, "param_sensitivity", {
                     "func": param_report_obj.func,
                     "total": param_report_obj.total_parameters,
                     "analyzed": param_report_obj.parameters_analyzed,
                 })
-
                 proposals = self._parse_proposals(problem, expected, param_report_obj)
                 if proposals:
                     whatif_entries = what_if(
                         param_report_obj, proposals=proposals, store=store,
                     )
                     if whatif_entries:
-                        status(
-                            "params",
-                            f"What-if evaluation: {len(whatif_entries)} proposal(s) evaluated",
-                        )
+                        status("signals", f"What-if: {len(whatif_entries)} proposal(s)")
                         self.memory.log_step(session_id, "param_whatif", {
                             "count": len(whatif_entries),
                             "items": [w.to_dict() for w in whatif_entries[:20]],
                         })
             except Exception as exc:
-                status("params", f"Parameter analysis failed: {exc}")
+                status("signals", f"Parameter analysis failed: {exc}")
                 param_section_md = ""
 
-        # ── CodeGraph: inject structured code context into expert panel ──
-        # render_for_expert_panel 已经包含：模块函数/信号/调用链 + 校准参数 +
-        # 跨模块共享函数/信号 + 构建信息。注入到 ContextBudget 让所有专家可见。
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 6: DIAGNOSE — Expert Panel (LangGraph, multi-LLM)
+        # ═══════════════════════════════════════════════════════════════════
+        status("diagnose", "Building expert panel context...")
+
+        # Load CodeGraph context
         codegraph_section = ""
+        semantics_section = ""
         try:
             from .codegraph import CodeGraph, CodeGraphRenderer
             cg_path = self.codegraph_db_path
@@ -412,16 +432,28 @@ class Orchestrator:
 包括函数调用链、信号依赖、变量读写、状态转换等行为模式。分析根因时请结合
 TPE 证据段与 CodeGraph 结构数据交叉验证。
 """
+                sem_md = renderer.render_semantics_for_panel(
+                    module=func_name,
+                    max_chars=5000,
+                )
+                if sem_md:
+                    semantics_section = f"""## ★★ 语义标注层(Semantic Annotations) ★★
+{sem_md}
+
+**语义标注使用说明**: 以上为系统通过 LLM 对 C 源码进行的语义分析结果，
+包含告警逻辑、计算链路、状态机、输出链路等维度的深度理解。
+与 CodeGraph 结构数据配合使用：CodeGraph 告诉你「代码怎么写的」，
+语义标注告诉你「代码在做什么」。
+"""
                 cg.close()
         except Exception:
             pass  # silent fallback — CodeGraph is optional enhancement
 
-        # ── Phase 4: Expert Panel Diagnosis ──────────────────────────────
-        n_experts = len(ExpertPanel.select_experts(func_info.get("fail_type", "OTHER")))
-        status("diagnose", f"Launching expert panel ({n_experts} experts, 3 rounds)...")
+        # Build data summary
         memory_context = self.memory.build_context_for_diagnosis(func_name, problem, case_dir)
         data_summary = self._build_data_summary(store, bag_meta, blf_meta, sync)
 
+        # Pop evidence components
         key_facts = evidence.pop("KEY_FACTS", "")
         timeline = evidence.pop("timeline", [])
         transitions = evidence.pop("state_transitions", [])
@@ -437,12 +469,13 @@ TPE 证据段与 CodeGraph 结构数据交叉验证。
 
         transitions_text = ""
         if transitions:
-            lines = [f"  t={tr['t']}s {tr['side']} {tr['field']}: {tr['from']}→{tr['to']}"
-                     for tr in transitions[:30]]
-            transitions_text = "\n".join(lines)
+            t_lines = [f"  t={tr['t']}s {tr['side']} {tr['field']}: {tr['from']}→{tr['to']}"
+                       for tr in transitions[:30]]
+            transitions_text = "\n".join(t_lines)
         else:
             transitions_text = "(无状态跳变)"
 
+        # Build TPE section
         tpe_section = ""
         tpe_block = evidence.get("tpe_block") or ""
         if tpe_block:
@@ -463,6 +496,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 专家禁止在没有阅读 TPE 段的情况下输出根因结论。
 """
 
+        # Build suppression section
         suppression_section = ""
         if suppression_text:
             suppression_section = f"""
@@ -473,6 +507,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 专家分析时**必须以上述实测数据为准**，不得自行从其他数据源推断抑制信号状态。
 如某信号标注"未在BLF中找到"，结论应为"无法确认"而非自行查找替代信号。
 """
+
+        # Build output section
         output_section = ""
         if output_signal_text:
             has_brake = func_name.upper() in {"FCTB", "RCTB"}
@@ -497,6 +533,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 {note_line}
 """
 
+        # Build threshold section
         threshold_section = ""
         if threshold_ref:
             threshold_section = f"""
@@ -506,24 +543,23 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 **规则**: 报告中引用的所有阈值必须与上述文档一致。禁止使用"预估"阈值。
 """
 
+        # Build params section
         params_section = ""
         if param_section_md:
-            whatif_md = render_what_if_markdown(whatif_entries) if whatif_entries else ""
+            whatif_md_section = render_what_if_markdown(whatif_entries) if whatif_entries else ""
             params_section = f"""
 ## ★★ 参数敏感性分析(tune/verify 专属) ★★
 任务类型: **{task_type}** — 分析目标不是根因，而是参数调整后的量化影响。
 {param_section_md}
 
-{whatif_md}
+{whatif_md_section}
 
 **规则**: 本节所有数值均为系统从源码+本次录制直接计算得到。
 建议调优时必须基于上表中"穿越次数"、"min |Δ|"、"超阈值帧数"几列做判断，
 禁止仅凭直觉给方向；若提出新的阈值值，需指明该值在本次录制中的新穿越次数。
 """
 
-        # ── Expert Panel prompt assembly with global budget ────────────────
-        # Assemble pieces into a ContextBudget so the total prompt stays
-        # bounded even when individual sections are all near their limits.
+        # ContextBudget assembly
         methodology_block = """## ★★★ 因果链分析方法论(最高优先级) ★★★
 分析时必须区分数据的因果层次:
 - **观测层**(雷达端radar_objects/radar_debug): 仅说明「发生了什么」，是ECU决策的**结果**
@@ -533,7 +569,6 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 追溯方法: 看到异常状态 → 查代码中哪行赋值了此状态 → 该赋值依赖哪个变量/条件 → 该变量来自哪个CAN信号 → CAN信号实际值是什么"""
 
         budget = ContextBudget(total_chars=60_000)
-        # Priorities: higher = keep more of it when we need to trim.
         budget.add("methodology",   methodology_block, priority=100, min_chars=400)
         budget.add("key_facts",     f"## ★ 关键事实(必读) ★\n{key_facts}", priority=100, min_chars=2000)
         budget.add("tpe",           tpe_section,       priority=95,  min_chars=2000)
@@ -547,14 +582,18 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         budget.add("threshold",     threshold_section, priority=75,  min_chars=1000)
         budget.add("params",        params_section,    priority=70,  min_chars=1000)
         budget.add("codegraph",     codegraph_section, priority=72,  min_chars=800)
+        budget.add("semantics",     semantics_section, priority=73,  min_chars=600)
         budget.add("timeline",      f"## 窗口内数据时间线\n{timeline_text[:10000]}", priority=60, min_chars=2000)
         budget.add("frame_anal",    f"## 帧分析\n{frame_analysis[:6000]}", priority=55, min_chars=1500)
         budget.add("evidence",      f"## 数据取证\n{evidence_text}", priority=55, min_chars=3000)
         budget.add("data_summary",  f"## 数据概览\n{data_summary[:5000]}", priority=40, min_chars=1000)
 
         combined_data = budget.concat()
-        status("panel_prompt", budget.format_report())
+        status("diagnose", budget.format_report())
 
+        # Run expert panel
+        n_experts = len(ExpertPanel.select_experts(func_info.get("fail_type", "OTHER")))
+        status("diagnose", f"Launching expert panel ({n_experts} experts, 3 rounds)...")
         panel = ExpertPanel(self.router, self.config, self.project_root)
         panel_result = safe_llm_call(
             "expert_panel",
@@ -589,10 +628,12 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             render_what_if_markdown(whatif_entries) if whatif_entries else ""
         )
 
-        # ── Phase 4.5: CodeFixEngine — generate actionable code diffs ───
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 7: FIX — CodeFixEngine diff generation (1 LLM)
+        # ═══════════════════════════════════════════════════════════════════
         fix_report_md = ""
         try:
-            status("code_fix", "Generating code fix suggestions...")
+            status("fix", "Generating code fix suggestions...")
             fix_report_md = self._generate_code_fix(
                 problem=problem,
                 diagnosis=diagnosis,
@@ -600,14 +641,16 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 status=status,
             )
             if fix_report_md:
-                status("code_fix", "Code fix generated successfully")
+                status("fix", "Code fix generated successfully")
             else:
-                status("code_fix", "No actionable code fix generated")
+                status("fix", "No actionable code fix generated")
         except Exception as exc:
-            status("code_fix", f"Code fix generation failed: {exc}")
+            status("fix", f"Code fix generation failed: {exc}")
 
-        # ── Phase 5: Generate report & update memory ─────────────────────
-        status("report", "Generating report...")
+        # ═══════════════════════════════════════════════════════════════════
+        # Step 8: DELIVER — Report + visualize + memory (deterministic)
+        # ═══════════════════════════════════════════════════════════════════
+        status("deliver", "Generating report...")
         report_path = self._save_report(
             case_dir, diagnosis, problem, expected,
             func_name, bag_meta, blf_meta, windows,
@@ -620,8 +663,9 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         expert_appendix_path = case_dir / "expert_opinions.md"
         self._save_expert_appendix(expert_appendix_path, panel_result)
 
+        # Visualization
         try:
-            status("visualize", "Rendering HTML visualization...")
+            status("deliver", "Rendering HTML visualization...")
             viz = build_html_report(
                 case_dir=case_dir,
                 func_name=func_name,
@@ -637,32 +681,44 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 bag_meta=bag_meta,
                 blf_meta=blf_meta,
             )
-            status(
-                "visualize",
-                f"HTML report: {viz.html_path} (charts={viz.charts_built})",
-            )
+            status("deliver", f"HTML report: {viz.html_path} (charts={viz.charts_built})")
             self.memory.log_step(session_id, "visualize", viz.to_dict())
         except Exception as exc:
-            status("visualize", f"Visualization failed: {exc}")
+            status("deliver", f"Visualization failed: {exc}")
 
+        # Memory update
         try:
             self._update_memories(session_id, case_dir, func_name, func_info, diagnosis, problem)
         except Exception:
             pass
+
+        # L6 code knowledge precipitation from diagnosis
+        try:
+            status("deliver", "Precipitating code knowledge to L6...")
+            self._precipitate_knowledge(
+                func_name=func_name,
+                panel_result=panel_result,
+                conditions=conditions,
+                evidence=evidence,
+            )
+            status("deliver", "L6 knowledge precipitation done")
+        except Exception:
+            pass
         self.memory.complete_session(session_id, f"Report saved to {report_path}")
-        status("done", report_path)
+        status("deliver", f"Diagnosis complete: {report_path}")
 
         store.close()
 
-        # P1.4: Save observability log
+        # Save observability log
         try:
             obs_log_path = case_dir / "observability_log.json"
             step_logger.save(obs_log_path)
-            status("observability", f"Step log saved: {obs_log_path}")
+            status("deliver", f"Step log saved: {obs_log_path}")
         except Exception:
             pass
 
         return report_path
+
 
     # ── Temporal Pattern Engine runner ─────────────────────────────────
 
@@ -1739,3 +1795,151 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         if len(existing["known_issues"]) > 50:
             existing["known_issues"] = existing["known_issues"][-50:]
         self.memory.write_function_knowledge(func_name, existing)
+
+    def _precipitate_knowledge(
+        self,
+        func_name: str,
+        panel_result: dict,
+        conditions: dict,
+        evidence: dict,
+    ):
+        """从诊断结果中提取可沉淀的代码知识，增量合并到 L6 code_knowledge。
+
+        从 expert_panel 的 expert_opinions / final_verdict 中提取：
+        - **alarm_logic**: 报警触发/取消条件（从专家分析中的条件检查表）
+        - **state_machine**: 状态机流转（从状态转移描述）
+        - **calculation_chain**: 关键变量/阈值（从数据链路和计算链）
+
+        所有条目带 ``_precipitated`` 标记和 ``code_ref``，便于与 CodeLearner 来源区分。
+        幂等：相同 id 的条目用新内容覆盖旧内容。
+        """
+        import re
+
+        precipitate_prompt = f"""你是代码知识沉淀专家。请从以下诊断结果中提取结构化代码知识，写入 L6 code_knowledge。
+
+功能: {func_name}
+
+## 专家结论
+{panel_result.get("final_verdict", "")[:3000]}
+
+## 各专家分析
+{json.dumps(panel_result.get("expert_opinions", {}), ensure_ascii=False, indent=2)[:5000]}
+
+## 条件检查
+{json.dumps(conditions, ensure_ascii=False, indent=2)[:3000]}
+
+## 关键证据
+{json.dumps(evidence, ensure_ascii=False, indent=2)[:3000]}
+
+请输出 JSON（只输出 JSON）：
+{{
+  "alarm_logic": {{
+    "trigger_conditions": [
+      {{"id": "diag-TRIG-1", "description": "一句话描述", "threshold": "阈值", "c_expression": "代码条件", "variables": ["变量1"], "code_ref": {{"file": "文件名", "line": 行号}}}}
+    ],
+    "cancel_conditions": [...],
+    "block_conditions": [
+      {{"id": "diag-BLOCK-1", "description": "导致功能不触发的拦截条件", "threshold": "阈值", "actual_value": "实测值", "c_expression": "拦截条件", "variables": ["变量1"], "code_ref": {{"file": "文件名", "line": 行号}}}}
+    ]
+  }},
+  "state_machine": {{
+    "transitions": [
+      {{"id": "diag-TR-1", "from": "状态A", "to": "状态B", "condition": "转移条件", "action": "转移动作", "code_ref": {{"file": "文件名", "line": 行号}}}}
+    ],
+    "blocked_transitions": [
+      {{"id": "diag-BTR-1", "from": "当前状态", "expected_to": "期望状态", "blocked_by": "阻塞原因", "code_ref": {{"file": "文件名", "line": 行号}}}}
+    ]
+  }},
+  "calculation_chain": {{
+    "key_variables": {{
+      "变量名": {{"description": "变量描述", "formula": "计算公式", "inputs": ["输入变量"], "actual_value": "实测值", "code_ref": {{"file": "文件名", "line": 行号}}}}
+    }},
+    "thresholds_used": [
+      {{"name": "阈值名", "value": "阈值", "role": "用途", "id": "diag-TH-1"}}
+    ],
+    "derivation_chain": [
+      {{"step": 1, "from": "输入", "to": "输出", "in_file": "文件", "transform": "转换描述"}}
+    ]
+  }},
+  "output_chain": {{
+    "blocked_outputs": [
+      {{"id": "diag-BO-1", "internal_var": "内部变量", "expected_output": "期望输出", "actual_output": "实际输出", "blocked_by": "阻塞原因", "code_ref": {{"file": "文件名", "line": 行号}}}}
+    ]
+  }}
+}}
+
+要求:
+1. 只提取诊断中明确提到的知识，不要编造
+2. 所有 id 以 "diag-" 开头，避免与 CodeLearner 冲突
+3. code_ref 必须来自诊断中提到的具体文件/行号
+4. 如果某个焦点没有新发现，留空数组/对象
+5. block_conditions / blocked_transitions / blocked_outputs 是新的知识类型，记录"导致功能不触发的原因"
+"""
+        try:
+            result = self.router.complex(
+                [{"role": "user", "content": precipitate_prompt}],
+                max_tokens=8192,
+            )
+            precipitated = parse_json_from_llm(
+                result.get("content", ""),
+                context="precipitate_knowledge",
+            )
+            if not precipitated:
+                return
+
+            # Read existing L6 knowledge
+            existing = self.memory.read_code_knowledge(func_name)
+            if not existing:
+                existing = {"_meta": {"function": func_name, "learned_focuses": []}}
+
+            meta = existing.setdefault("_meta", {"function": func_name})
+            now = datetime.datetime.now().isoformat()
+
+            for focus in ["alarm_logic", "state_machine", "calculation_chain", "output_chain"]:
+                if focus not in precipitated:
+                    continue
+                new_data = precipitated[focus]
+                if not new_data:
+                    continue
+
+                existing_focus = existing.setdefault(focus, {})
+
+                for key, new_items in new_data.items():
+                    if not isinstance(new_items, list):
+                        # Handle dict keys (e.g. key_variables in calculation_chain)
+                        if isinstance(new_items, dict):
+                            existing_key = existing_focus.setdefault(key, {})
+                            for var_name, var_info in new_items.items():
+                                if isinstance(var_info, dict):
+                                    var_info["_precipitated"] = True
+                                    var_info["_precipitated_at"] = now
+                                    existing_key[var_name] = var_info
+                        continue
+
+                    # List items — merge by id (new overwrites old)
+                    existing_list = existing_focus.setdefault(key, [])
+                    existing_ids = {item.get("id") for item in existing_list if isinstance(item, dict)}
+
+                    for item in new_items:
+                        if not isinstance(item, dict):
+                            continue
+                        item["_precipitated"] = True
+                        item["_precipitated_at"] = now
+                        item_id = item.get("id")
+                        if item_id:
+                            # Replace existing item with same id
+                            existing_list = [
+                                i for i in existing_list
+                                if not isinstance(i, dict) or i.get("id") != item_id
+                            ]
+                        existing_list.append(item)
+
+                if focus not in meta.get("learned_focuses", []):
+                    learned = meta.setdefault("learned_focuses", [])
+                    learned.append(focus)
+
+            meta["last_updated"] = now
+            self.memory.write_code_knowledge(func_name, existing)
+
+        except Exception:
+            pass

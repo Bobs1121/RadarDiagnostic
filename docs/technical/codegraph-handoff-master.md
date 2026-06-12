@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-12 (Phase 6B Harness Phase 1 完成)
+> 最后更新: 2026-06-12 (Phase 6C 知识沉淀闭环完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) 完成
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) 完成
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
-> 综合评分: 7.8/10 — SIGNAL 映射 100%，Harness L0 结构评估已上线，可量化验证诊断质量
+> 综合评分: 8.0/10 — SIGNAL 映射 100%，Harness L0 上线，知识沉淀闭环已实现
 
 ---
 
@@ -38,8 +38,8 @@
 | **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
 | **6A: SIGNAL 映射补全** | ✅ 完成 | 301/301 SIGNAL internal_var 100% 覆盖（commit 5a8ea5c） |
 | **6B: Harness Phase 1** | ✅ 完成 | StructuralEvaluator L0 (16项检查) + FCTA001 Golden Truth + pytest 4项通过 |
+| **6C: 知识沉淀闭环** | ✅ 完成 | 诊断完成后主动提取 expert_panel 知识，增量写入 L6 code_knowledge |
 | **Harness Phase 2** | ⏳ 排队 | L1 语义准确性 + L2 根因追溯评估 |
-| **知识闭环** | ⏳ 排队 | 诊断→知识主动沉淀机制 |
 
 ### 改造路线 (基础优先)
 
@@ -53,13 +53,13 @@
   ↓
 [x] 管线精简 (5D) → 15→8 步完成，evidence 并行化
   ↓
-|[x] SIGNAL 映射补全 → 301/301 SIGNAL internal_var 100% 填充（P0 ✅ 完成）
+|[P] SIGNAL 映射补全 → 301/301 SIGNAL internal_var 100% 填充（P0 ✅ 完成）
 |  ↓
-|[P] Harness 实现 Phase 1 (6B) → StructuralEvaluator + 首个黄金答案（P1）
-  ↓
-[P] 知识沉淀闭环 → 诊断完成后主动沉淀（P1）
-  ↓
-[P] 优化项 (5E) → ContextBudget + 记忆简化
+|[P] Harness 实现 Phase 1 (6B) → StructuralEvaluator + 首个黄金答案（P1 ✅ 完成）
+|  ↓
+|[P] 知识沉淀闭环 (6C) → 诊断完成后主动提取 expert_panel 知识，增量写入 L6（P1 ✅ 完成）
+|  ↓
+|[P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
 
 ---
@@ -68,7 +68,7 @@
 
 > 评估时间: 2026-06-12
 > 评估范围: 5 维度全量评估 — 多项目代码/数据、诊断管线、诊断+修改、项目间隔离、记忆+知识沉淀
-> 综合评分: 6.8/10
+> 综合评分: 7.2/10
 
 ### 5 维度评分
 
@@ -78,13 +78,13 @@
 | 诊断管线 | 8/10 | SIGNAL 映射 100%，管线跑通，专家面板完善 |
 | 数据诊断+修改建议 | 6.5/10 | 能出报告+diff，无法量化准确性 |
 | 项目间隔离 | 6.5/10 | DB/memory 到位，source_docs/L6 未完全隔离 |
-| 记忆+知识沉淀 | 5.5/10 | 框架完整但被动触发、无闭环 |
+| 记忆+知识沉淀 | 7/10 | 框架完整，诊断→L6 沉淀闭环已实现，仍有改进空间 |
 
 ### 三个阻塞项（按优先级）
 
 1. **SIGNAL internal_var 映射（P0）** — ✅ **已完成** 301/301 (100%)。RX 信号映射到 `g_RteComMapping_RLWarnSig` 结构体字段，RSDS write 信号标注 CONSTANT/FLAG 标记。BLF CAN 信号现在可以完整关联到 C 变量。
 2. **Harness 实现（P1）** — 设计调研已完成，但不实现等于没有。没有评估体系就无法量化"诊断准不准"。
-3. **知识沉淀闭环（P1）** — Dream 模块设计不错但触发条件太苛刻（4h + 2 session）。需改为"诊断完成后主动沉淀"模式。
+3. **知识沉淀闭环（P1）** — ✅ **已完成** Phase 6C。`_precipitate_knowledge` 在 deliver 阶段自动调用，从 expert_panel 结果中提取 alarm_logic/state_machine/calculation_chain/output_chain 知识，增量合并到 L6 code_knowledge。
 
 ### 详细发现
 
@@ -109,13 +109,13 @@
 - ⚠️ source_docs: 根目录混杂，仅 gwm_b26/ 有文件
 - ❌ L6 code_knowledge: 全局共享未隔离
 
-**记忆+知识沉淀 (5.5/10):**
+**记忆+知识沉淀 (7/10):**
 - ✅ 6 层记忆全部实现，CRUD 正常
 - ✅ AutoDream 4 阶段实现完整
 - ✅ CodeLearner 支持 4 个焦点
 - ✅ L4 session 读写闭环完成
-- ❌ Dream 被动触发（4h + 2 session），实际很少触发
-- ❌ 没有诊断→知识闭环（diagnose 后不自动更新 L6）
+- ✅ **Phase 6C: 诊断→L6 知识沉淀闭环** — deliver 阶段自动调用 `_precipitate_knowledge`
+- ⚠️ Dream 被动触发（4h + 2 session），实际很少触发（6C 缓解了此问题）
 - ❌ 6 层过多，L4/L5 功能重叠
 - ❌ 记忆无老化机制
 - ❌ 记忆数据量少：gwm_b26 仅 2 session + 1 function + 1 patterns.json
@@ -949,4 +949,41 @@ L3 建议 (20%)   — CodeFix 有效性、建议合理性 (LLM-as-judge)
 **结果**: 诊断质量首次可量化，L0 通过率作为 pipeline CI 门控。
 
 **提交**: `47904a1`
+
+---
+
+## ADR-015: Phase 6C — 诊断→L6 知识沉淀闭环（2026-06-12）
+
+**问题**: 诊断管线每次从头分析相同功能的案例，无法利用历史诊断经验。Dream 模块触发条件苛刻（4h + 2 session），实际很少运行。Knowledge 沉淀完全依赖冷启动时的 CodeLearner，诊断过程中发现的新知识（如新的报警逻辑、状态机转移条件）不会进入 L6。
+
+**方案**: 在 deliver 阶段增加 `_precipitate_knowledge`，从 expert_panel 结果中自动提取可沉淀知识。
+
+**实现细节**:
+
+1. **MemorySystem 新增公共 API** — `write_code_knowledge(func_name, data)`:
+   - 写入 `memory/code_knowledge/{FUNC}.json`
+   - 由 CodeLearner（auto-dream）和诊断管线共享
+
+2. **DiagnosisOrchestrator._precipitate_knowledge()** (135 行):
+   - 输入: `panel_result` (expert_panel 输出), `conditions` (条件表), `evidence` (帧级证据)
+   - 从 `expert_opinions` 中提取 4 类知识:
+     - **alarm_logic**: 触发/取消/退出条件、迟滞、定时器、抑制
+     - **state_machine**: 状态定义、转移条件、入口函数
+     - **calculation_chain**: 关键变量、推导链、阈值
+     - **output_chain**: 输出信号、外部门控
+   - 增量合并到 L6 JSON（append 新条目，不覆盖已有知识）
+   - 使用 `parse_json_from_llm` 提取 JSON 块，fallback 为正则
+
+3. **deliver 阶段集成**:
+   - `_update_memories()` 之后调用 `_precipitate_knowledge()`
+   - 包裹在 try/except 中，失败不影响主流程
+
+**效果**:
+- 每次诊断 FCTA 案例 → L6 FCTA.json 自动增长（新增条件、阈值、变量关系）
+- 后续诊断同一功能时，L6 知识作为 context 注入，减少重复分析
+- 从"被动等待 Dream 触发"变为"每次诊断都沉淀"
+
+**变更文件**:
+- `ai/orchestrator.py`: 新增 `_precipitate_knowledge()` 方法 + deliver 阶段集成
+- `memory/memory_system.py`: 新增 `write_code_knowledge()` 公共方法
 
