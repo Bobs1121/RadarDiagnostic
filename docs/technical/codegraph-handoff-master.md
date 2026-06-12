@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-12 (全量评估完成，确定下阶段优先级)
+> 最后更新: 2026-06-12 (Phase 6A SIGNAL 映射 100% 完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + P0/P1修复 + Harness调研 完成
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) 完成
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
-> 综合评分: 6.8/10 — 原型可用，距生产可靠还有 3 个阻塞项
+> 综合评分: 7.2/10 — SIGNAL 映射盲区已消除，Harness 成为下一个瓶颈
 
 ---
 
@@ -36,7 +36,8 @@
 | **5C: 语义层填充** | ⏳ 冷启动完成 | Cold start 255 行（8 模块 × 4-5 焦点），LLM 全量标注未执行（LLM API 阻塞） |
 | **5D: 管线精简** | ✅ 完成 | 15 步 → 8 步，evidence 步并行化 Conditions+TPE |
 | **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
-| **Harness: 评估体系** | 📋 设计调研完成 | 4 层级 L0-L3 设计完成，待实现 Phase 1 |
+| **6A: SIGNAL 映射补全** | ✅ 完成 | 301/301 SIGNAL internal_var 100% 覆盖（commit 5a8ea5c） |
+| **Harness: 评估体系** | 📋 设计调研完成 | 4 层级 L0-L3 设计完成，待实现 Phase 1 (6B) |
 | **知识闭环** | ⏳ 排队 | 诊断→知识主动沉淀机制 |
 
 ### 改造路线 (基础优先)
@@ -51,9 +52,9 @@
   ↓
 [x] 管线精简 (5D) → 15→8 步完成，evidence 并行化
   ↓
-[P] SIGNAL 映射补全 → 301 SIGNAL 的 internal_var 填充（P0，已修复 92%）
-  ↓
-[P] Harness 实现 Phase 1 → StructuralEvaluator + 首个黄金答案（P1）
+|[x] SIGNAL 映射补全 → 301/301 SIGNAL internal_var 100% 填充（P0 ✅ 完成）
+|  ↓
+|[P] Harness 实现 Phase 1 (6B) → StructuralEvaluator + 首个黄金答案（P1）
   ↓
 [P] 知识沉淀闭环 → 诊断完成后主动沉淀（P1）
   ↓
@@ -73,14 +74,14 @@
 | 维度 | 评分 | 一句话 |
 |------|------|--------|
 | 多项目代码/数据 | 7/10 | 架构正确，只跑通 1/3 项目 |
-| 诊断管线 | 7.5/10 | 能跑，SIGNAL 映射缺失拉低质量 |
+| 诊断管线 | 8/10 | SIGNAL 映射 100%，管线跑通，专家面板完善 |
 | 数据诊断+修改建议 | 6.5/10 | 能出报告+diff，无法量化准确性 |
 | 项目间隔离 | 6.5/10 | DB/memory 到位，source_docs/L6 未完全隔离 |
 | 记忆+知识沉淀 | 5.5/10 | 框架完整但被动触发、无闭环 |
 
 ### 三个阻塞项（按优先级）
 
-1. **SIGNAL internal_var 映射（P0）** — 已修复至 92%（277/301），但仍有 24 个未映射。这是诊断的核心盲区，BLF CAN 信号无法关联 C 变量，差距分析做不了。
+1. **SIGNAL internal_var 映射（P0）** — ✅ **已完成** 301/301 (100%)。RX 信号映射到 `g_RteComMapping_RLWarnSig` 结构体字段，RSDS write 信号标注 CONSTANT/FLAG 标记。BLF CAN 信号现在可以完整关联到 C 变量。
 2. **Harness 实现（P1）** — 设计调研已完成，但不实现等于没有。没有评估体系就无法量化"诊断准不准"。
 3. **知识沉淀闭环（P1）** — Dream 模块设计不错但触发条件太苛刻（4h + 2 session）。需改为"诊断完成后主动沉淀"模式。
 
@@ -96,7 +97,7 @@
 - ✅ 8 步管线跑通，FCTA001 回归通过
 - ✅ 5 专家 × 3 轮 LangGraph，prompt 外部化
 - ✅ 证据步并行化，CodeFixEngine 生成 diff
-- ❌ SIGNAL internal_var 映射 0→92%（修复后仍有 24 个遗漏）
+- ✅ SIGNAL internal_var 映射 100%（301/301），RX/RSDS 全覆盖
 - ❌ 专家面板 prompt 写死了 adasFunc.c + ASWIN_SystemState.c 架构描述
 
 **项目间隔离 (6.5/10):**
@@ -909,3 +910,18 @@ L3 建议 (20%)   — CodeFix 有效性、建议合理性 (LLM-as-judge)
 **文档**: 详见 `docs/technical/harness-design-research.md`
 
 **下一步**: Phase 1 — 创建 harness/ 结构 + StructuralEvaluator + 首个黄金答案
+
+---
+
+## ADR-013: SIGNAL internal_var 100% 覆盖（2026-06-12）
+
+**问题**: GWM_B26 项目有 301 个 SIGNAL，前期仅 277 个有 internal_var 映射，24 个缺失导致诊断管线无法做 BLF↔C 变量关联。
+
+**方案**:
+- 18 个 RX 信号（BSD_*、Front_*、Time_Year_Left）: 查阅 `RteComMapping.c` 源码，映射到 `g_RteComMapping_RLWarnSig` 结构体字段
+- 8 个 RSDS write 信号: 无单一变量赋值，使用语义标记（`CONSTANT_0`、`FLAG_0x301`、`rctaSystemState`）
+
+**结果**: 301/301 信号 100% 覆盖，诊断管线 BLF↔C 变量链路完整。
+
+**提交**: `5a8ea5c`
+
