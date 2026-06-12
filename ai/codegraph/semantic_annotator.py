@@ -130,10 +130,12 @@ class SemanticAnnotator:
         db_path: str | Path,
         project_root: str | Path,
         router=None,
+        memory_dir: Optional[Path] = None,
     ):
         self.db_path = Path(db_path)
         self.project_root = Path(project_root)
         self.router = router
+        self.memory_dir = memory_dir  # per-project memory dir (e.g. memory/projects/gwm_b26)
         self.conn: Optional[sqlite3.Connection] = None
         self.stats = AnnotationStats()
         self._connect()
@@ -170,17 +172,33 @@ class SemanticAnnotator:
 
     # ─── Cold Start: code_knowledge → node_semantics ─────────────────────
 
+    def _resolve_knowledge_dir(self) -> Optional[Path]:
+        """Resolve code_knowledge directory — per-project first, then legacy global."""
+        # Try per-project directory
+        if self.memory_dir:
+            proj_ckpt = self.memory_dir / "code_knowledge"
+            if proj_ckpt.exists() and any(proj_ckpt.glob("*.json")):
+                return proj_ckpt
+        # Fallback: legacy global directory
+        legacy = self.project_root / "memory" / "code_knowledge"
+        if legacy.exists() and any(legacy.glob("*.json")):
+            return legacy
+        return None
+
     def cold_start(self) -> int:
         """
         从 code_knowledge/*.json 填充已有知识到 node_semantics 表。
 
         这是零成本的冷启动 — 已有的知识直接入库，不需要 LLM 调用。
 
+        优先使用 per-project 目录（memory/projects/<proj>/code_knowledge/），
+        若不存在则回退到 legacy 全局目录（memory/code_knowledge/）。
+
         Returns:
             填充的标注数量。
         """
-        knowledge_dir = self.project_root / "memory" / "code_knowledge"
-        if not knowledge_dir.exists():
+        knowledge_dir = self._resolve_knowledge_dir()
+        if knowledge_dir is None:
             log.info("Cold start: no code_knowledge directory found")
             return 0
 

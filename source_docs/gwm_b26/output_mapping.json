@@ -1,6 +1,6 @@
 {
-  "source_hash": "f7a04c826fcaf9fc",
-  "mapping_count": 328,
+  "source_hash": "23feece8f9e2a866",
+  "mapping_count": 322,
   "mappings": [
     {
       "can_signal": "RSDS_LCAResp",
@@ -134,7 +134,7 @@
     },
     {
       "can_signal": "RSDS_RCW_Trigger",
-      "expression": "l_temp_u8",
+      "expression": "(l_temp_u8 == 2) ? 1 : 0",
       "direction": "write"
     },
     {
@@ -229,36 +229,6 @@
     },
     {
       "can_signal": "BSD_Blindness_LeftR_0x338_TX",
-      "expression": "l_temp_u8",
-      "direction": "write"
-    },
-    {
-      "can_signal": "BSD_L_State_0x301_TX",
-      "expression": "l_temp_u8",
-      "direction": "write"
-    },
-    {
-      "can_signal": "LCA_L_State_0x301_TX",
-      "expression": "l_temp_u8",
-      "direction": "write"
-    },
-    {
-      "can_signal": "DOW_L_State_0x301_TX",
-      "expression": "l_temp_u8",
-      "direction": "write"
-    },
-    {
-      "can_signal": "RCW_L_State_0x301_TX",
-      "expression": "l_temp_u8",
-      "direction": "write"
-    },
-    {
-      "can_signal": "RCTA_L_State_0x301_TX",
-      "expression": "l_temp_u8",
-      "direction": "write"
-    },
-    {
-      "can_signal": "RCTB_L_State_0x301_TX",
       "expression": "l_temp_u8",
       "direction": "write"
     },
@@ -739,22 +709,22 @@
     },
     {
       "can_signal": "ObjLgtSpdCurvRi",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsX",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "ObjLatSpdCurvRi",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsY",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velY",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_ObjRelVelXStd_Ri",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsXVar",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velXVar",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_ObjRelVelYStd_Ri",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsYVar",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velYVar",
       "direction": "write"
     },
     {
@@ -869,12 +839,12 @@
     },
     {
       "can_signal": "LCA_RiTgt_01_Vx",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "LCA_RiTgt_01_Vy",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velY",
       "direction": "write"
     },
     {
@@ -974,12 +944,12 @@
     },
     {
       "can_signal": "RCW_MidTgt_01_Vx",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RCW_MidTgt_01_Vy",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velY",
       "direction": "write"
     },
     {
@@ -1034,12 +1004,12 @@
     },
     {
       "can_signal": "RCTA_RiTgt_02_Vx",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RCTA_RiTgt_02_Vy",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velY",
       "direction": "write"
     },
     {
@@ -1094,12 +1064,12 @@
     },
     {
       "can_signal": "RCTB_MidTgt_02_Vx",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RCTB_MidTgt_02_Vy",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velY",
       "direction": "write"
     },
     {
@@ -1334,22 +1304,22 @@
     },
     {
       "can_signal": "ObjLgtSpdCurvLe_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsX",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "ObjLatSpdCurvLe_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsY",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velY",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_ObjRelVelXStd_Le_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsXVar",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velXVar",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_ObjRelVelYStd_Le_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsYVar",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velYVar",
       "direction": "write"
     },
     {
@@ -1464,12 +1434,12 @@
     },
     {
       "can_signal": "RSDS_LCA_LeTgt_01_Vx_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_LCA_LeTgt_01_Vy_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velY",
       "direction": "write"
     },
     {
@@ -1534,12 +1504,12 @@
     },
     {
       "can_signal": "RSDS_RCTA_LeTgt_02_Vx_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_RCTA_LeTgt_02_Vy_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velY",
       "direction": "write"
     },
     {
@@ -1604,12 +1574,12 @@
     },
     {
       "can_signal": "RSDS_RCW_MidTgt_01_Vx_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_RCW_MidTgt_01_Vy_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velY",
       "direction": "write"
     },
     {
@@ -1634,198 +1604,646 @@
     },
     {
       "can_signal": "RSDS_RCTB_MidTgt_02_Vx_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsX * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velX",
       "direction": "write"
     },
     {
       "can_signal": "RSDS_RCTB_MidTgt_02_Vy_0x301_TX",
-      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsY * System_ms2Kmh",
+      "expression": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velY",
       "direction": "write"
     }
   ],
   "signal_to_expr": {
-    "RSDS_LCAResp": "(PERInputUpdate.adasEnable.bLCAEnable == TRUE) ? 1 : 0",
-    "RSDS_DOWResp": "(PERInputUpdate.adasEnable.bDOWEnable == TRUE) ? 1 : 0",
-    "RSDS_RCWResp": "(PERInputUpdate.adasEnable.bRCWEnable == TRUE) ? 1 : 0",
-    "RSDS_RCTABrkResp": "u8tmp",
-    "RSDS_RCTAResp": "(PERInputUpdate.adasEnable.bRCTAEnable == TRUE) ? 1 : 0",
-    "CR_FCTB_Resp": "u8tmp",
-    "CR_FCTA_Resp": "(PERInputUpdate.adasEnable.bFCTAEnable == TRUE) ? 1 : 0",
-    "RSDS_CTA_Actv": "0u",
-    "BSD_LCA_warningReqRight": "l_temp_u8",
-    "DOW_warningReqRight": "l_temp_u8",
-    "RCTA_warningReqRight": "l_temp_u8_RCTA_RR",
-    "RSDS_BrkgReq": "l_temp_u8_RCTB",
-    "RSDS_BrkgTrig": "l_temp_u8_RCTB",
-    "RSDS_BrkgReqVal": "GetRctbBrakeValue()",
-    "BSD_LCA_warningReqleft": "l_temp_u8",
-    "DOW_warningReqleft": "l_temp_u8",
-    "RCTA_warningReqLeft": "l_temp_u8_RCTA_RL",
-    "RSDS_RCW_Trigger": "l_temp_u8",
-    "BSD_State": "l_temp_u8",
-    "LCA_State": "l_temp_u8",
-    "DOW_State": "l_temp_u8",
-    "RCW_State": "l_temp_u8",
-    "RCTA_State": "l_temp_u8",
-    "RCTB_State": "l_temp_u8",
-    "FCTA_Warn": "GetFctaWarningSignal()",
-    "CR_BrkgReq": "l_temp_u8_FCTB",
-    "FCTBTrig": "l_temp_u8_FCTB",
-    "CR_BrkgReqVal": "GetFctbBrakeValue()",
-    "BSD_BSDLCAWarn_LeftR_0x338_TX": "l_temp_u8",
-    "BSD_DOWWarn_LeftR_0x338_TX": "l_temp_u8",
-    "BSD_RCTAWarn_LeftR_0x338_TX": "l_temp_u8",
-    "BSD_RCWWarn_LeftR_0x338_TX": "(l_temp_u8 == 2) ? 1 : 0",
-    "BSD_CtaDeceReq_LeftR_0x338_TX": "l_temp_u8_RCTB_RL",
-    "BSD_CtaDeceleration_LeftR_0x338_TX": "l_temp_f",
-    "BSD_SDAStsLeftR_0x338_TX": "l_temp_u8",
-    "BSD_Failure_LeftR_0x338_TX": "l_temp_u8",
-    "BSD_Blindness_LeftR_0x338_TX": "l_temp_u8",
-    "BSD_L_State_0x301_TX": "l_temp_u8",
-    "LCA_L_State_0x301_TX": "l_temp_u8",
-    "DOW_L_State_0x301_TX": "l_temp_u8",
-    "RCW_L_State_0x301_TX": "l_temp_u8",
-    "RCTA_L_State_0x301_TX": "l_temp_u8",
-    "RCTB_L_State_0x301_TX": "l_temp_u8",
-    "Front_FCTAWarn_LeftR_0x339_TX": "l_temp_u8",
-    "Front_CtaDeceReq_LeftR_0x339_TX": "l_temp_u8_RCTB_RL",
-    "Front_CtaDeceleration_LeftR_0x339_TX": "l_temp_f",
-    "Front_SDAStsLeftR_0x339_TX": "l_temp_u8",
-    "Front_Failure_LeftR_0x339_TX": "l_temp_u8",
-    "Front_Blindness_LeftR_0x339_TX": "l_temp_u8",
-    "RSDS_IPSoundReq": "SoundU8",
-    "RSDS_LEDLightReqRight": "max_right",
-    "RSDS_LEDLightReqLeft": "max_left",
-    "RSDS_TrailerSts": "(DIDTrailerSts() == TRUE) ? 1u : 0u",
-    "RSDS_ErrSts": "(ErrorSDASts == TRUE) ? 1u : 0U",
-    "FCTA_B_FuncSts": "(FCTABErrorSts == TRUE) ? 1u : 0U",
-    "CR_ErrSts": "(FCTABErrorSts == TRUE) ? 1u : 0U",
-    "RSDS_Brk_ErrSts": "0",
-    "RSDS_BliSts": "Blind_LED",
-    "CR_BliSts": "Front_Blind_LED",
-    "LeTarSts": "u8tmp",
-    "ObjStsLe": "u8tmp",
-    "ObjLgtPosnCurvLe": "ftmp",
-    "ObjLatPosnCurvLe": "ftmp",
-    "RSDS_ObjDistXStd_Le": "ftmp",
-    "RSDS_ObjDistYStd_Le": "ftmp",
-    "ObjLgtSpdCurvLe": "ftmp",
-    "ObjLatSpdCurvLe": "ftmp",
-    "RSDS_ObjRelVelXStd_Le": "ftmp",
-    "RSDS_ObjRelVelYStd_Le": "ftmp",
-    "RSDS_ObjRelAccelX_Le": "ftmp",
-    "RSDS_ObjRelAccelY_Le": "ftmp",
-    "RSDS_ObjRAccelXStd_Le": "ftmp",
-    "RSDS_ObjRAccelYStd_Le": "ftmp",
-    "ObjTTCLe": "ftmp",
-    "ObjLenLe": "u8tmp",
-    "ObjWidthLe": "ftmp",
-    "ObjStatyLe": "u8tmp",
-    "ZoneIndLe": "u8tmp",
-    "ObjIDLe": "u8tmp",
-    "RSDS_LeTgt_01": "u8tmp",
-    "RSDS_LeTgt_01_dx": "ftmp",
-    "RSDS_LeTgt_01_dy": "ftmp",
-    "BSD_LCA_Left_TTC": "ftmp",
-    "LCA_LeTgt_01_Type": "u8tmp",
-    "LCA_LeTgt_01_Vx": "ftmp",
-    "LCA_LeTgt_01_Vy": "ftmp",
-    "RSDS_LeTgt_02": "u8tmp",
-    "RSDS_LeTgt_02_dx": "ftmp",
-    "RSDS_LeTgt_02_dy": "ftmp",
-    "RCTA_LeTgt_02_Type": "u8tmp",
-    "RCTA_LeTgt_02_Vx": "ftmp",
-    "RCTA_LeTgt_02_Vy": "ftmp",
-    "RiTarSts": "u8tmp_RiTarSts",
-    "ObjStsRi": "u8tmp_ObjStsRi",
-    "ObjLgtPosnCurvRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distX",
-    "ObjLatPosnCurvRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distY",
-    "RSDS_ObjDistXStd_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distXVar",
-    "RSDS_ObjDistYStd_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distYVar",
-    "ObjLgtSpdCurvRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsX",
-    "ObjLatSpdCurvRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsY",
-    "RSDS_ObjRelVelXStd_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsXVar",
-    "RSDS_ObjRelVelYStd_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velAbsYVar",
-    "RSDS_ObjRelAccelX_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelX",
-    "RSDS_ObjRelAccelY_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelY",
-    "RSDS_ObjRAccelXStd_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelXVar",
-    "RSDS_ObjRAccelYStd_Ri": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelYVar",
-    "ObjTTCRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].fTTC",
-    "ObjRinRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].length",
-    "ObjWidthRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].width",
-    "ObjStatyRi": "u8tmp",
-    "ZoneIndRi": "u8tmp",
-    "ObjIDRi": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].objID",
-    "RSDS_RiTgt_01": "1",
-    "RSDS_RiTgt_01_dx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].distX",
-    "RSDS_RiTgt_01_dy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].distY",
-    "BSD_LCA_Right_TTC": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].fTTC",
-    "LCA_RiTgt_01_Type": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].objType",
-    "LCA_RiTgt_01_Vx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velAbsX * System_ms2Kmh",
-    "LCA_RiTgt_01_Vy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velAbsY * System_ms2Kmh",
-    "RSDS_MidTgt_01": "1",
-    "RSDS_MidTgt_01_dx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distX",
-    "RSDS_MidTgt_01_dy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distY",
-    "RCW_TTC": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].fTTC",
-    "RCW_MidTgt_01_Type": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].objType",
-    "RCW_MidTgt_01_Vx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsX * System_ms2Kmh",
-    "RCW_MidTgt_01_Vy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsY * System_ms2Kmh",
-    "RSDS_RiTgt_02": "1",
-    "RSDS_RiTgt_02_dx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].distX",
-    "RSDS_RiTgt_02_dy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].distY",
-    "RCTA_RiTgt_02_Type": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].objType",
-    "RCTA_RiTgt_02_Vx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velAbsX * System_ms2Kmh",
-    "RCTA_RiTgt_02_Vy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velAbsY * System_ms2Kmh",
-    "RSDS_MidTgt_02": "1",
-    "RSDS_MidTgt_02_dx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].distX",
-    "RSDS_MidTgt_02_dy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].distY",
-    "RCTB_MidTgt_02_Type": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].objType",
-    "RCTB_MidTgt_02_Vx": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsX * System_ms2Kmh",
-    "RCTB_MidTgt_02_Vy": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsY * System_ms2Kmh",
-    "RCTA_B_TTC": "rcta_b_ttc_min",
-    "LeTarSts_0x301_TX": "u8tmp_LeTarSts",
-    "ObjStsLe_0x301_TX": "u8tmp_ObjStsLe",
-    "ObjLgtPosnCurvLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distX",
-    "ObjLatPosnCurvLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distY",
-    "RSDS_ObjDistXStd_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distXVar",
-    "RSDS_ObjDistYStd_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distYVar",
-    "ObjLgtSpdCurvLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsX",
-    "ObjLatSpdCurvLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsY",
-    "RSDS_ObjRelVelXStd_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsXVar",
-    "RSDS_ObjRelVelYStd_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velAbsYVar",
-    "RSDS_ObjRelAccelX_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelX",
-    "RSDS_ObjRelAccelY_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelY",
-    "RSDS_ObjRAccelXStd_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelXVar",
-    "RSDS_ObjRAccelYStd_Le_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelYVar",
-    "ObjTTCLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].fTTC",
-    "ObjLenLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].length",
-    "ObjWidthLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].width",
-    "ObjStatyLe_0x301_TX": "u8tmp",
-    "ZoneIndLe_0x301_TX": "u8tmp",
-    "ObjIDLe_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].objID",
-    "RSDS_LeTgt_01_0x301_TX": "1",
-    "RSDS_LeTgt_01_dx_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].distX",
-    "RSDS_LeTgt_01_dy_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].distY",
-    "BSD_LCA_Left_TTC_0x338_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].fTTC",
-    "RSDS_LCA_LeTgt_01_Type_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].objType",
-    "RSDS_LCA_LeTgt_01_Vx_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velAbsX * System_ms2Kmh",
-    "RSDS_LCA_LeTgt_01_Vy_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velAbsY * System_ms2Kmh",
-    "RSDS_LeTgt_02_0x301_TX": "1",
-    "RSDS_LeTgt_02_dx_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].distX",
-    "RSDS_LeTgt_02_dy_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].distY",
-    "RCTA_B__L__TTC_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].fTTC",
-    "RSDS_RCTA_LeTgt_02_Type_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].objType",
-    "RSDS_RCTA_LeTgt_02_Vx_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velAbsX * System_ms2Kmh",
-    "RSDS_RCTA_LeTgt_02_Vy_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velAbsY * System_ms2Kmh",
-    "RSDS_MidTgt_01_L_0x301_TX": "1",
-    "RSDS_MidTgt_01_dx_L_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distX",
-    "RSDS_MidTgt_01_dy_L_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distY",
-    "RCW_TTC_0x338_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].fTTC",
-    "RSDS_RCW_MidTgt_01_Type_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].objType",
-    "RSDS_RCW_MidTgt_01_Vx_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsX * System_ms2Kmh",
-    "RSDS_RCW_MidTgt_01_Vy_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velAbsY * System_ms2Kmh",
-    "RSDS_RCTB_MidTgt_02_Type_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].objType",
-    "RSDS_RCTB_MidTgt_02_Vx_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsX * System_ms2Kmh",
-    "RSDS_RCTB_MidTgt_02_Vy_0x301_TX": "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velAbsY * System_ms2Kmh"
+    "RSDS_LCAResp": [
+      "(PERInputUpdate.adasEnable.bLCAEnable == TRUE) ? 1 : 0"
+    ],
+    "RSDS_DOWResp": [
+      "(PERInputUpdate.adasEnable.bDOWEnable == TRUE) ? 1 : 0"
+    ],
+    "RSDS_RCWResp": [
+      "(PERInputUpdate.adasEnable.bRCWEnable == TRUE) ? 1 : 0"
+    ],
+    "RSDS_RCTABrkResp": [
+      "(PERInputUpdate.adasEnable.bRCTBEnable == TRUE) ? 1 : 0",
+      "u8tmp"
+    ],
+    "RSDS_RCTAResp": [
+      "0",
+      "(PERInputUpdate.adasEnable.bRCTAEnable == TRUE) ? 1 : 0"
+    ],
+    "CR_FCTB_Resp": [
+      "(PERInputUpdate.adasEnable.bFCTBEnable == TRUE) ? 1 : 0",
+      "u8tmp"
+    ],
+    "CR_FCTA_Resp": [
+      "0",
+      "(PERInputUpdate.adasEnable.bFCTAEnable == TRUE) ? 1 : 0"
+    ],
+    "RSDS_CTA_Actv": [
+      "1u",
+      "0u"
+    ],
+    "BSD_LCA_warningReqRight": [
+      "l_temp_u8"
+    ],
+    "DOW_warningReqRight": [
+      "l_temp_u8"
+    ],
+    "RCTA_warningReqRight": [
+      "l_temp_u8_RCTA_RR"
+    ],
+    "RSDS_BrkgReq": [
+      "l_temp_u8_RCTB"
+    ],
+    "RSDS_BrkgTrig": [
+      "l_temp_u8_RCTB"
+    ],
+    "RSDS_BrkgReqVal": [
+      "GetRctbBrakeValue()"
+    ],
+    "BSD_LCA_warningReqleft": [
+      "l_temp_u8"
+    ],
+    "DOW_warningReqleft": [
+      "l_temp_u8"
+    ],
+    "RCTA_warningReqLeft": [
+      "l_temp_u8_RCTA_RL"
+    ],
+    "RSDS_RCW_Trigger": [
+      "(l_temp_u8 == 2) ? 1 : 0"
+    ],
+    "BSD_State": [
+      "l_temp_u8"
+    ],
+    "LCA_State": [
+      "l_temp_u8"
+    ],
+    "DOW_State": [
+      "l_temp_u8"
+    ],
+    "RCW_State": [
+      "l_temp_u8"
+    ],
+    "RCTA_State": [
+      "l_temp_u8"
+    ],
+    "RCTB_State": [
+      "l_temp_u8"
+    ],
+    "FCTA_Warn": [
+      "GetFctaWarningSignal()"
+    ],
+    "CR_BrkgReq": [
+      "l_temp_u8_FCTB"
+    ],
+    "FCTBTrig": [
+      "l_temp_u8_FCTB"
+    ],
+    "CR_BrkgReqVal": [
+      "GetFctbBrakeValue()"
+    ],
+    "BSD_BSDLCAWarn_LeftR_0x338_TX": [
+      "l_temp_u8"
+    ],
+    "BSD_DOWWarn_LeftR_0x338_TX": [
+      "l_temp_u8"
+    ],
+    "BSD_RCTAWarn_LeftR_0x338_TX": [
+      "l_temp_u8"
+    ],
+    "BSD_RCWWarn_LeftR_0x338_TX": [
+      "(l_temp_u8 == 2) ? 1 : 0"
+    ],
+    "BSD_CtaDeceReq_LeftR_0x338_TX": [
+      "l_temp_u8_RCTB_RL"
+    ],
+    "BSD_CtaDeceleration_LeftR_0x338_TX": [
+      "l_temp_f"
+    ],
+    "BSD_SDAStsLeftR_0x338_TX": [
+      "l_temp_u8"
+    ],
+    "BSD_Failure_LeftR_0x338_TX": [
+      "l_temp_u8"
+    ],
+    "BSD_Blindness_LeftR_0x338_TX": [
+      "l_temp_u8"
+    ],
+    "Front_FCTAWarn_LeftR_0x339_TX": [
+      "l_temp_u8"
+    ],
+    "Front_CtaDeceReq_LeftR_0x339_TX": [
+      "l_temp_u8_RCTB_RL"
+    ],
+    "Front_CtaDeceleration_LeftR_0x339_TX": [
+      "l_temp_f"
+    ],
+    "Front_SDAStsLeftR_0x339_TX": [
+      "l_temp_u8"
+    ],
+    "Front_Failure_LeftR_0x339_TX": [
+      "l_temp_u8"
+    ],
+    "Front_Blindness_LeftR_0x339_TX": [
+      "l_temp_u8"
+    ],
+    "RSDS_IPSoundReq": [
+      "SoundU8"
+    ],
+    "RSDS_LEDLightReqRight": [
+      "max_right"
+    ],
+    "RSDS_LEDLightReqLeft": [
+      "max_left"
+    ],
+    "RSDS_TrailerSts": [
+      "(DIDTrailerSts() == TRUE) ? 1u : 0u"
+    ],
+    "RSDS_ErrSts": [
+      "(ErrorSDASts == TRUE) ? 1u : 0U"
+    ],
+    "FCTA_B_FuncSts": [
+      "(FCTABErrorSts == TRUE) ? 1u : 0U"
+    ],
+    "CR_ErrSts": [
+      "(FCTABErrorSts == TRUE) ? 1u : 0U"
+    ],
+    "RSDS_Brk_ErrSts": [
+      "0"
+    ],
+    "RSDS_BliSts": [
+      "Blind_LED"
+    ],
+    "CR_BliSts": [
+      "Front_Blind_LED"
+    ],
+    "LeTarSts": [
+      "u8tmp"
+    ],
+    "ObjStsLe": [
+      "u8tmp"
+    ],
+    "ObjLgtPosnCurvLe": [
+      "ftmp"
+    ],
+    "ObjLatPosnCurvLe": [
+      "ftmp"
+    ],
+    "RSDS_ObjDistXStd_Le": [
+      "ftmp"
+    ],
+    "RSDS_ObjDistYStd_Le": [
+      "ftmp"
+    ],
+    "ObjLgtSpdCurvLe": [
+      "ftmp"
+    ],
+    "ObjLatSpdCurvLe": [
+      "ftmp"
+    ],
+    "RSDS_ObjRelVelXStd_Le": [
+      "ftmp"
+    ],
+    "RSDS_ObjRelVelYStd_Le": [
+      "ftmp"
+    ],
+    "RSDS_ObjRelAccelX_Le": [
+      "ftmp"
+    ],
+    "RSDS_ObjRelAccelY_Le": [
+      "ftmp"
+    ],
+    "RSDS_ObjRAccelXStd_Le": [
+      "ftmp"
+    ],
+    "RSDS_ObjRAccelYStd_Le": [
+      "ftmp"
+    ],
+    "ObjTTCLe": [
+      "ftmp"
+    ],
+    "ObjLenLe": [
+      "u8tmp"
+    ],
+    "ObjWidthLe": [
+      "ftmp"
+    ],
+    "ObjStatyLe": [
+      "u8tmp"
+    ],
+    "ZoneIndLe": [
+      "u8tmp"
+    ],
+    "ObjIDLe": [
+      "u8tmp"
+    ],
+    "RSDS_LeTgt_01": [
+      "u8tmp"
+    ],
+    "RSDS_LeTgt_01_dx": [
+      "ftmp"
+    ],
+    "RSDS_LeTgt_01_dy": [
+      "ftmp"
+    ],
+    "BSD_LCA_Left_TTC": [
+      "ftmp"
+    ],
+    "LCA_LeTgt_01_Type": [
+      "u8tmp"
+    ],
+    "LCA_LeTgt_01_Vx": [
+      "ftmp"
+    ],
+    "LCA_LeTgt_01_Vy": [
+      "ftmp"
+    ],
+    "RSDS_LeTgt_02": [
+      "u8tmp"
+    ],
+    "RSDS_LeTgt_02_dx": [
+      "ftmp"
+    ],
+    "RSDS_LeTgt_02_dy": [
+      "ftmp"
+    ],
+    "RCTA_LeTgt_02_Type": [
+      "u8tmp"
+    ],
+    "RCTA_LeTgt_02_Vx": [
+      "ftmp"
+    ],
+    "RCTA_LeTgt_02_Vy": [
+      "ftmp"
+    ],
+    "RiTarSts": [
+      "u8tmp_RiTarSts"
+    ],
+    "ObjStsRi": [
+      "u8tmp_ObjStsRi"
+    ],
+    "ObjLgtPosnCurvRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distX"
+    ],
+    "ObjLatPosnCurvRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distY"
+    ],
+    "RSDS_ObjDistXStd_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distXVar"
+    ],
+    "RSDS_ObjDistYStd_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].distYVar"
+    ],
+    "ObjLgtSpdCurvRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velX"
+    ],
+    "ObjLatSpdCurvRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velY"
+    ],
+    "RSDS_ObjRelVelXStd_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velXVar"
+    ],
+    "RSDS_ObjRelVelYStd_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].velYVar"
+    ],
+    "RSDS_ObjRelAccelX_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelX"
+    ],
+    "RSDS_ObjRelAccelY_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelY"
+    ],
+    "RSDS_ObjRAccelXStd_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelXVar"
+    ],
+    "RSDS_ObjRAccelYStd_Ri": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].accelYVar"
+    ],
+    "ObjTTCRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].fTTC"
+    ],
+    "ObjRinRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].length"
+    ],
+    "ObjWidthRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].width"
+    ],
+    "ObjStatyRi": [
+      "0",
+      "u8tmp"
+    ],
+    "ZoneIndRi": [
+      "0",
+      "u8tmp"
+    ],
+    "ObjIDRi": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.rightObjIdx].objID"
+    ],
+    "RSDS_RiTgt_01": [
+      "0",
+      "1"
+    ],
+    "RSDS_RiTgt_01_dx": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].distX"
+    ],
+    "RSDS_RiTgt_01_dy": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].distY"
+    ],
+    "BSD_LCA_Right_TTC": [
+      "INFINITY",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].fTTC"
+    ],
+    "LCA_RiTgt_01_Type": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].objType"
+    ],
+    "LCA_RiTgt_01_Vx": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velX"
+    ],
+    "LCA_RiTgt_01_Vy": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightObjIdx].velY"
+    ],
+    "RSDS_MidTgt_01": [
+      "0",
+      "u8tmp",
+      "1"
+    ],
+    "RSDS_MidTgt_01_dx": [
+      "0",
+      "ftmp",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distX"
+    ],
+    "RSDS_MidTgt_01_dy": [
+      "0",
+      "ftmp",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distY"
+    ],
+    "RCW_TTC": [
+      "INFINITY",
+      "ftmp",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].fTTC"
+    ],
+    "RCW_MidTgt_01_Type": [
+      "0",
+      "u8tmp",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].objType"
+    ],
+    "RCW_MidTgt_01_Vx": [
+      "0",
+      "ftmp",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velX"
+    ],
+    "RCW_MidTgt_01_Vy": [
+      "0",
+      "ftmp",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velY"
+    ],
+    "RSDS_RiTgt_02": [
+      "0",
+      "1"
+    ],
+    "RSDS_RiTgt_02_dx": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].distX"
+    ],
+    "RSDS_RiTgt_02_dy": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].distY"
+    ],
+    "RCTA_RiTgt_02_Type": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].objType"
+    ],
+    "RCTA_RiTgt_02_Vx": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velX"
+    ],
+    "RCTA_RiTgt_02_Vy": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.rightSecObjIdx].velY"
+    ],
+    "RSDS_MidTgt_02": [
+      "0",
+      "1"
+    ],
+    "RSDS_MidTgt_02_dx": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].distX"
+    ],
+    "RSDS_MidTgt_02_dy": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].distY"
+    ],
+    "RCTB_MidTgt_02_Type": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].objType"
+    ],
+    "RCTB_MidTgt_02_Vx": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velX"
+    ],
+    "RCTB_MidTgt_02_Vy": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velY"
+    ],
+    "RCTA_B_TTC": [
+      "rcta_b_ttc_min"
+    ],
+    "LeTarSts_0x301_TX": [
+      "0",
+      "u8tmp_LeTarSts"
+    ],
+    "ObjStsLe_0x301_TX": [
+      "0",
+      "u8tmp_ObjStsLe"
+    ],
+    "ObjLgtPosnCurvLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distX"
+    ],
+    "ObjLatPosnCurvLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distY"
+    ],
+    "RSDS_ObjDistXStd_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distXVar"
+    ],
+    "RSDS_ObjDistYStd_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].distYVar"
+    ],
+    "ObjLgtSpdCurvLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velX"
+    ],
+    "ObjLatSpdCurvLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velY"
+    ],
+    "RSDS_ObjRelVelXStd_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velXVar"
+    ],
+    "RSDS_ObjRelVelYStd_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].velYVar"
+    ],
+    "RSDS_ObjRelAccelX_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelX"
+    ],
+    "RSDS_ObjRelAccelY_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelY"
+    ],
+    "RSDS_ObjRAccelXStd_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelXVar"
+    ],
+    "RSDS_ObjRAccelYStd_Le_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].accelYVar"
+    ],
+    "ObjTTCLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].fTTC"
+    ],
+    "ObjLenLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].length"
+    ],
+    "ObjWidthLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].width"
+    ],
+    "ObjStatyLe_0x301_TX": [
+      "0",
+      "u8tmp"
+    ],
+    "ZoneIndLe_0x301_TX": [
+      "0",
+      "u8tmp"
+    ],
+    "ObjIDLe_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objELKInfo.leftObjIdx].objID"
+    ],
+    "RSDS_LeTgt_01_0x301_TX": [
+      "0",
+      "1"
+    ],
+    "RSDS_LeTgt_01_dx_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].distX"
+    ],
+    "RSDS_LeTgt_01_dy_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].distY"
+    ],
+    "BSD_LCA_Left_TTC_0x338_TX": [
+      "INFINITY",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].fTTC"
+    ],
+    "RSDS_LCA_LeTgt_01_Type_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].objType"
+    ],
+    "RSDS_LCA_LeTgt_01_Vx_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velX"
+    ],
+    "RSDS_LCA_LeTgt_01_Vy_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftObjIdx].velY"
+    ],
+    "RSDS_LeTgt_02_0x301_TX": [
+      "0",
+      "1"
+    ],
+    "RSDS_LeTgt_02_dx_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].distX"
+    ],
+    "RSDS_LeTgt_02_dy_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].distY"
+    ],
+    "RCTA_B__L__TTC_0x301_TX": [
+      "INFINITY",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].fTTC"
+    ],
+    "RSDS_RCTA_LeTgt_02_Type_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].objType"
+    ],
+    "RSDS_RCTA_LeTgt_02_Vx_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velX"
+    ],
+    "RSDS_RCTA_LeTgt_02_Vy_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.leftSecObjIdx].velY"
+    ],
+    "RSDS_MidTgt_01_L_0x301_TX": [
+      "0",
+      "1"
+    ],
+    "RSDS_MidTgt_01_dx_L_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distX"
+    ],
+    "RSDS_MidTgt_01_dy_L_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].distY"
+    ],
+    "RCW_TTC_0x338_TX": [
+      "INFINITY",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].fTTC"
+    ],
+    "RSDS_RCW_MidTgt_01_Type_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].objType"
+    ],
+    "RSDS_RCW_MidTgt_01_Vx_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velX"
+    ],
+    "RSDS_RCW_MidTgt_01_Vy_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleObjIdx].velY"
+    ],
+    "RSDS_RCTB_MidTgt_02_Type_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].objType"
+    ],
+    "RSDS_RCTB_MidTgt_02_Vx_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velX"
+    ],
+    "RSDS_RCTB_MidTgt_02_Vy_0x301_TX": [
+      "0",
+      "PEROutput.objInfo.trcOutData[PEROutput.objGMWInfo.middleSecObjIdx].velY"
+    ]
   }
 }

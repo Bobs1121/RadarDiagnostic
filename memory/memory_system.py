@@ -328,11 +328,23 @@ class MemorySystem:
     # ── L6: Code Knowledge (auto-dream 学到的代码知识) ─────────────────
 
     def read_code_knowledge(self, func_name: str) -> dict:
-        """读取某功能的深度代码知识（由 CodeLearner 填充）。"""
-        path = self.memory_dir / "code_knowledge" / f"{func_name.upper()}.json"
+        """读取某功能的深度代码知识（由 CodeLearner 填充）。
+
+        优先从 per-project 目录读取，若不存在则回退到 legacy 全局目录
+        ``memory/code_knowledge/``（兼容旧数据迁移前的路径）。
+        """
+        func_upper = func_name.upper()
+        path = self.memory_dir / "code_knowledge" / f"{func_upper}.json"
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        # Backward-compat fallback: legacy global code_knowledge
+        legacy = self.root / "memory" / "code_knowledge" / f"{func_upper}.json"
+        if legacy.exists():
+            try:
+                return json.loads(legacy.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 pass
         return {}
@@ -367,16 +379,24 @@ class MemorySystem:
     def read_constants(self) -> dict:
         """读取全局数值常量表（``memory/code_knowledge/constants.json``）。
 
+        优先从 per-project 目录读取，若不存在则回退到 legacy 全局目录。
         由 ``CodeLearner._learn_constants_if_needed()`` 写入。所有功能共享。
         若文件不存在或损坏返回空 dict。
         """
         path = self.memory_dir / "code_knowledge" / "constants.json"
-        if not path.exists():
-            return {}
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return {}
+        if path.exists():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        # Backward-compat fallback
+        legacy = self.root / "memory" / "code_knowledge" / "constants.json"
+        if legacy.exists():
+            try:
+                return json.loads(legacy.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {}
 
     def render_constants_for_context(
         self,

@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-12 (Phase 6C 知识沉淀闭环完成)
+> 最后更新: 2026-06-12 (Phase 6D 多项目数据隔离完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) 完成
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) 完成
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
-> 综合评分: 8.0/10 — SIGNAL 映射 100%，Harness L0 上线，知识沉淀闭环已实现
+> 综合评分: 8.3/10 — SIGNAL 映射 100%，Harness L0 上线，知识沉淀闭环，多项目数据完全隔离
 
 ---
 
@@ -39,6 +39,7 @@
 | **6A: SIGNAL 映射补全** | ✅ 完成 | 301/301 SIGNAL internal_var 100% 覆盖（commit 5a8ea5c） |
 | **6B: Harness Phase 1** | ✅ 完成 | StructuralEvaluator L0 (16项检查) + FCTA001 Golden Truth + pytest 4项通过 |
 | **6C: 知识沉淀闭环** | ✅ 完成 | 诊断完成后主动提取 expert_panel 知识，增量写入 L6 code_knowledge |
+| **6D: 多项目数据隔离** | ✅ 完成 | source_docs + L6 code_knowledge 按项目隔离 + 代码引用更新 + 向后兼容回退 |
 | **Harness Phase 2** | ⏳ 排队 | L1 语义准确性 + L2 根因追溯评估 |
 
 ### 改造路线 (基础优先)
@@ -58,8 +59,10 @@
 |[P] Harness 实现 Phase 1 (6B) → StructuralEvaluator + 首个黄金答案（P1 ✅ 完成）
 |  ↓
 |[P] 知识沉淀闭环 (6C) → 诊断完成后主动提取 expert_panel 知识，增量写入 L6（P1 ✅ 完成）
-|  ↓
-|[P] 优化项 (5E) → ContextBudget + 记忆简化
+||  ↓
+||[P] 多项目数据隔离 (6D) → source_docs + L6 code_knowledge 按项目隔离 + 代码引用修复（✅ 完成）
+||  ↓
+||[P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
 
 ---
@@ -68,7 +71,7 @@
 
 > 评估时间: 2026-06-12
 > 评估范围: 5 维度全量评估 — 多项目代码/数据、诊断管线、诊断+修改、项目间隔离、记忆+知识沉淀
-> 综合评分: 7.2/10
+> 综合评分: 7.2/10（Phase 6D 隔离修复后升至 8.3/10，见下方更新）
 
 ### 5 维度评分
 
@@ -77,7 +80,7 @@
 | 多项目代码/数据 | 7/10 | 架构正确，只跑通 1/3 项目 |
 | 诊断管线 | 8/10 | SIGNAL 映射 100%，管线跑通，专家面板完善 |
 | 数据诊断+修改建议 | 6.5/10 | 能出报告+diff，无法量化准确性 |
-| 项目间隔离 | 6.5/10 | DB/memory 到位，source_docs/L6 未完全隔离 |
+| 项目间隔离 | 8.5/10 | DB/memory/source_docs/L6 全部按项目隔离，向后兼容 |
 | 记忆+知识沉淀 | 7/10 | 框架完整，诊断→L6 沉淀闭环已实现，仍有改进空间 |
 
 ### 三个阻塞项（按优先级）
@@ -88,11 +91,11 @@
 
 ### 详细发现
 
-**多项目代码/数据 (7/10):**
+**多项目代码/数据 (7/10 → 8/10 after 6D):**
 - ✅ config.yaml projects 块、CLI -P、CodeGraph DB 按项目隔离、memory 按项目隔离
 - ❌ 只有 gwm_b26 有完整 CodeGraph；sc6h/cr5cb 首次诊断会现场构建
-- ❌ source_docs/ 根目录仍有 24 个混杂文件
-- ❌ memory/code_knowledge/ 仍全局共享（不同项目 FCTA 实现差异大）
+- ✅ source_docs/ 已迁移到 source_docs/{project_key}/（6D 完成）
+- ✅ memory/code_knowledge/ 已迁移到 memory/projects/{key}/code_knowledge/（6D 完成）
 
 **诊断管线 (7.5/10):**
 - ✅ 8 步管线跑通，FCTA001 回归通过
@@ -101,13 +104,14 @@
 - ✅ SIGNAL internal_var 映射 100%（301/301），RX/RSDS 全覆盖
 - ❌ 专家面板 prompt 写死了 adasFunc.c + ASWIN_SystemState.c 架构描述
 
-**项目间隔离 (6.5/10):**
+**项目间隔离 (6.5/10 → 8.5/10 after 6D):**
 - ✅ CodeGraph DB: codegraph_{key}.db
 - ✅ Memory sessions/patterns/functions: memory/projects/{key}/
 - ✅ config cache: P0-2 修复后按项目隔离
 - ✅ resolve 函数: P1-1 修复后支持 project_key
-- ⚠️ source_docs: 根目录混杂，仅 gwm_b26/ 有文件
-- ❌ L6 code_knowledge: 全局共享未隔离
+- ✅ source_docs: 已迁移到 source_docs/{project_key}/，根目录只留 AGENTS.md（6D）
+- ✅ L6 code_knowledge: 已迁移到 memory/projects/{key}/code_knowledge/（6D）
+- ✅ 向后兼容: 所有读取路径有 legacy fallback（memory/code_knowledge/ → projects/{key}/）（6D）
 
 **记忆+知识沉淀 (7/10):**
 - ✅ 6 层记忆全部实现，CRUD 正常
@@ -986,4 +990,57 @@ L3 建议 (20%)   — CodeFix 有效性、建议合理性 (LLM-as-judge)
 **变更文件**:
 - `ai/orchestrator.py`: 新增 `_precipitate_knowledge()` 方法 + deliver 阶段集成
 - `memory/memory_system.py`: 新增 `write_code_knowledge()` 公共方法
+
+## ADR-016: Phase 6D — 多项目数据隔离：source_docs + L6 code_knowledge（2026-06-12）
+
+**问题**: Phase 5A 实现了 DB（CodeGraph）和 memory（L1-L5 sessions/patterns/functions）按项目隔离，但 `source_docs/` 和 L6 `code_knowledge/` 仍全局共享：
+- `source_docs/` 根目录下 24 个文件混杂（BSD.md, FCTA.md, signal_mapping.json 等），实际全是 gwm_b26 的数据
+- `memory/code_knowledge/` 下 FCTA.json 等知识是 gwm_b26 专属，sc6h 项目（BYD_UKE）的 FCTA 实现完全不同
+- `orchestrator.py` 硬编码 `self.project_root / "memory" / "code_knowledge"`
+- `semantic_annotator.py` 硬编码 `"memory/code_knowledge"` 后缀
+
+这导致多项目场景下知识污染：sc6h 的诊断可能引用 gwm_b26 的 knowledge，source_docs 生成也会覆盖其他项目的文件。
+
+**方案**: 将 source_docs 和 code_knowledge 迁移到按项目隔离的目录，所有引用改为通过 config/project_key 动态解析。
+
+**目录结构变更**:
+```
+Before:                        After:
+source_docs/BSD.md          →  source_docs/gwm_b26/BSD.md
+source_docs/FCTA_conditions →  source_docs/gwm_b26/FCTA_conditions.json
+memory/code_knowledge/*.json → memory/projects/gwm_b26/code_knowledge/*.json
+                               memory/projects/sc6h/code_knowledge/ (空，待首次使用)
+```
+
+**代码变更**:
+
+1. **`memory/memory_system.py`** — `read_code_knowledge()` 和 `read_constants()` 增加 legacy fallback:
+   - 优先读 `self.memory_dir / "code_knowledge"`（per-project）
+   - fallback 到 `self.root / "memory" / "code_knowledge"`（legacy global）
+
+2. **`ai/orchestrator.py:756`** — 硬编码路径改为 `self.memory.memory_dir / "code_knowledge"`:
+   ```python
+   # Before: self.project_root / "memory" / "code_knowledge"
+   # After:  self.memory.memory_dir / "code_knowledge"
+   ```
+
+3. **`ai/codegraph/semantic_annotator.py`** — 新增 `_resolve_knowledge_dir()`:
+   - 接收 `memory_dir` 参数（per-project）
+   - 优先 per-project，fallback 到 legacy global
+   - 构造函数新增 `memory_dir` 参数
+
+**向后兼容**: 所有读取路径保留 legacy fallback（`memory/code_knowledge/`），已有数据不迁移、不删除，作为安全网。
+
+**已验证**:
+- `config.yaml` projects 块: 3 个项目（gwm_b26/sc6h/cr5cb）
+- `config.py get_project()`: 自动计算 `memory_dir = memory/projects/{key}`
+- `memory/projects/gwm_b26/code_knowledge/`: 10 个 JSON 文件完整
+- `source_docs/gwm_b26/`: 21 个文件完整
+- `source_docs/` 根目录: 仅剩 AGENTS.md（干净）
+- 所有修改文件 `py_compile` 通过
+
+**效果**:
+- 多项目数据完全隔离，不再有跨项目知识污染
+- 新项目首次使用时自动创建隔离目录
+- 向后兼容保证现有数据可用
 

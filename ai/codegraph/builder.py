@@ -108,6 +108,9 @@ class CodeGraphBuilder:
             result.files_changed = len(changed)
 
             if not changed:
+                # Always run signal enrichment even when skipping —
+                # mapping files may have been updated independently of source code.
+                self._enrich_signal_nodes()
                 result.build_type = "skip"
                 result.duration_sec = time.time() - start
                 log.info("CodeGraph: no files changed, skipping build (%.1fs)", result.duration_sec)
@@ -731,30 +734,82 @@ class CodeGraphBuilder:
         self.conn.commit()
 
     def _enrich_signal_nodes(self):
-        """Phase 11: Enrich SIGNAL nodes with DBC/variable mapping from signal_mapping.json."""
+        """Phase 11: Enrich SIGNAL nodes with DBC/variable mapping.
+        
+        Uses both signal_mapping.json (read signals) and output_mapping.json (write signals).
+        For output signals, extracts variable names from WriteSignal expressions.
+        """
+        import re as _re
         if not self.source_docs_dir:
             return
-        mapping_path = self.source_docs_dir / "signal_mapping.json"
-        if not mapping_path.exists():
-            return
-        try:
-            import json as _json
-            mapping_data = _json.loads(mapping_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return
-
-        # Build lookup: CAN signal name -> {internal_var, can_name, can_id, ...}
-        mappings = mapping_data.get("mappings", [])
-        can_to_var: dict[str, str] = {}
+        
+        # Build combined lookup: signal_name_lower -> enrichment dict
         can_to_info: dict[str, dict] = {}
-        for m in mappings:
-            can_sig = m.get("can_signal", "")
-            int_var = m.get("internal_var", "")
-            if can_sig and int_var:
-                can_to_var[can_sig.lower()] = int_var
-                can_to_info[can_sig.lower()] = m
-
-        # Update existing SIGNAL nodes
+        
+        # 1. signal_mapping.json — ReadSignal side (internal_var already extracted)
+        mapping_path = self.source_docs_dir / "signal_mapping.json"
+        if mapping_path.exists():
+            try:
+                import json as _json
+                mapping_data = _json.loads(mapping_path.read_text(encoding="utf-8"))
+                for m in mapping_data.get("mappings", []):
+                    can_sig = m.get("can_signal", "")
+                    int_var = m.get("internal_var", "")
+                    if can_sig and int_var:
+                        can_to_info[can_sig.lower()] = m
+            except (json.JSONDecodeError, OSError):
+                pass
+        
+        # 2. output_mapping.json — WriteSignal side (extract var from expression)
+        output_path = self.source_docs_dir / "output_mapping.json"
+        if output_path.exists():
+            try:
+                import json as _json
+                output_data = _json.loads(output_path.read_text(encoding="utf-8"))
+                for m in output_data.get("mappings", []):
+                    can_sig = m.get("can_signal", "")
+                    expr = m.get("expression", "")
+                    if not can_sig:
+                        continue
+                    # Extract variable names from expression
+                    # Patterns: PERInput.xxx.yyy, g_xxx.yyy, l_temp_xxx, u8tmp_LeTarSts, simpleVar
+                    int_vars = _re.findall(
+                        r'\b([A-Za-z_]\w*(?:\.\w+){0,3})\b',
+                        expr
+                    )
+                    # Filter out keywords and literals
+                    kw = {'TRUE', 'FALSE', 'NULL', 'void', 'return', 'if', 'else',
+                          'while', 'for', 'switch', 'case', 'break', 'continue',
+                          'typedef', 'struct', 'enum', 'define', 'sizeof'}
+                    int_vars = [v for v in int_vars if v not in kw and v != can_sig]
+                    
+                    # Pick the most meaningful variable (longest dotted path, or first)
+                    int_var = ""
+                    if int_vars:
+                        # Prefer dotted paths (like PERInput.x.y) over simple vars
+                        dotted = [v for v in int_vars if '.' in v]
+                        if dotted:
+                            int_var = max(dotted, key=len)
+                        else:
+                            int_var = int_vars[0]
+                    
+                    # Only add if not already in can_to_info (read side takes precedence)
+                    key = can_sig.lower()
+                    if key not in can_to_info:
+                        can_to_info[key] = {
+                            "can_signal": can_sig,
+                            "internal_var": int_var,
+                            "expression": expr,
+                            "can_name": can_sig,
+                            "dbc_signal_name": can_sig,
+                        }
+                    elif not can_to_info[key].get("internal_var") and int_var:
+                        # Existing entry from signal_mapping but missing internal_var
+                        can_to_info[key]["internal_var"] = int_var
+            except (json.JSONDecodeError, OSError):
+                pass
+        
+        # 3. Update existing SIGNAL nodes
         rows = self.conn.execute(
             "SELECT id, name FROM nodes WHERE type='SIGNAL'"
         ).fetchall()
@@ -763,12 +818,14 @@ class CodeGraphBuilder:
         for row in rows:
             sig_id = row["id"]
             sig_name = row["name"] or ""
-            # Try to match by signal name (case-insensitive)
-            info = can_to_info.get(sig_name.lower())
+            sig_lower = sig_name.lower()
+            
+            # Try exact match first
+            info = can_to_info.get(sig_lower)
             if not info:
-                # Try matching on signal_name part (after module prefix)
+                # Try substring match (signal name may contain suffix like _RX/_TX)
                 for k, v in can_to_info.items():
-                    if k in sig_name.lower() or sig_name.lower() in k:
+                    if k in sig_lower or sig_lower in k:
                         info = v
                         break
 
@@ -798,7 +855,8 @@ class CodeGraphBuilder:
 
         self.conn.commit()
         if updated:
-            log.info("CodeGraph: enriched %d SIGNAL nodes with data-variable mapping", updated)
+            log.info("CodeGraph: enriched %d SIGNAL nodes (total mapping sources: %d)", 
+                     updated, len(can_to_info))
 
     # ── Internal: Purge Changed ─────────────────────────────────────────
 
@@ -827,9 +885,16 @@ class CodeGraphBuilder:
         # Also find all nodes that belong to these files (signals, vars defined in them)
         all_node_ids = list(file_ids) + func_ids
 
-        # Edges involving these nodes
+        # Edges involving these nodes — also catch edges FROM outside TO these nodes
         if all_node_ids:
             all_placeholders = ",".join("?" * len(all_node_ids))
+            
+            # Remove node_semantics first (FK constraint: node_id -> nodes.id)
+            self.conn.execute(
+                f"DELETE FROM node_semantics WHERE node_id IN ({all_placeholders})",
+                all_node_ids,
+            )
+            
             edge_count = self.conn.execute(
                 f"SELECT COUNT(*) FROM edges WHERE source IN ({all_placeholders}) OR target IN ({all_placeholders})",
                 all_node_ids + all_node_ids,

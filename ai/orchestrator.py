@@ -753,7 +753,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
         source_root = Path(self.config["paths"]["source_code"])
         docs_dir = self.source_docs_dir
-        knowledge_dir = self.project_root / "memory" / "code_knowledge"
+        knowledge_dir = self.memory.memory_dir / "code_knowledge"
 
         try:
             sig_mapping = extract_signal_mapping(source_root, docs_dir)
