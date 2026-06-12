@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-12 (Phase 6A SIGNAL 映射 100% 完成)
+> 最后更新: 2026-06-12 (Phase 6B Harness Phase 1 完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) 完成
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) 完成
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
-> 综合评分: 7.2/10 — SIGNAL 映射盲区已消除，Harness 成为下一个瓶颈
+> 综合评分: 7.8/10 — SIGNAL 映射 100%，Harness L0 结构评估已上线，可量化验证诊断质量
 
 ---
 
@@ -37,7 +37,8 @@
 | **5D: 管线精简** | ✅ 完成 | 15 步 → 8 步，evidence 步并行化 Conditions+TPE |
 | **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
 | **6A: SIGNAL 映射补全** | ✅ 完成 | 301/301 SIGNAL internal_var 100% 覆盖（commit 5a8ea5c） |
-| **Harness: 评估体系** | 📋 设计调研完成 | 4 层级 L0-L3 设计完成，待实现 Phase 1 (6B) |
+| **6B: Harness Phase 1** | ✅ 完成 | StructuralEvaluator L0 (16项检查) + FCTA001 Golden Truth + pytest 4项通过 |
+| **Harness Phase 2** | ⏳ 排队 | L1 语义准确性 + L2 根因追溯评估 |
 | **知识闭环** | ⏳ 排队 | 诊断→知识主动沉淀机制 |
 
 ### 改造路线 (基础优先)
@@ -924,4 +925,28 @@ L3 建议 (20%)   — CodeFix 有效性、建议合理性 (LLM-as-judge)
 **结果**: 301/301 信号 100% 覆盖，诊断管线 BLF↔C 变量链路完整。
 
 **提交**: `5a8ea5c`
+
+## ADR-014: Harness Phase 1 — 诊断质量结构化评估（2026-06-12）
+
+**问题**: 诊断管线输出质量无法量化验证，无法判断报告是否完整、证据链是否充分、根因是否可靠。
+
+**设计调研**: 参考 SWE-bench、DeepEval 等开源评估框架，采用 4 层级设计：
+- L0: 结构性评估（确定性规则）
+- L1: 语义准确性（黄金答案对照）
+- L2: 根因追溯（因果链一致性）
+- L3: 可操作性（修复建议质量）
+
+**Phase 1 实现 (L0)**:
+- `StructuralEvaluator`: 16 项检查，覆盖 4 个维度
+  - 4 个必备章节（根因、条件、证据链、建议）
+  - 3 个关键元数据（功能、现象、预期）
+  - 4 个证据链字段（信号名、时间戳、值、来源）
+  - 1 个置信度格式
+- `HarnessRunner`: 统一入口，支持 CLI / pytest / 批量运行
+- `FCTA001_ground_truth.json`: 首条黄金答案，含根因/条件/证据/建议
+- pytest 测试 4 项全部通过，L0 评分 1.0/1.0
+
+**结果**: 诊断质量首次可量化，L0 通过率作为 pipeline CI 门控。
+
+**提交**: `47904a1`
 
