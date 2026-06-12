@@ -646,6 +646,46 @@ After:
 
 ---
 
+## Post-Assessment: 新 P0/P1 任务（2026-06-12 评估后追加）
+
+全量评估（6.8/10）识别出 3 个阻塞项，需要作为新增 Phase 6 处理：
+
+### Phase 6A: SIGNAL internal_var 映射收尾 (P0 — 1 天)
+
+**背景**: 301 个 SIGNAL 节点中 277 个已映射（92%），剩余 24 个未映射是诊断盲区。
+
+**目标**: 补全全部 301 个 SIGNAL 的 `internal_var` 映射。
+
+**方法**: 参照已完成映射的 pattern（Rte 读取 → SWC 变量），通过代码追踪补全。
+
+### Phase 6B: Harness Phase 1 实现 (P1 — 3 天)
+
+**背景**: Harness 设计调研已完成（`docs/technical/harness-design-research.md`），代码未实现。
+
+**目标**: 实现 `harness/` 结构 + `StructuralEvaluator` + 首个黄金答案案例。
+
+**参考文档**: `docs/technical/harness-design-research.md`
+
+### Phase 6C: 知识沉淀闭环 (P1 — 2 天)
+
+**背景**: Dream 模块被动触发条件苛刻（4h + 2 session），实际很少触发。缺少"诊断→知识"闭环。
+
+**目标**: 诊断完成后主动更新 L6 `code_knowledge`，优化 Dream 触发条件。
+
+### Phase 6D: source_docs 清理 + L6 按项目隔离 (P1 — 1 天)
+
+**背景**: `source_docs/` 根目录 24 个混杂文件；L6 `code_knowledge/` 全局共享。
+
+**目标**: 所有项目知识按 `source_docs/{project}/` 和 `memory/code_knowledge/{project}/` 隔离。
+
+### Phase 6E: 专家面板 prompt 多项目适配 (P2 — 1 天)
+
+**背景**: Expert panel prompt 写死了 `adasFunc.c` + `ASWIN_SystemState.c`，其他项目不适用。
+
+**目标**: prompt 中架构描述改为从 CodeGraph/配置动态生成，适配任意项目。
+
+---
+
 ## 时间线
 
 ```
@@ -655,6 +695,13 @@ Week 3:  Phase 5D (管线精简) + 5E (优化项) — 管线精简 2 天 + 优�
 ```
 
 **Phase 5 总工期: 12 天**
+
+**Phase 6 总工期: 8 天**
+```
+Week 1:  6A SIGNAL 映射收尾 (P0) + 6D source_docs 清理 — 2 天
+Week 2:  6B Harness Phase 1 (P1) + 6C 知识闭环 — 5 天
+Week 3:  6E 专家面板 prompt 多项目适配 (P2) — 1 天
+```
 
 ---
 

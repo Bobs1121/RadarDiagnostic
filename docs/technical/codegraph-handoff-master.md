@@ -1,9 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-11 (P0-1/2/3 + P1-1/2 全部完成)
+> 最后更新: 2026-06-12 (全量评估完成，确定下阶段优先级)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + P0/P1修复 完成，5E 待开始
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + P0/P1修复 + Harness调研 完成
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
+> 综合评分: 6.8/10 — 原型可用，距生产可靠还有 3 个阻塞项
 
 ---
 
@@ -35,6 +36,8 @@
 | **5C: 语义层填充** | ⏳ 冷启动完成 | Cold start 255 行（8 模块 × 4-5 焦点），LLM 全量标注未执行（LLM API 阻塞） |
 | **5D: 管线精简** | ✅ 完成 | 15 步 → 8 步，evidence 步并行化 Conditions+TPE |
 | **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
+| **Harness: 评估体系** | 📋 设计调研完成 | 4 层级 L0-L3 设计完成，待实现 Phase 1 |
+| **知识闭环** | ⏳ 排队 | 诊断→知识主动沉淀机制 |
 
 ### 改造路线 (基础优先)
 
@@ -48,8 +51,72 @@
   ↓
 [x] 管线精简 (5D) → 15→8 步完成，evidence 并行化
   ↓
+[P] SIGNAL 映射补全 → 301 SIGNAL 的 internal_var 填充（P0，已修复 92%）
+  ↓
+[P] Harness 实现 Phase 1 → StructuralEvaluator + 首个黄金答案（P1）
+  ↓
+[P] 知识沉淀闭环 → 诊断完成后主动沉淀（P1）
+  ↓
 [P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
+
+---
+
+## 2026-06-12 全量评估报告
+
+> 评估时间: 2026-06-12
+> 评估范围: 5 维度全量评估 — 多项目代码/数据、诊断管线、诊断+修改、项目间隔离、记忆+知识沉淀
+> 综合评分: 6.8/10
+
+### 5 维度评分
+
+| 维度 | 评分 | 一句话 |
+|------|------|--------|
+| 多项目代码/数据 | 7/10 | 架构正确，只跑通 1/3 项目 |
+| 诊断管线 | 7.5/10 | 能跑，SIGNAL 映射缺失拉低质量 |
+| 数据诊断+修改建议 | 6.5/10 | 能出报告+diff，无法量化准确性 |
+| 项目间隔离 | 6.5/10 | DB/memory 到位，source_docs/L6 未完全隔离 |
+| 记忆+知识沉淀 | 5.5/10 | 框架完整但被动触发、无闭环 |
+
+### 三个阻塞项（按优先级）
+
+1. **SIGNAL internal_var 映射（P0）** — 已修复至 92%（277/301），但仍有 24 个未映射。这是诊断的核心盲区，BLF CAN 信号无法关联 C 变量，差距分析做不了。
+2. **Harness 实现（P1）** — 设计调研已完成，但不实现等于没有。没有评估体系就无法量化"诊断准不准"。
+3. **知识沉淀闭环（P1）** — Dream 模块设计不错但触发条件太苛刻（4h + 2 session）。需改为"诊断完成后主动沉淀"模式。
+
+### 详细发现
+
+**多项目代码/数据 (7/10):**
+- ✅ config.yaml projects 块、CLI -P、CodeGraph DB 按项目隔离、memory 按项目隔离
+- ❌ 只有 gwm_b26 有完整 CodeGraph；sc6h/cr5cb 首次诊断会现场构建
+- ❌ source_docs/ 根目录仍有 24 个混杂文件
+- ❌ memory/code_knowledge/ 仍全局共享（不同项目 FCTA 实现差异大）
+
+**诊断管线 (7.5/10):**
+- ✅ 8 步管线跑通，FCTA001 回归通过
+- ✅ 5 专家 × 3 轮 LangGraph，prompt 外部化
+- ✅ 证据步并行化，CodeFixEngine 生成 diff
+- ❌ SIGNAL internal_var 映射 0→92%（修复后仍有 24 个遗漏）
+- ❌ 专家面板 prompt 写死了 adasFunc.c + ASWIN_SystemState.c 架构描述
+
+**项目间隔离 (6.5/10):**
+- ✅ CodeGraph DB: codegraph_{key}.db
+- ✅ Memory sessions/patterns/functions: memory/projects/{key}/
+- ✅ config cache: P0-2 修复后按项目隔离
+- ✅ resolve 函数: P1-1 修复后支持 project_key
+- ⚠️ source_docs: 根目录混杂，仅 gwm_b26/ 有文件
+- ❌ L6 code_knowledge: 全局共享未隔离
+
+**记忆+知识沉淀 (5.5/10):**
+- ✅ 6 层记忆全部实现，CRUD 正常
+- ✅ AutoDream 4 阶段实现完整
+- ✅ CodeLearner 支持 4 个焦点
+- ✅ L4 session 读写闭环完成
+- ❌ Dream 被动触发（4h + 2 session），实际很少触发
+- ❌ 没有诊断→知识闭环（diagnose 后不自动更新 L6）
+- ❌ 6 层过多，L4/L5 功能重叠
+- ❌ 记忆无老化机制
+- ❌ 记忆数据量少：gwm_b26 仅 2 session + 1 function + 1 patterns.json
 
 ---
 
@@ -80,9 +147,9 @@
 - `docs/technical/codegraph-handoff-master.md` — 更新状态
 
 ### 评分更新
-- 记忆机制：6/10 → **7/10**
+- 记忆机制：7/10
 - SIGNAL 映射：0% → **92%**（277/301）
-- 综合评估：6.8/10 → **7.2/10**
+- **综合评估：6.8/10**（全量评估后修正，原 7.2/10 偏高）
 
 ---
 
@@ -100,8 +167,8 @@
 - 保留内部子步骤名称：`source_docs`、`tpe`、`suppression`、`output_signals`
 
 ### 评分更新
-- 多项目适配性：5/10 → **6/10**（resolve 函数隔离性提升）
-- 综合评估：7.2/10 → **7.3/10**
+- 多项目适配性：6/10（resolve 函数隔离性提升）
+- **综合评估：6.8/10**（全量评估后确认）
 
 ---
 
@@ -528,22 +595,23 @@ prompts/expert_panel/
 
 ## 已知问题与待办
 
-### 高优先级 (影响诊断准确率)
+### 高优先级 (影响诊断准确率) — 三个阻塞项
 
 | # | 问题 | 状态 | 计划 Phase |
 |---|------|------|-----------|
-| ~~1~~ | ~~**项目配置硬编码** — config.yaml 写死 GWM_B26~~ | ~~已解决~~ | 5A.1 ✅ |
-| 2 | **变量 false positives** — 797 变量中大量局部变量 | 🔜 下一步 | 5B |
-| ~~3~~ | ~~**数据-变量映射不完整** — BLF signal → C 变量链路不完整~~ | ~~基础设施就绪~~ | 5A.5 ✅ |
+| 1 | **SIGNAL internal_var 映射不完整** — 277/301 已修复，仍缺 24 个 | 🟡 92% | P0-1（剩余收尾） |
+| 2 | **Harness 评估体系未实现** — 设计调研完成，代码未写 | ⏳ 排队 | P1-Harness |
+| 3 | **知识沉淀无闭环** — Dream 被动触发，诊断后不更新 L6 | ⏳ 排队 | P1-Knowledge |
 | 4 | **CodeGraph 语义层为空** — semantic_annotations 表空 | ⏳ 排队 | 5C |
 
 ### 中优先级 (影响效率和可维护性)
 
 | # | 问题 | 状态 | 计划 Phase |
 |---|------|------|-----------|
-| 5 | 管线 15 步过多 | ⏳ 排队 | 5D |
-| 6 | ContextBudget 固定 60K | ⏳ 排队 | 5E.1 |
-| 7 | 记忆 6 层消费不均衡 | ⏳ 排队 | 5E.2 |
+| 5 | ContextBudget 固定 60K | ⏳ 排队 | 5E.1 |
+| 6 | 记忆 6 层消费不均衡 | ⏳ 排队 | 5E.2 |
+| 7 | source_docs 根目录混杂 | ⏳ 排队 | P1-source_docs |
+| 8 | 专家面板 prompt 写死架构描述 | ⏳ 排队 | 5E.3 |
 
 ### Deferred (暂不处理)
 
@@ -711,39 +779,42 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 
 **总体评价**: 核心功能已完整实现，剩余未实现项都是优化性质的（精简、动态化）。
 
-### 2. 鲁棒性 — 评分 8.5/10
+### 2. 鲁棒性 — 评分 7.5/10
 
 | 维度 | 评分 | 详情 |
 |------|------|------|
 | 错误处理 | 9/10 | 25 个 try 块，26 个 except，**0 个 silent pass** |
 | 降级策略 | 9/10 | safe_llm_call 3 处 + CodeGraph/TPE 缺失时 fallback |
 | 缓存机制 | 9/10 | overview_hashes (8 引用) + source_hash (6 引用) |
-|| 管线长度 | 7/10 | **已精简到 8 步**（5D 完成）— 出错面显著降低 |
-| SIGNAL 映射 | 3/10 | **301 个 SIGNAL 节点，0 个 internal_var 映射 — 空指针** |
-| 总评 | 8.5/10 | 架构健壮，但管线过长 + SIGNAL 映射缺失是硬伤 |
+| 管线长度 | 8/10 | **已精简到 8 步**（5D 完成）— 出错面显著降低 |
+| SIGNAL 映射 | 7/10 | **277/301 已修复**（P0-1），但 24 个仍缺失 |
+| 总评 | 7.5/10 | 架构健壮，SIGNAL 映射是最大短板 |
 
 **风险点**:
 1. ~~**管线 15 步太长**~~ — **已解决**（5D 精简到 8 步）
-2. **SIGNAL internal_var 全空** — BLF CAN 信号到 C 变量的映射完全缺失，诊断无法做差距分析
+2. **SIGNAL internal_var 仍有 24 个缺失** — BLF CAN 信号到 C 变量的映射仍有盲区
 3. **code_knowledge 过期风险** — L6 知识文件没有版本关联，代码变更后知识可能过时
+4. **Harness 缺失** — 无法量化诊断准确性
 
-### 3. 多项目适配 — 评分 5/10
+### 3. 多项目适配 — 评分 6.5/10
 
 | 维度 | 评分 | 详情 |
 |------|------|------|
 | config 配置 | ✅ 3 项目 | gwm_b26 / sc6h / cr5cb |
 | CodeGraph DB 隔离 | ✅ 按项目 | codegraph_{proj}.db |
 | Memory 目录隔离 | ✅ 按项目 | memory/projects/{proj}/ |
+| Config cache | ✅ 已修复 | P0-2 按项目隔离 |
+| resolve 函数 | ✅ 已修复 | P1-1 支持 project_key |
 | source_docs 隔离 | ⚠️ 部分 | 根目录 24 个文件混杂 + gwm_b26/ 子目录仅 2 个 |
-| L6 知识隔离 | ❌ 全局 | code_knowledge/ 不分项目，但 BSD/LCA 等功能跨项目通用 — 可接受 |
-| 总评 | 5/10 | 核心隔离到位，source_docs 混杂是短板 |
+| L6 知识隔离 | ❌ 全局 | code_knowledge/ 不分项目，不同项目 FCTA 实现差异大 |
+| 总评 | 6.5/10 | 核心隔离到位，source_docs/L6 是短板 |
 
 **具体问题**:
 - `source_docs/` 根目录混有 24 个文件，无法区分项目归属
 - `source_docs/gwm_b26/` 只有 2 个文件 — 大部分文档未迁移
 - 理想状态：所有 project-specific docs 移到 `source_docs/{proj}/`
 
-### 4. 记忆机制 — 评分 7/10
+### 4. 记忆机制 — 评分 5.5/10
 
 **6 层记忆架构**:
 - L1: project.md — 项目级记忆
@@ -755,56 +826,86 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 
 **优点**:
 - CRUD 操作完整
-- 按项目隔离
+- 按项目隔离（memory/projects/{proj}/）
 - L6 有 11 个模块的知识沉淀，覆盖 BSD/LCA/DOW/FCTA/FCTB/RCTA/RCTB/RCW
+- L4 session 读写闭环完成
 
 **缺点**:
 - 6 层过多 — 实际使用中 L1-L4 使用频率高，L5-L6 低频
 - L4/L5 存在冗余（session 和 case 记忆重叠）
 - 没有记忆老化/清理机制
 - 没有 LLM 驱动的自动知识蒸馏
+- Dream 被动触发（4h + 2 session），实际很少触发
+- 诊断完成后不主动更新 L6 code_knowledge
+- 实际数据量少：gwm_b26 仅 2 session + 1 function + 1 patterns.json
 
-### 5. 知识沉淀机制 — 评分 6.5/10
+### 5. 知识沉淀机制 — 评分 5.5/10
 
 | 维度 | 评分 | 详情 |
 |------|------|------|
 | code_knowledge (L6) | 8/10 | 11 个 JSON 文件，结构规范，覆盖主要功能 |
 | CodeGraph 语义层 | 7/10 | 255 行冷启动 + render 注入 Expert Panel |
 | source_docs 缓存 | 7/10 | 有 hash 缓存，但多项目混杂 |
-| 知识更新闭环 | 4/10 | 诊断→记忆写入有，但记忆→知识蒸馏无 |
-| 总评 | 6.5/10 | 数据收集到位，但知识提炼环节缺失 |
+| 知识更新闭环 | 3/10 | 诊断→记忆写入有，但记忆→知识蒸馏无 |
+| Dream 触发频率 | 2/10 | 4h + 2 session + 无锁，实际很少触发 |
+| 总评 | 5.5/10 | 框架搭好了，但知识沉淀效率低 |
 
-**缺失的关键环节**: 诊断结果 → L6 知识自动更新。目前 L6 是冷启动数据，缺少"诊断后发现新知识 → 自动更新 L6"的闭环。
+**缺失的关键环节**:
+1. 诊断结果 → L6 知识自动更新（目前 L6 是冷启动数据）
+2. Dream 改为诊断完成后主动触发
+3. 记忆老化机制（代码变更后旧知识失效）
 
 ### 6. 优先级调整建议
 
-基于评审，调整 Phase 优先级：
+基于全量评估，下阶段优先级：
 
 ```
-当前顺序:              建议调整:
-5C.5 LLM 全量标注   →  降优先级（LLM 密钥阻塞）
-5D 管线精简          →  ✅ 已完成（管线缩短到 8 步）
-5E 记忆简化          →  维持（6→3 层降低维护成本）
-新增 P0: SIGNAL 映射 →  修复 internal_var 空映射（301→0 是诊断硬伤）
-新增 P1: source_docs →  清理混杂文件，按项目完全隔离
+P0:  SIGNAL internal_var 收尾 → 24 个剩余 SIGNAL 补全映射
+P1-1: Harness Phase 1 实现 → StructuralEvaluator + 首个黄金答案
+P1-2: 知识沉淀闭环 → 诊断完成后主动沉淀新知识
+P1-3: source_docs 清理 → 按项目完全隔离
+P2:   5E 记忆简化 → 6→3 层 + ContextBudget 动态
+P2:   5C.5 LLM 全量标注 → 等 LLM API 就绪
 ```
 
-**调整后路线**:
-```
-SIGNAL internal_var 映射 (P0) → 301 SIGNAL 补全 C 变量映射
-  ↓
-source_docs 清理 (P1) → 按项目完全隔离
-  ↓
-5E 记忆简化 (P1) → 6→3 层 + 知识蒸馏闭环
-  ↓
-5C.5 LLM 全量标注 (P2) → 等 LLM API 就绪
-```
+**三个都做完 P0+P1 后才能说"这个项目能用了"**。
 
 ### 7. 关键发现
 
 1. **项目没有走偏** — 与 PRD v2.1.0 方向一致，核心功能完整
 2. ~~**管线 15 步是最大风险**~~ — **已解决**：5D 完成，管线精简到 8 步，并行化 evidence 步
-3. **SIGNAL 映射是诊断盲区** — 301 个 SIGNAL 节点无法关联 C 变量，差距分析无法做
-4. **多项目隔离基本到位** — DB 和 memory 隔离好了，source_docs 混杂可接受但不优雅
+3. **SIGNAL 映射大幅改善但仍不完整** — 从 0/301 修复到 277/301（92%），差距分析基本可做
+4. **多项目隔离基本到位** — DB 和 memory 隔离好了，P0-2/P1-1 修复了 cache 和 resolve
 5. **记忆机制偏重存储、轻提炼** — 6 层记忆收集了足够数据，但缺少"诊断→知识"的自动闭环
 6. **CodeGraph 语义层冷启动成功** — 255 行语义标注已注入 Expert Panel，为诊断提供上下文
+7. **Harness 设计调研完成** — 4 层级评估方案明确，但实现是 P1 优先级
+8. **专家面板 prompt 多项目通用性差** — 写死了 adasFunc.c + ASWIN_SystemState.c，其他项目不适用
+
+---
+
+## ADR-2026-06-11: Harness 设计决策
+
+**背景**: radarAnalyze 缺少诊断质量评估体系。现有测试仅覆盖 TPE 组件，无法量化诊断结论准确性。
+
+**调研范围**: SWE-bench (8.2K★), DeepEval (7K★), OpenAI Evals (2.4K★), AgentBench (3.5K★), Aider (37K★), Braintrust (8K★)
+
+**决策**: 自研 4 层级评估 Harness（L0-L3），融合 SWE-bench 的黄金答案理念 + DeepEval 的多层指标方法。
+
+**理由**:
+- SWE-bench 评估代码补丁（确定性测试），不直接适用诊断场景
+- DeepEval 的 LLM-as-judge + pytest 模式可借鉴，但需适配诊断维度
+- 诊断质量 = f(结构性, 证据链, 结论准确性, 建议可操作)，需要多层级覆盖
+
+**架构**:
+```
+L0 结构性 (15%)  — 输出格式、字段完整性、耗时 (确定性)
+L1 证据链 (25%)  — 信号覆盖度、条件匹配、TPE 模式 (确定性为主)
+L2 结论 (40%)   — 根因分类、定位准确性、语义相似度 (LLM-as-judge)
+L3 建议 (20%)   — CodeFix 有效性、建议合理性 (LLM-as-judge)
+```
+
+**数据集**: `harness/cases/*_ground_truth.json`，每个案例包含预期分类、根因、证据、修复建议
+
+**文档**: 详见 `docs/technical/harness-design-research.md`
+
+**下一步**: Phase 1 — 创建 harness/ 结构 + StructuralEvaluator + 首个黄金答案
