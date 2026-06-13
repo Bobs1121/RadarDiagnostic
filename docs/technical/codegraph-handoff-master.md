@@ -800,7 +800,7 @@ a204863 feat(v2): Phase 1 基础层加固 — MF4 stub + topic auto-discovery + 
 1. ~~**管线 15 步太长**~~ — **已解决**（5D 精简到 8 步）
 2. **SIGNAL internal_var 仍有 24 个缺失** — BLF CAN 信号到 C 变量的映射仍有盲区
 3. **code_knowledge 过期风险** — L6 知识文件没有版本关联，代码变更后知识可能过时
-4. **Harness 缺失** — 无法量化诊断准确性
+4. **Harness** — ✅ Phase 1 (L0) + Phase 2 (L1/L2) 已完成，FCTA001 综合评分 0.86
 
 ### 3. 多项目适配 — 评分 6.5/10
 
@@ -1043,4 +1043,117 @@ memory/code_knowledge/*.json → memory/projects/gwm_b26/code_knowledge/*.json
 - 多项目数据完全隔离，不再有跨项目知识污染
 - 新项目首次使用时自动创建隔离目录
 - 向后兼容保证现有数据可用
+
+## ADR-017: Harness Phase 2 — 3 层评估体系（2026-06-13）
+
+**问题**: L0 Structural Evaluator 只能检查报告结构完整性，无法评估"诊断内容是否正确"。需要引入 Ground Truth（黄金答案）驱动的评估体系，量化诊断质量。
+
+**目标**: 回答三个核心问题：
+1. 证据链是否完整？（L1 — 确定性规则）
+2. 结论是否正确？（L2 — 语义匹配）
+3. 综合质量如何？（L0+L1+L2 加权）
+
+**架构**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    HarnessRunner                             │
+│  run_case(case_id) → run_all_cases()                        │
+│                                                              │
+│  L0: StructuralEvaluator   (权重 0.25)  结构完整性           │
+│  L1: EvidenceEvaluator     (权重 0.35)  证据链覆盖度         │
+│  L2: ConclusionEvaluator   (权重 0.40)  结论正确性           │
+│                                                              │
+│  overall = L0*0.25 + L1*0.35 + L2*0.40                     │
+│  L0 gate: L0 < 0.90 → 直接 FAIL                             │
+│  passed: overall >= 0.60                                    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**L1 EvidenceEvaluator — 确定性证据链覆盖度**
+
+| 检查项 | 权重 | 方法 | 说明 |
+|--------|------|------|------|
+| signal_coverage | 1.0 | 别名匹配（88组） | 信号名、中文名、CAN信号名 |
+| condition_checking | 1.0 | 关键词匹配 | 激活/抑制条件检查 |
+| tpe_analysis | 0.5 | 关键词匹配 | TPE时序模式分析 |
+| window_specification | 0.5 | 关键词匹配 | 测试窗口指定 |
+| data_chain | 0.5 | 关键词匹配 | 数据链路完整性 |
+
+- 88 组信号别名映射（BLF→C代码→中文描述）
+- 纯规则匹配，无 LLM 依赖
+- FCTA001 得分: 0.94
+
+**L2 ConclusionEvaluator — 语义结论正确性**
+
+| 检查项 | 权重 | 方法 | 说明 |
+|--------|------|------|------|
+| classification_exact | 1.5 | 精确匹配 | 主因分类（param/algorithm/sensor/logic/signal） |
+| classification_func | 1.0 | 函数类别匹配 | 18 个函数类别（TTC/distance/velocity 等） |
+| localization_file | 1.0 | 文件名模糊匹配 | FuzzyWuzzy > 70% |
+| localization_line | 1.0 | 行号范围匹配 | ±50 行容差 |
+| causal_tfidf | 2.5 | TF-IDF + Cosine | sklearn 中文分词 |
+| causal_keywords | 2.5 | 关键词重叠 | Jaccard 相似度 |
+| recommendations | 1.0 | 建议匹配 | 修复建议关键词 |
+| confidence_value | 1.0 | 数值对齐 | ±15 容差 |
+
+- 分类/定位：精确规则匹配
+- 因果分析：TF-IDF 语义相似度（sklearn）
+- 置信度：数值对齐
+- FCTA001 得分: 0.70（主要差距在 causal 0.57）
+
+**Ground Truth 格式**
+
+```json
+{
+  "case_id": "FCTA001",
+  "problem_statement": {
+    "function": "FCTA",
+    "file": "FCTA_issue_report.pdf",
+    "description": "车辆以40km/h接近...未触发AEB",
+    "session_id": "FCTA001",
+    "report": "cases/FCTA001/report.md",
+    "ground_truth": "harness/golden_truths/FCTA001_ground_truth.json"
+  },
+  "ground_truth_root_cause": {
+    "classification": "algorithm",
+    "primary_cause": "TTC 计算公式中...",
+    "key_concepts": ["TTC", "rel_vel_x", "inf", "除零保护"],
+    "key_signals": [{"signal": "vel_x", ...}],
+    "causal_chain": [...],
+    "condition_checks": [...],
+    "data_chains": [...],
+    "test_windows": [...]
+  },
+  "key_fix_recommendations": ["调整 TTC 算法...", "增加安全距离补偿...", ...],
+  "confidence": {"value": 88, "level": "high"}
+}
+```
+
+**文件清单**:
+- `harness/conclusion_evaluator.py` — L2 评估器（222 行）
+- `harness/evidence_evaluator.py` — L1 评估器（249 行）
+- `harness/harness_runner.py` — 集成 runner + HarnessResult
+- `harness/golden_truths/FCTA001_ground_truth.json` — 黄金答案 v3（含 evidence 字段）
+- `tests/test_harness_phase2.py` — 25 个测试用例
+
+**运行结果**:
+```
+Overall: 0.8606, Passed: True
+L0: 1.0000 (结构完整性满分)
+L1: 0.9400 (signal=1.00, cond=1.00, window=1.00)
+L2: 0.7041 (class=1.00, loc=1.00, causal=0.57)
+```
+
+**设计决策**:
+1. L1 用确定性规则而非 LLM — 可复现、可解释
+2. L2 用 TF-IDF + 关键词混合 — 平衡语义理解和精确匹配
+3. 权重分配 L2 > L1 > L0 — 结论正确性最重要
+4. L0 gate 防止结构残缺的报告被误判为合格
+5. Ground Truth 手工编写 — FCTA001 由专家编写，后续案例逐步积累
+
+**后续**:
+- Phase 3: 更多案例 ground truth（BSD001 等）
+- Phase 3: LLM-as-judge 增强 L2 因果匹配
+- Phase 3: 统计报告（多案例聚合分析）
 
