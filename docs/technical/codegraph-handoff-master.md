@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-12 (Phase 6D 多项目数据隔离完成)
+> 最后更新: 2026-06-13 (优先级计划 + Harness Phase 2 完成)
 > 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) 完成
+> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) 完成
 > PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
-> 综合评分: 8.3/10 — SIGNAL 映射 100%，Harness L0 上线，知识沉淀闭环，多项目数据完全隔离
+> 综合评分: 8.3/10 — SIGNAL 100%，Harness 3 层评估上线(FCTA001 0.86)，知识沉淀闭环，多项目完全隔离
 
 ---
 
@@ -599,25 +599,110 @@ prompts/expert_panel/
 
 ---
 
-## 已知问题与待办
+## 2026-06-13 优先级计划（按执行顺序）
 
-### 高优先级 (影响诊断准确率) — 三个阻塞项
+> 基于项目当前状态评估制定。Phase 1-6D 已完成，Harness Phase 2 刚上线。
+> 综合评分: 8.3/10
 
-| # | 问题 | 状态 | 计划 Phase |
-|---|------|------|-----------|
-| 1 | **SIGNAL internal_var 映射不完整** — 277/301 已修复，仍缺 24 个 | 🟡 92% | P0-1（剩余收尾） |
-| 2 | **Harness 评估体系未实现** — 设计调研完成，代码未写 | ⏳ 排队 | P1-Harness |
-| 3 | **知识沉淀无闭环** — Dream 被动触发，诊断后不更新 L6 | ⏳ 排队 | P1-Knowledge |
-| 4 | **CodeGraph 语义层为空** — semantic_annotations 表空 | ⏳ 排队 | 5C |
+### Phase 优先级总览
 
-### 中优先级 (影响效率和可维护性)
+| 优先级 | Phase | 任务 | 预估工时 | 依赖 | 状态 |
+|--------|-------|------|----------|------|------|
+| **P0-1** | Harness Phase 3 | 更多案例 ground truth（BSD001/FCTB002） | 2 天 | Harness Phase 2 | ⏳ 排队 |
+| **P0-2** | Harness Phase 3 | LLM-as-judge 增强 L2 因果匹配 | 1 天 | P0-1 ground truth | ⏳ 排队 |
+| **P1-1** | 5E.1 | ContextBudget 动态总预算 | 0.5 天 | 无 | ⏳ 排队 |
+| **P1-2** | 5E.2 | 记忆简化 6→3 层 | 1 天 | 无 | ⏳ 排队 |
+| **P1-3** | 5E.3 | 专家面板 prompt 多项目适配 | 1 天 | 5E.2（记忆简化） | ⏳ 排队 |
+| **P2-1** | 5C.5 | LLM 全量语义标注 | 3 天 | LLM API 就绪 | ❌ BLOCKED |
+| **P2-2** | Harness Phase 3 | 统计聚合报告（多案例） | 1 天 | P0-2 | ⏳ 排队 |
+| **Deferred** | MF4 Parser | asammdf 依赖 | — | 内网安装 asammdf | ❌ BLOCKED |
 
-| # | 问题 | 状态 | 计划 Phase |
-|---|------|------|-----------|
-| 5 | ContextBudget 固定 60K | ⏳ 排队 | 5E.1 |
-| 6 | 记忆 6 层消费不均衡 | ⏳ 排队 | 5E.2 |
-| 7 | source_docs 根目录混杂 | ⏳ 排队 | P1-source_docs |
-| 8 | 专家面板 prompt 写死架构描述 | ⏳ 排队 | 5E.3 |
+### 详细说明
+
+#### P0-1: Harness Phase 3 — 更多案例 Ground Truth（2 天）
+
+**目标**: Harness 覆盖从 1 个案例扩展到 3-5 个案例，形成有意义的评估基线。
+
+**任务分解**:
+1. **BSD001 ground truth** — BSD（盲点检测）功能案例，覆盖多目标场景
+2. **FCTB002 ground truth** — FCTB（前向碰撞预警-制动）案例，覆盖 TTC 算法
+3. **FCTB003 ground truth** — 不同速度场景 FCTB，验证速度敏感性
+
+**验收标准**:
+- 每个 ground truth 包含完整的 classification / root_cause / evidence / fix_recommendations
+- HarnessRunner 跑通所有案例，输出聚合报告
+- 平均 overall score 作为项目基线
+
+#### P0-2: Harness Phase 3 — LLM-as-judge 增强 L2（1 天）
+
+**目标**: 当前 L2 causal 匹配靠 TF-IDF（FCTA001 得 0.57），引入 LLM-as-judge 提升语义匹配准确度。
+
+**方案**:
+- 在 ConclusionEvaluator 中增加 `causal_llm_judge` 子项
+- 将诊断报告根因与 ground truth 根因一起发给 LLM，让 LLM 判断一致性
+- LLM 打分与 TF-IDF 分数取 max（保留确定性 baseline）
+- 新增 `recommendations_llm_judge` — LLM 评估修复建议质量
+
+**验收标准**:
+- FCTA001 L2 causal 从 0.57 提升到 0.7+
+- 新增 LLM judge 项有清晰的 prompt 和评分标准
+
+#### P1-1: ContextBudget 动态总预算（0.5 天）
+
+**目标**: 当前固定 60K char 预算，改为根据 CodeGraph 大小和案例复杂度动态调整。
+
+**实现**: `ai/context_budget.py` 新增 `_dynamic_budget()` 方法，公式见 IMPLEMENTATION_PLAN 5E.1。
+
+#### P1-2: 记忆简化 6→3 层（1 天）
+
+**目标**: 合并 L5（case memory）到 L3（patterns），简化为 3 层：项目级（L1）+ 知识库（L2-L6 合并）+ session（L4）。
+
+**验收标准**:
+- API 向后兼容（旧调用不报错）
+- 数据迁移脚本运行成功
+- 诊断管线正常读写
+
+#### P1-3: 专家面板 prompt 多项目适配（1 天）
+
+**目标**: Expert panel prompt 中硬编码的架构描述改为从 CodeGraph/配置动态生成。
+
+**方案**:
+- `prompts/expert_panel/` 模板中使用占位符（如 `{{architecture_desc}}`）
+- `orchestrator.py` 从 CodeGraph 查询当前项目的架构信息，填充占位符
+- 每个项目的 `key_source_files` 自动注入 prompt
+
+### 当前阻塞项
+
+| 阻塞项 | 原因 | 解锁条件 |
+|--------|------|----------|
+| 5C.5 LLM 全量语义标注 | LLM API 密钥/配额不足 | 配置有效 API key（Bosch Model Farm 或外部） |
+| MF4 Parser | asammdf 内网不可安装 | 内网 pip 源安装 asammdf 或用 mffparser 替代 |
+
+---
+
+## 已知问题与待办（更新 2026-06-13）
+
+### 已完成（不再阻塞）
+
+| # | 问题 | 解决 Phase |
+|---|------|-----------|
+| 1 | SIGNAL internal_var 映射不完整 — 301/301 已补全 ✅ | 6A |
+| 2 | Harness 评估体系未实现 — Phase 1(L0) + Phase 2(L1/L2) 已完成 ✅ | 6B + ADR-017 |
+| 3 | 知识沉淀无闭环 — deliver 阶段自动调用 `_precipitate_knowledge` ✅ | 6C |
+| 4 | source_docs 根目录混杂 — 已迁移到 source_docs/{project}/ ✅ | 6D |
+| 5 | L6 code_knowledge 全局共享 — 已迁移到 memory/projects/{key}/code_knowledge/ ✅ | 6D |
+
+### 当前待办（按优先级）
+
+| # | 问题 | 优先级 | 计划 Phase |
+|---|------|--------|-----------|
+| 1 | Harness ground truth 仅 1 个案例 | P0-1 | Harness Phase 3 |
+| 2 | L2 因果匹配靠 TF-IDF，语义匹配不够准 | P0-2 | Harness Phase 3 |
+| 3 | ContextBudget 固定 60K | P1-1 | 5E.1 |
+| 4 | 记忆 6 层消费不均衡 | P1-2 | 5E.2 |
+| 5 | 专家面板 prompt 写死架构描述 | P1-3 | 5E.3 |
+| 6 | CodeGraph 语义层为空 | P2-1 | 5C.5（BLOCKED） |
+| 7 | Harness 缺少多案例统计报告 | P2-2 | Harness Phase 3 |
 
 ### Deferred (暂不处理)
 
