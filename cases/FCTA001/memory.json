@@ -1,7 +1,7 @@
 {
-  "session_id": "FCTA001_20260611_140859",
+  "session_id": "FCTA001_20260612_172520",
   "function": "FCTA",
   "problem": "FCTA功能在60km/h速度下没有触发",
-  "diagnosis_summary": "\n\n### 根因\n一句话根因 + 因果链: 目标相对纵向速度(rel_vel_x≈0, 来源雷达解算) → 触发adasFunc.c运动学除零保护(TTC返回inf, 阈值≤2.0s不满足) 且 目标绝对速度(多帧<4.0km/h, 来源trc_N.vel_x)未达准入门限 → 内部告警标志(bLeft/RightFctaWarningFlg)持续置FALSE → 状态机滞留Standby(2)(来源fcta_system_state) → L4告警未触发。TPE段无triggered模式，故无防抖清零副作用，根因系L1输入特征未穿透L2过滤逻辑。\n\n### 时序耦合(TPE触发清单)\n| 模式 | 源文件:行 | 首触发t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|--------|\n| 无 | - | - | - | - | - |\n\n### 条件检查汇总\n| 条件 | 阈值 | 实际值 | 满足? | 数据来源 | 相关 TPE 模式 |\n|------|------|--------|---",
-  "_updated": "2026-06-11T14:23:23.727189"
+  "diagnosis_summary": "\n\n### 根因\n**一句话根因**: 雷达上报目标纵向相对速度极低（`|vel_x|≈0~0.5 m/s`）且距离离散，导致ECU内部TTC计算溢出为`inf`，不满足FCTA目标预警速度阈值（≥4.0 km/h）与有效TTC条件，`adasFunc.c`静态筛选逻辑直接拦截，报警标志维持清零。  \n**因果链**: `RADAR_OBJ_VEL_X/DIST_X`映射值(`|vel_x|<0.5m/s`, 来源:帧分析数据) → `adasFunc.c`动力学筛选(`阈值: fFctaObjWarningSpd=4.0km/h, TTC≤2.0s`, 来源:权威阈值参考) → `bWarnFlag=0` → `fcta_system_state`滞留`2(Standby)` → `FCTA_Warn`输出`0`(现象)。注：TPE无模式触发，属静态条件拦截而非时序耦合抑制。\n\n### 时序耦合(TPE触发清单)\n| 模式 | 源文件:行 | 首触发t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|-",
+  "_updated": "2026-06-12T17:41:21.348371"
 }

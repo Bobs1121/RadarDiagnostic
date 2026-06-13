@@ -10,267 +10,58 @@
       "5": "Failure",
       "6": "Passive"
     },
-    "transitions": [
-      {
-        "from": "0",
-        "to": "1",
-        "conditions": [
-          {
-            "condition": "Self Inspection Finished",
-            "variable": "g_DTCCode.selfInspFlg",
-            "threshold": "== TRUE",
-            "source": "adasFunc.c:L2545"
-          }
-        ]
-      },
-      {
-        "from": "*",
-        "to": "4",
-        "conditions": [
-          {
-            "condition": "FCTA Enable Condition False",
-            "variable": "adasEnable->bFCTAEnable",
-            "threshold": "== FALSE",
-            "source": "adasFunc.c:L2604"
-          },
-          {
-            "condition": "Calibration Flag Enabled",
-            "variable": "g_DTCCode.calibratingFlg",
-            "threshold": "== TRUE",
-            "source": "adasFunc.c:L2599"
-          }
-        ]
-      },
-      {
-        "from": "*",
-        "to": "5",
-        "conditions": [
-          {
-            "condition": "Failure Flag Set",
-            "variable": "g_DTCCode.failureFlg",
-            "threshold": "== TRUE",
-            "source": "adasFunc.c:L2561"
-          }
-        ]
-      },
-      {
-        "from": "*",
-        "to": "2",
-        "conditions": [
-          {
-            "condition": "Gear is D or N (4 or 5)",
-            "variable": "g_egoCarAddInfo.actual_gear",
-            "threshold": "== 4 || == 5",
-            "source": "adasFunc.c:L2567"
-          },
-          {
-            "condition": "Speed in Active Range",
-            "variable": "g_egoCarAddInfo.carSpd",
-            "threshold": ">= fFctaActiveLowSpd (1.0 km/h) && <= fFctaActiveUpSpd (20.0 km/h)",
-            "source": "adasFunc.c:L2569"
-          }
-        ]
-      },
-      {
-        "from": "2|3",
-        "to": "6",
-        "conditions": [
-          {
-            "condition": "Speed out of Active Range (Deactive)",
-            "variable": "g_egoCarAddInfo.carSpd",
-            "threshold": "> fFctaDeactiveUpSpd (22.0 km/h) || < fFctaDeactiveLowSpd (0.0 km/h)",
-            "source": "adasFunc.c:L2578"
-          },
-          {
-            "condition": "Gear not D or N",
-            "variable": "g_egoCarAddInfo.actual_gear",
-            "threshold": "!= 4 && != 5",
-            "source": "adasFunc.c:L2594"
-          }
-        ]
-      },
-      {
-        "from": "2",
-        "to": "3",
-        "conditions": [
-          {
-            "condition": "Warning Active (Left or Right)",
-            "variable": "PEROutput.adasWarning.bLeftFctaWarning || PEROutput.adasWarning.bRightFctaWarning",
-            "threshold": "!= 0",
-            "source": "ASWIN_SystemState.c:L1067"
-          }
-        ]
-      }
-    ]
+    "transitions": []
   },
   "target_filter": {
     "skip_function": "N/A",
-    "conditions": [
-      {
-        "condition": "Object Yaw Angle Check",
-        "variable": "sObj->yawAng",
-        "threshold": ">= 38.0 && <= 127.0",
-        "note": "Warning Enter"
-      },
-      {
-        "condition": "Object Yaw Angle Check",
-        "variable": "sObj->yawAng",
-        "threshold": ">= 33.0 && <= 135.0",
-        "note": "Warning Exit"
-      }
-    ]
+    "conditions": []
   },
   "detect_enable": {
-    "flag": "bFctaDetectFlg",
-    "conditions": [
-      {
-        "condition": "System State is Standby or Active",
-        "variable": "adasWarning->fctaSystemState",
-        "threshold": "== 2 || == 3"
-      }
-    ]
+    "flag": "N/A",
+    "conditions": []
   },
   "ego_speed_ranges": {
     "active": {
-      "low": "fFctaActiveLowSpd=1.0",
-      "high": "fFctaActiveUpSpd=20.0",
+      "low": "N/A",
+      "high": "N/A",
       "unit": "km/h"
     },
     "deactive": {
-      "low": "fFctaDeactiveLowSpd=0.0",
-      "high": "fFctaDeactiveUpSpd=22.0",
+      "low": "N/A",
+      "high": "N/A",
       "unit": "km/h"
     },
     "detect": {
-      "low": "fFctaDetectLowSpd=1.0",
-      "high": "fFctaDetectUpSpd=20.0",
+      "low": "N/A",
+      "high": "N/A",
       "unit": "km/h"
     }
   },
   "target_speed_ranges": {
     "warning_enter": {
-      "low": "fFctaObjWarningSpd=4.0",
-      "high": "fFctaObjWarningUpSpd=70.0",
+      "low": "N/A",
+      "high": "N/A",
       "unit": "km/h"
     },
     "warning_exit": {
-      "low": "fFctaObjDeWarningSpd=2.2",
-      "high": "fFctaObjDeWarningUpSpd=73.6",
+      "low": "N/A",
+      "high": "N/A",
       "unit": "km/h"
     }
   },
-  "external_suppression": [
-    {
-      "source_system": "Driver Operation (Accelerator)",
-      "condition": "Accelerator pedal position too high suppresses Standby->Active transition",
-      "variable": "AdasStM.AccPedPosDiag",
-      "can_signal": "ACC_PED_POS_DIAG",
-      "suppression_trigger": ">= 80",
-      "normal_value": "< 80",
-      "effect": "Suppress Standby2Active",
-      "source": "ASWIN_SystemState.c:L1839"
-    },
-    {
-      "source_system": "Vehicle Dynamics (ESP)",
-      "condition": "ESP Diagnostic Active suppresses Standby->Active transition",
-      "variable": "AdasStM.ESPDiagActv",
-      "can_signal": "ESP_DIAG_ACTV",
-      "suppression_trigger": "!= 0",
-      "normal_value": "== 0",
-      "effect": "Suppress Standby2Active",
-      "source": "ASWIN_SystemState.c:L1841"
-    },
-    {
-      "source_system": "Vehicle Dynamics (Trailer)",
-      "condition": "Trailer Status Active suppresses Standby->Active transition",
-      "variable": "AdasStM.TrailerSts",
-      "can_signal": "TRAILER_STS",
-      "suppression_trigger": "!= 0",
-      "normal_value": "== 0",
-      "effect": "Suppress Standby2Active",
-      "source": "ASWIN_SystemState.c:L1840"
-    },
-    {
-      "source_system": "Driver Operation (Steering)",
-      "condition": "Steering Wheel Speed too high suppresses Standby->Active transition",
-      "variable": "AdasStM.SteerWheelSpd",
-      "can_signal": "STEER_WHEEL_SPD",
-      "suppression_trigger": "> 150",
-      "normal_value": "<= 150",
-      "effect": "Suppress Standby2Active",
-      "source": "ASWIN_SystemState.c:L1838"
-    },
-    {
-      "source_system": "Transmission (Gear)",
-      "condition": "Gear is Reverse (7) or Park/Neutral variant (8) suppresses Standby->Active transition",
-      "variable": "g_egoCarAddInfo.actual_gear",
-      "can_signal": "GEAR_POS",
-      "suppression_trigger": "== 7 || == 8",
-      "normal_value": "!= 7 && != 8",
-      "effect": "Suppress Standby2Active",
-      "source": "ASWIN_SystemState.c:L1837"
-    },
-    {
-      "source_system": "Transmission (Gear)",
-      "condition": "Gear is not D(4) or N(5) prevents entering Standby State",
-      "variable": "g_egoCarAddInfo.actual_gear",
-      "can_signal": "GEAR_POS",
-      "suppression_trigger": "!= 4 && != 5",
-      "normal_value": "== 4 || == 5",
-      "effect": "Prevent Standby Entry",
-      "source": "adasFunc.c:L2567"
-    },
-    {
-      "source_system": "DTC/Fault",
-      "condition": "FCTA Fault Error Status Active",
-      "variable": "ADAS_GetFCTAFaultErrorStatus()",
-      "can_signal": "N/A",
-      "suppression_trigger": "== TRUE",
-      "normal_value": "== FALSE",
-      "effect": "Set Failure State (5)",
-      "source": "ASWIN_SystemState.c:L1314"
-    },
-    {
-      "source_system": "Calibration",
-      "condition": "Calibration Flag Enabled",
-      "variable": "GWM_Adas_CalFlagEna()",
-      "can_signal": "N/A",
-      "suppression_trigger": "== TRUE",
-      "normal_value": "== FALSE",
-      "effect": "Set Off State (4)",
-      "source": "ASWIN_SystemState.c:L1905"
-    }
-  ],
+  "external_suppression": [],
   "other_conditions": [
     {
-      "category": "Warning Logic",
-      "condition": "Object Warning Base TTM in X-Axis",
-      "variable": "fFctaObjWarningBaseTTMX",
-      "threshold": "2.0 s"
+      "category": "Model Definition",
+      "condition": "FCTA is defined as AdasModelFCTA with value 6U",
+      "variable": "AdasModelFCTA",
+      "threshold": "6U"
     },
     {
-      "category": "Warning Logic",
-      "condition": "Object Warning TTM in Y-Axis Upper",
-      "variable": "fFctaObjWarningUpTTMY",
-      "threshold": "2.5 s"
-    },
-    {
-      "category": "Warning Logic",
-      "condition": "Object Warning TTM in Y-Axis Lower",
-      "variable": "fFctaObjWarningLowTTMY",
-      "threshold": "0.4 s"
-    },
-    {
-      "category": "Warning Logic",
-      "condition": "Object Warning C-DDCI Offset Lower",
-      "variable": "fFctaObjWarningLowerCDDCIOffSet",
-      "threshold": "0.0 m"
-    },
-    {
-      "category": "Warning Logic",
-      "condition": "Object Warning DDCI Offset Lower",
-      "variable": "fFctaObjWarningLowerDDCIOffSet",
-      "threshold": "-1.0 m"
+      "category": "Warning Flag Definition",
+      "condition": "WarningFlag_Warning is defined as 1U",
+      "variable": "WarningFlag_Warning",
+      "threshold": "1U"
     }
   ]
 }
