@@ -2,6 +2,11 @@
 HarnessRunner — 诊断质量评估统一入口
 
 执行诊断 → 收集产物 → 运行各层级评估 → 输出汇总报告
+
+评估层级：
+  L0: StructuralEvaluator  — 结构完整性（MVP, V1, V2 检查项）
+  L1: EvidenceEvaluator    — 证据链覆盖度（确定性规则）
+  L2: ConclusionEvaluator  — 结论正确性（分类/定位/因果匹配）
 """
 
 import json
@@ -11,43 +16,72 @@ from typing import Optional
 from datetime import datetime
 
 from harness.structural_evaluator import StructuralEvaluator, StructuralEvaluationResult
+from harness.evidence_evaluator import EvidenceEvaluator, EvidenceEvaluationResult
+from harness.conclusion_evaluator import ConclusionEvaluator, ConclusionEvaluationResult
 
 HARNESS_DIR = Path(__file__).parent
 BASE_DIR = HARNESS_DIR.parent
 GOLDEN_TRUTHS_DIR = HARNESS_DIR / "golden_truths"
 
 
+# 层级权重 — 用于计算综合分数
+L0_WEIGHT = 0.25    # 结构完整性
+L1_WEIGHT = 0.35    # 证据覆盖度（最重要）
+L2_WEIGHT = 0.40    # 结论正确性
+
+
 class HarnessResult:
-    """完整的评估结果"""
-    
+    """完整的评估结果（L0 + L1 + L2）"""
+
     def __init__(self, case_id: str):
         self.case_id = case_id
         self.timestamp = datetime.now().isoformat()
         self.l0_result: Optional[StructuralEvaluationResult] = None
+        self.l1_result: Optional[EvidenceEvaluationResult] = None
+        self.l2_result: Optional[ConclusionEvaluationResult] = None
         self.overall_score: float = 0.0
         self.passed: bool = False
         self.errors: list[str] = []
-    
+
     @property
     def passing_score(self) -> float:
-        """及格线 —— L0 要求 ≥0.90"""
-        return 0.90
-    
+        """及格线 —— 综合 ≥0.60，L0 ≥0.90"""
+        return 0.60
+
     def compute_overall(self):
-        """计算综合分数（当前只有 L0）"""
+        """
+        计算综合分数（L0 + L1 + L2 加权平均）。
+
+        加权公式：
+          overall = L0 * 0.25 + L1 * 0.35 + L2 * 0.40
+
+        约束：L0 必须 ≥0.90，否则直接 FAIL（结构不合格，不配评分）。
+        """
         if self.l0_result is None:
             self.overall_score = 0.0
             self.passed = False
             return
-        
-        # 当前只有 L0，直接取 L0 分数
-        self.overall_score = self.l0_result.score
-        self.passed = self.l0_result.score >= self.passing_score
-    
+
+        # L0 gate: 结构不合格直接 FAIL
+        if self.l0_result.score < 0.90:
+            self.overall_score = self.l0_result.score * L0_WEIGHT
+            self.passed = False
+            self.errors.append(f"L0 结构分 {self.l0_result.score:.2f} < 0.90，不满足评估前提")
+            return
+
+        # 收集各层分数（缺失层按 0 处理，但不一定 FAIL）
+        l0 = self.l0_result.score
+        l1 = self.l1_result.score if self.l1_result else 0.0
+        l2 = self.l2_result.score if self.l2_result else 0.0
+
+        # 加权平均
+        self.overall_score = l0 * L0_WEIGHT + l1 * L1_WEIGHT + l2 * L2_WEIGHT
+        self.passed = self.overall_score >= self.passing_score
+
     def to_dict(self) -> dict:
         from harness.structural_evaluator import StructuralEvaluator
         evaluator = StructuralEvaluator()
-        
+
         result = {
             "case_id": self.case_id,
             "timestamp": self.timestamp,
@@ -55,31 +89,74 @@ class HarnessResult:
             "passed": self.passed,
             "passing_threshold": self.passing_score,
             "l0_structural": None,
+            "l1_evidence": None,
+            "l2_conclusion": None,
             "errors": self.errors,
         }
-        
+
         if self.l0_result is not None:
             result["l0_structural"] = evaluator.to_json(self.l0_result)
-        
+        if self.l1_result is not None:
+            result["l1_evidence"] = {
+                "score": round(self.l1_result.score, 4),
+                "passed": self.l1_result.passed,
+                "signal_score": round(self.l1_result.signal_score, 4),
+                "condition_score": round(self.l1_result.condition_score, 4),
+                "window_score": round(self.l1_result.window_score, 4),
+                "checks": [
+                    {
+                        "category": c.category,
+                        "name": c.name,
+                        "passed": c.passed,
+                        "description": c.description,
+                        "detail": c.detail,
+                        "weight": c.weight,
+                    }
+                    for c in self.l1_result.checks
+                ],
+            }
+        if self.l2_result is not None:
+            result["l2_conclusion"] = {
+                "score": round(self.l2_result.score, 4),
+                "passed": self.l2_result.passed,
+                "classification_score": round(self.l2_result.classification_score, 4),
+                "localization_score": round(self.l2_result.localization_score, 4),
+                "causal_score": round(self.l2_result.causal_score, 4),
+                "checks": [
+                    {
+                        "category": c.category,
+                        "name": c.name,
+                        "passed": c.passed,
+                        "score": round(c.score, 4),
+                        "description": c.description,
+                        "detail": c.detail,
+                        "weight": c.weight,
+                    }
+                    for c in self.l2_result.checks
+                ],
+            }
+
         return result
-    
+
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
 
 class HarnessRunner:
     """
-    评估运行器 —— 加载诊断报告，对照黄金答案运行评估。
-    
+    评估运行器 —— 加载诊断报告，对照黄金答案运行 L0/L1/L2 评估。
+
     Usage:
         runner = HarnessRunner()
-        result = runner.run_case("FCTA001", report_path="cases/FCTA001/report.md")
+        result = runner.run_case("FCTA001")
         print(result.to_json())
     """
-    
+
     def __init__(self):
         self.structural_eval = StructuralEvaluator()
-    
+        self.evidence_eval = EvidenceEvaluator()
+        self.conclusion_eval = ConclusionEvaluator()
+
     def run_case(
         self,
         case_id: str,
@@ -87,50 +164,69 @@ class HarnessRunner:
         golden_truth_path: Optional[str | Path] = None,
     ) -> HarnessResult:
         """
-        运行单个案例的评估。
-        
+        运行单个案例的 L0/L1/L2 评估。
+
         Args:
             case_id: 案例 ID（如 "FCTA001"）
             report_path: 诊断报告路径，默认 cases/{case_id}/report.md
             golden_truth_path: 黄金答案路径，默认 harness/golden_truths/{case_id}_ground_truth.json
-            
+
         Returns:
             HarnessResult with scores and details
         """
         result = HarnessResult(case_id)
-        
+
         # 解析路径
         if report_path is None:
             report_path = BASE_DIR / "cases" / case_id / "report.md"
         report_path = Path(report_path)
-        
+
         if golden_truth_path is None:
             golden_truth_path = GOLDEN_TRUTHS_DIR / f"{case_id}_ground_truth.json"
         golden_truth_path = Path(golden_truth_path)
-        
+
         # 1. 加载诊断报告
         if not report_path.exists():
             result.errors.append(f"诊断报告不存在: {report_path}")
             result.compute_overall()
             return result
-        
+
         report_text = report_path.read_text(encoding="utf-8")
-        
+
         # 2. 加载黄金答案
+        golden_truth = None
         if not golden_truth_path.exists():
             result.errors.append(f"黄金答案不存在: {golden_truth_path}")
             result.errors.append("（无黄金答案时仍可做 L0 结构评估）")
-        
-        # 3. 运行 L0 结构性评估
+        else:
+            golden_truth = json.loads(golden_truth_path.read_text(encoding="utf-8"))
+
+        # 3. 运行 L0 结构性评估（不依赖黄金答案）
         try:
             l0 = self.structural_eval.evaluate(report_text)
             result.l0_result = l0
         except Exception as e:
             result.errors.append(f"L0 评估异常: {e!s}")
-        
-        # 4. 计算综合分数
+
+        # 4. 运行 L1 证据评估（需要黄金答案）
+        if golden_truth is not None:
+            try:
+                l1 = self.evidence_eval.evaluate(report_text, golden_truth)
+                result.l1_result = l1
+            except Exception as e:
+                result.errors.append(f"L1 评估异常: {e!s}")
+
+        # 5. 运行 L2 结论评估（需要黄金答案）
+        if golden_truth is not None:
+            try:
+                l2 = self.conclusion_eval.evaluate(report_text, golden_truth)
+                result.l2_result = l2
+            except Exception as e:
+                result.errors.append(f"L2 评估异常: {e!s}")
+
+        # 6. 计算综合分数
         result.compute_overall()
-        
+
         return result
     
     def run_all_cases(self, cases: Optional[list[str]] = None) -> list[HarnessResult]:
