@@ -1,7 +1,8 @@
 # radarAnalyze v2 — 后续开发计划（2026-06-13）
 
-> 范围: 仅规划与设计（本文件不代表已实现）
+> 范围: 规划与设计，部分已实施（见下方 ✅ 标记）
 > 基准文档: `docs/PRD_refactor_v2.md`（v2.1.0）、`docs/technical/codegraph-handoff-master.md`
+> 更新: 2026-06-14 — P0-2/P0-3/P1-1/P1-3 已实施，P1-2 延期
 
 ---
 
@@ -58,7 +59,9 @@
 
 ---
 
-## 2) P0-2 — Harness Phase 3：LLM-as-judge 增强 L2（1 天）
+## 2) P0-2 — Harness Phase 3：LLM-as-judge 增强 L2 ✅ 已实施 (95/100)
+
+**状态**: `harness/llm_judge.py` 已实现 LLMJudge + ConclusionEvaluator 集成，config 已配。验证通过。
 
 **设计原则**:
 - 默认仍以 L2 baseline（概念命中 + 关键词重叠）作为“可复现下限”
@@ -75,7 +78,11 @@
 
 ---
 
-## 3) P0-3 — Engineering：依赖分档治理（0.5 天）
+## 3) P0-3 — Engineering：依赖分档治理 ✅ 已实施 (90/100)
+
+**状态**: requirements.txt 已分 base/llm/panel/harness 四档。langgraph 未安装时报友好错误。pandas 清理。
+
+**实施记录** (ADR-019):
 
 **目标**: 让“装什么能跑什么”一目了然，并避免 import-time 崩溃。
 
@@ -91,7 +98,11 @@
 
 ---
 
-## 4) P1-1 — 5E.1：ContextBudget 动态总预算（0.5 天）
+## 4) P1-1 — 5E.1：ContextBudget 动态总预算 ✅ 已实施 (90/100)
+
+**状态**: `compute_budget()` 已实现并集成 orchestrator。因子：CG 节点 + 窗口数 + 时长 + 模型上下文。
+
+**实施记录** (ADR-020):
 
 **设计点**:
 - 输入信号：CodeGraph 规模、case 时长/窗口数量、信号数量、是否启用专家面板
@@ -103,7 +114,9 @@
 
 ---
 
-## 5) P1-2 — 5E.2：记忆系统简化 6→3 层（1 天）
+## 5) P1-2 — 5E.2：记忆系统简化 6→3 层 ⏸️ 延期
+
+**延期原因**: 10+ 调用方依赖各独立层，合并风险 > 当前收益。等 P0 项目稳定后再评估。
 
 **建议简化方向**:
 - 保留：项目级知识（L1）、会话（L4）、统一知识库（合并 L2/L3/L5/L6）
@@ -115,7 +128,11 @@
 
 ---
 
-## 6) P1-3 — 5E.3：专家面板 prompt 多项目适配（1 天）
+## 6) P1-3 — 5E.3：专家面板 prompt 多项目适配 ✅ 已实施 (88/100)
+
+**状态**: `load_expert_system(expert_id, project_key)` 支持项目级覆写。ExpertPanel 透传 project_key。已创建 sc6h/gwm_b26/cr5cb 覆写目录。
+
+**实施记录**:
 
 **设计点**:
 - prompt 模板用占位符（如 `{{architecture_desc}}`、`{{key_source_files}}`）
