@@ -658,6 +658,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             param_report_md=param_section_md,
             whatif_md=whatif_md,
             fix_report_md=fix_report_md,
+            snapshot_id=self.config.get("identity", {}).get("snapshot_id", ""),
         )
 
         expert_appendix_path = case_dir / "expert_opinions.md"
@@ -708,6 +709,34 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         status("deliver", f"Diagnosis complete: {report_path}")
 
         store.close()
+
+        # ══ Save DiagnosisBundle (structured output) ════════════════
+        try:
+            status("deliver", "Saving DiagnosisBundle...")
+            bundle_path = self._save_diagnosis_bundle(
+                case_dir=case_dir,
+                problem=problem,
+                expected=expected,
+                func_name=func_name,
+                task_type=task_type,
+                classification=classification.to_dict(),
+                panel_result=panel_result,
+                conditions=conditions,
+                evidence=evidence,
+                probe_results=probe_results,
+                windows=windows,
+                bag_meta=bag_meta,
+                blf_meta=blf_meta,
+                tpe_result=self._last_tpe_result,
+                param_report=param_report_obj,
+                whatif_entries=whatif_entries,
+                fix_report=fix_report_md,
+                step_logger=step_logger,
+                token_tracker=token_tracker,
+            )
+            status("deliver", f"DiagnosisBundle saved: {bundle_path}")
+        except Exception as exc:
+            status("deliver", f"DiagnosisBundle save failed: {exc}")
 
         # Save observability log
         try:
@@ -1679,7 +1708,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                      task_type: str = "diagnose",
                      param_report_md: str = "",
                      whatif_md: str = "",
-                     fix_report_md: str = "") -> str:
+                     fix_report_md: str = "",
+                     snapshot_id: str = "") -> str:
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         title_map = {
@@ -1689,7 +1719,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             "query":    "角雷达信息检索报告",
         }
         method_map = {
-            "diagnose": "窗口检测 + 条件提取 + TPE + 5专家面板×3轮",
+            "diagnose": "窗口检测 + 条件提取 + TPE + 5专家面板\u00d73轮",
             "tune":     "参数扫描 + 敏感性分析(穿越次数/裕度) + 专家建议",
             "verify":   "参数敏感性对比 + What-if 评估",
             "query":    "知识检索 + 文档汇总",
@@ -1708,6 +1738,11 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 | 预期结果 | {expected} |
 | 分析方法 | {method_label} |
 """
+        variant_id = self.config.get("identity", {}).get("variant_id", "")
+        if variant_id:
+            header += f"| Variant | `{variant_id}` |\n"
+        if snapshot_id:
+            header += f"| 快照ID | `{snapshot_id}` |\n"
         if windows:
             for i, w in enumerate(windows):
                 header += f"| 测试窗口{i+1} | {w.t_start:.1f}s~{w.t_end:.1f}s ({w.duration:.1f}s) — {w.trigger_reason} |\n"
@@ -1943,3 +1978,145 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
         except Exception:
             pass
+
+    def _save_diagnosis_bundle(
+        self,
+        case_dir: Path,
+        problem: str,
+        expected: str,
+        func_name: str,
+        task_type: str,
+        classification: dict,
+        panel_result: dict,
+        conditions: dict,
+        evidence: dict,
+        probe_results: dict,
+        windows: list,
+        bag_meta: dict,
+        blf_meta: dict,
+        tpe_result,
+        param_report,
+        whatif_entries,
+        fix_report: str,
+        step_logger,
+        token_tracker,
+    ) -> Path:
+        """Save a structured DiagnosisBundle alongside report.md.
+
+        The bundle captures all diagnosis artifacts with consistent
+        variant_id / snapshot_id / case_id for audit and replay.
+        """
+        from core.diagnosis_bundle import DiagnosisBundle, Evidence, CodeLocation
+        from core.materials import MaterialRegistry, StructuredRequirementSet
+
+        variant_id = self.config.get("identity", {}).get("variant_id", "")
+        snapshot_id = self.config.get("identity", {}).get("snapshot_id", "")
+        case_id = case_dir.name
+
+        bundle = DiagnosisBundle.for_case(
+            project_root=self.project_root,
+            case_id=case_id,
+            variant_id=variant_id,
+            problem=problem,
+            expected=expected,
+        )
+        bundle.snapshot_id = snapshot_id
+        bundle.classification = classification.get("task_type", "")
+
+        # ── Evidence chain ──────────────────────────────────────────
+        # Convert evidence dict to Evidence objects
+        if evidence:
+            for key, val in evidence.items():
+                ev = Evidence(
+                    evidence_id=f"ev-{key}",
+                    source="analysis",
+                    description=str(val)[:500] if not isinstance(val, str) else val[:500],
+                    confidence=0.7,
+                )
+                bundle.add_evidence(ev)
+
+        # ── Conditions as evidence ──────────────────────────────────
+        if conditions:
+            for cond_key, cond_val in conditions.items():
+                if isinstance(cond_val, dict):
+                    desc = f"{cond_key}: " + json.dumps(cond_val, ensure_ascii=False)[:300]
+                else:
+                    desc = f"{cond_key}: {str(cond_val)[:300]}"
+                bundle.add_evidence(Evidence(
+                    evidence_id=f"cond-{cond_key}",
+                    source="condition",
+                    description=desc,
+                    confidence=0.8,
+                ))
+
+        # ── Root cause from panel ───────────────────────────────────
+        if panel_result:
+            opinions = panel_result.get("expert_opinions", {})
+            summary = panel_result.get("moderator_summary", "")
+            if summary:
+                bundle.root_cause = summary[:1000]
+                bundle.root_cause_confidence = 0.6
+
+                # Extract code locations from panel findings
+                import re
+                code_refs = re.findall(r'([a-zA-Z_][\w/]*/[\w.]+\.(c|h|cpp))\s*:?(\d+)?', summary)
+                for fp, line in code_refs:
+                    bundle.code_localization.append(CodeLocation(
+                        file_path=fp,
+                        line_start=int(line) if line else 0,
+                    ))
+
+        # Upgrade conclusion level based on evidence
+        if bundle.evidence_chain:
+            bundle.upgrade_to_candidate()
+        if bundle.code_localization and bundle.evidence_chain:
+            bundle.upgrade_to_confirmed()
+
+        # ── Requirement trace (discover materials for variant) ──────
+        if variant_id:
+            try:
+                registry = MaterialRegistry.for_variant(self.project_root, variant_id)
+                materials = registry.list_by_variant(variant_id)
+                req_set = StructuredRequirementSet.for_variant(self.project_root, variant_id)
+
+                bundle.requirement_trace = {
+                    "variant_id": variant_id,
+                    "snapshot_id": snapshot_id,
+                    "material_ids": [m.material_id for m in materials],
+                    "material_count": len(materials),
+                    "authoritative_count": len(registry.list_authoritative(variant_id)),
+                    "requirement_ids": list(req_set.requirements.keys()),
+                    "requirement_count": len(req_set.requirements),
+                }
+            except Exception:
+                bundle.requirement_trace = {
+                    "variant_id": variant_id,
+                    "snapshot_id": snapshot_id,
+                    "error": "failed to load materials/requirements",
+                }
+
+        # ── Signal analysis ─────────────────────────────────────────
+        if probe_results:
+            bundle.signal_analysis["probe"] = probe_results
+        if tpe_result:
+            bundle.signal_analysis["tpe"] = (
+                tpe_result.to_dict() if hasattr(tpe_result, "to_dict") else str(tpe_result)[:500]
+            )
+
+        # ── Metadata ────────────────────────────────────────────────
+        bundle.metadata.update({
+            "task_type": task_type,
+            "function": func_name,
+            "windows": [{"start": w.t_start, "end": w.t_end, "trigger": w.trigger_reason}
+                        for w in windows] if windows else [],
+            "bag_meta": bag_meta,
+            "blf_meta": blf_meta,
+            "step_log": step_logger.to_dict() if hasattr(step_logger, "to_dict") else {},
+            "token_usage": token_tracker.to_dict() if hasattr(token_tracker, "to_dict") else {},
+            "has_fix_report": bool(fix_report),
+        })
+
+        # Save to case directory
+        bundle_path = case_dir / "diagnosis_bundle.json"
+        bundle.save(bundle_path)
+        return bundle_path

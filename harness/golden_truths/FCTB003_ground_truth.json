@@ -1,0 +1,127 @@
+{
+  "case_id": "FCTB003",
+  "version": "1.0.0",
+  "created": "2026-06-13",
+  "project": "gwm_b26",
+
+  "problem_statement": {
+    "function": "FCTB",
+    "description": "FCTB能够成功刹车避障，但保压时间不够；当目标车辆穿过自车后，FCTB就被释放不触发了",
+    "expected": "FCTB应保压到车辆完全停稳，目标穿越自车后仍应保持制动输出",
+    "actual": "目标穿越后obj_flag关闭，状态机6→2跳变，刹车压力提前释放"
+  },
+
+  "ground_truth_root_cause": {
+    "primary_cause": "AEB信号链路失效（RteComMapping映射代码被注释）导致bAEBBAActiveFlg默认为FALSE，触发非AEB主动制动时FCTB释放逻辑",
+    "causal_chain": [
+      "CAN信号AEBBAActv_0x137无值或被忽略（来源：CAN/DBC层）",
+      "RteComMapping中action_byte2_0x15函数的AEBBAActv_0x137读取代码被注释",
+      "g_DTCCode.bAEBBAActiveFlg保持默认值FALSE",
+      "FCTB控制逻辑检测到!bAEBBAActiveFlg，满足'AEB未激活则释放保压'条件",
+      "目标穿越自车后属性降权（probObstrUnder归零，Dist<1.6m被误判为沟渠杂波）",
+      "FCTB obj_flag立即关闭，状态机从6跳变至2",
+      "刹车压力释放"
+    ],
+    "key_signals": [
+      {"signal": "ESP_FD2.AEBBAActv_0x137", "value": "0.0000全窗口", "significance": "AEB制动激活信号链路失效"},
+      {"signal": "g_DTCCode.bAEBBAActiveFlg", "value": "FALSE(默认)", "significance": "内部AEB激活标志，映射失效导致恒为FALSE"},
+      {"signal": "fctb_system_state", "value": "6→2跳变", "significance": "状态机从激活态跳变至Standby"},
+      {"signal": "FCTB obj_flag", "value": "仅维持1帧后关闭", "significance": "目标标志过早清除"}
+    ]
+  },
+
+  "condition_checks": [
+    {
+      "condition": "AEB Brake Active (BA)",
+      "threshold": "==FALSE(释放条件)",
+      "actual": "0.0000(100%帧)",
+      "satisfied": true,
+      "data_source": "外部抑制信号实测",
+      "note": "满足释放条件导致保压解除"
+    },
+    {
+      "condition": "AEB Brake Active (IB)",
+      "threshold": "==FALSE(释放条件)",
+      "actual": "0.0000(98.9%帧)",
+      "satisfied": true,
+      "data_source": "外部抑制信号实测",
+      "note": "满足释放条件导致保压解除"
+    },
+    {
+      "condition": "FCTB系统状态机",
+      "threshold": "!=3(非激活态)",
+      "actual": "6→2跳变",
+      "satisfied": true,
+      "data_source": "窗口1数据"
+    },
+    {
+      "condition": "目标障碍概率",
+      "threshold": ">阈值(维持条件)",
+      "actual": "归零(Dist<1.6m)",
+      "satisfied": false,
+      "data_source": "感知与目标专家分析"
+    },
+    {
+      "condition": "油门踏板位置",
+      "threshold": ">80(抑制条件)",
+      "actual": "9.2067(均值)",
+      "satisfied": false,
+      "data_source": "外部抑制信号实测",
+      "note": "未触发油门抑制"
+    }
+  ],
+
+  "key_fix_recommendations": [
+    "恢复AEB信号链路：检查RteComMapping.c中action_byte2_0x15函数，取消AEBBAActv_0x137读取注释并核对DBC极性(1=Active)",
+    "优化FCTB保压逻辑：修改状态机退出条件，进入保压阶段后即使obj_flag=0，只要CurrentTime-EventTime<3.0s仍需维持制动输出",
+    "校准目标过滤：调整AssignProbOverFlg中近距离(<1.6m)目标概率计算，避免穿越车辆被误判为沟渠杂波"
+  ],
+
+  "data_chains": [
+    {
+      "chain": "CAN AEBBAActv_0x137(无值) → RteComMapping(注释失效) → bAEBBAActiveFlg=FALSE → !Active触发释放 → 保压解除",
+      "description": "AEB信号链路失效导致FCTB保压提前释放"
+    },
+    {
+      "chain": "目标穿越 → Dist<1.6m → AssignProbOverFlg(probObstrUnder归零) → 误判为Ditch杂波 → obj_flag关闭 → 报警清除",
+      "description": "目标穿越属性降权加速报警清除"
+    }
+  ],
+
+  "confidence": {
+    "value": 75,
+    "uncertainty_factors": [
+      "adasFunc.c具体保压判断逻辑片段缺失",
+      "fFctbHoldTimeThresh=3.0f是否优先于AEB抑制逻辑无法确认",
+      "状态机显示值6与文档定义2/3不符，可能存在日志定义偏差"
+    ],
+    "certain_factors": [
+      "AEB信号链路失效证据充分（RteComMapping注释+全窗口0值）",
+      "目标穿越导致属性降权的因果链清晰"
+    ]
+  },
+
+  "test_windows": [
+    {"id": 1, "start": 1776063428.1, "end": 1776063436.2, "event": "报警变化+状态跳变+目标出现+速度变化"},
+    {"id": 2, "start": 1776063439.4, "end": 1776063461.6, "event": "报警变化+状态跳变+速度变化"}
+  ],
+
+  "scenario_analysis": {
+    "fctb_hold_threshold": "fFctbHoldTimeThresh=3.0s（保压时间阈值）",
+    "scenario_essence": "AEB信号链路断开+目标穿越属性降权双重因素导致保压失效",
+    "normal_behavior": "正常场景中AEB保压请求保持有效或FCTB内部计时器覆盖目标消失瞬间"
+  },
+
+  "evaluation_criteria": {
+    "structural_minimum": 0.90,
+    "semantic_target": 0.70,
+    "required_elements": [
+      "root_cause_with_causal_chain",
+      "condition_check_table",
+      "evidence_chain_with_signals",
+      "fix_recommendations",
+      "confidence_score",
+      "data_chain_analysis"
+    ]
+  }
+}

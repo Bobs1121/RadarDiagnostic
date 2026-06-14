@@ -32,79 +32,218 @@ ai:
     max_chars: 6000       # 渲染进 prompt 的最大字符数
     use_thinking: false   # planner 是轻量任务，默认不开 thinking
 
-# ── Project Configuration ──────────────────────────────────────────────
-# Multi-project support.  Each project defines its own source code root,
-# key files, and the orchestrator scopes CodeGraph / memory / source_docs
-# per project.
+# ─── Identity Hierarchy (variant / package_profile / snapshot) ────────
 #
-# CLI: python cli.py -P <project_key> <case_dir> ...
-# When -P is omitted, `default_project` is used.
+# NEW: The five-layer identity model replaces the flat project_key.
+#   platforms.*       → PlatformFamily (tech plugin)
+#   codebases.*       → Codebase (physical workspace)
+#   variants.*        → Variant (customer project boundary)
+#   package_profiles* → PackageProfile (build parameter combo)
 #
+# LEGACY: `projects.*` is still supported for backward compatibility.
+#   On load, legacy projects are automatically mapped to variants.
+#   New configurations should use the identity hierarchy below.
+#
+# CLI:
+#   Legacy:  python cli.py -P gwm_b26 <case_dir>   (project_key mode)
+#   New:     python cli.py --variant gen6/gwm_b26 <case_dir>
+#   Full:    python cli.py --variant gen6/gwm_b26 --package gen6/gwm_b26/default <case_dir>
+
+# ── Platform Families ────────────────────────────────────────────────
+platforms:
+  gen6_c_radar:
+    language: c
+    build_system: scons
+  gen5_cpp_radar:
+    language: cpp
+    build_system: cmake
+
+# ── Codebases ────────────────────────────────────────────────────────
+codebases:
+  gwm_cr60light:
+    root_path: "D:\\\\GWM-CR60LIGHT\\\\cr60_light"
+    platform_id: gen6_c_radar
+  byd_sc6h_cr60light:
+    root_path: "D:\\\\BYD-SC6H-cr60light\\\\cr60_light"
+    platform_id: gen6_c_radar
+  byd_ovs_cb:
+    root_path: "C:\\\\BYD_OVS_CB"
+    platform_id: gen5_cpp_radar
+
+# ── Variants (customer project boundaries) ───────────────────────────
+variants:
+  gen6/gwm_b26:
+    codebase_id: gwm_cr60light
+    display_name: "GWM_B26 (CR60Light)"
+    build_entry: "coem/GWM_B26/buildscripts/build.bat"
+    scope:
+      include:
+        - "coem/GWM_B26/**"
+    default_package_profile: gen6/gwm_b26/default
+    key_source_files:
+      - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIfSchedule\\\\AswIfSchedule.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+      - "coem\\\\GWM_B26\\\\components\\\\com\\\\AutoGen\\\\PriCan\
+teLite_PriCan.h"
+    dbc_sets:
+      default:
+        files:
+          - "CR_DBC_V3.2_20260331.dbc"
+          - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+          - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+    source_domains:
+      system_state:
+        - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+        - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+      algorithm:
+        - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+        - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+        - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+      signal_chain:
+        - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+      perception:
+        - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+        - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+        - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+      output:
+        - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+
+  gen6/byd_sc6h:
+    codebase_id: byd_sc6h_cr60light
+    display_name: "BYD-SC6H-cr60light (6代角雷达)"
+    build_entry: "coem/BYD_SC6H/buildscripts/build.bat"
+    scope:
+      include:
+        - "coem/BYD_SC6H/**"
+        - "coem/BYD_UKE/**"
+    default_package_profile: gen6/byd_sc6h/default
+    key_source_files:
+      - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+    dbc_sets:
+      default:
+        files:
+          - "CR_DBC_V3.2_20260331.dbc"
+          - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+          - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+
+  gen5/byd:
+    codebase_id: byd_ovs_cb
+    display_name: "BYD_OVS_CB (5代角雷达)"
+    build_entry: "apl/byd/tools/build.bat"
+    scope:
+      include:
+        - "apl/byd/**"
+    key_source_files: []
+    dbc_sets: []
+
+# ── Package Profiles (build parameter combos) ────────────────────────
+package_profiles:
+  gen6/gwm_b26/default:
+    variant_id: gen6/gwm_b26
+    build_flags:
+      vehicle_type: GWM_B26
+      power_supply: KL15
+      antenna: SYMMETRY
+      cycle_time: T66MS
+      sw_build_type: DEVELOP
+      fun_test_type: "OFF"
+    patch_set:
+      source_dir: coem/GWM_B26/buildscripts/patch
+
+  gen6/byd_sc6h/default:
+    variant_id: gen6/byd_sc6h
+    build_flags:
+      vehicle_type: BYD_SC6H
+      power_supply: KL15
+      antenna: SYMMETRY
+      cycle_time: T66MS
+      sw_build_type: DEVELOP
+      fun_test_type: "OFF"
+
+# ── Default variant ──────────────────────────────────────────────────
+default_variant: "gen6/gwm_b26"
+
+# ── Legacy projects block (backward compat — auto-mapped to variants) ──
+# Kept so existing -P gwm_b26 etc. still works.  On load these are
+# merged into the variant system.  New projects should be added to
+# `variants.*` above instead.
 projects:
   gwm_b26:
     display_name: "GWM_B26 (CR60Light)"
-    source_code: "D:\\BYD-SC6H-cr60light\\cr60_light"
+    source_code: "D:\\\\GWM-CR60LIGHT\\\\cr60_light"
     dbc_files:
       - "CR_DBC_V3.2_20260331.dbc"
       - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
       - "GWM_RearCorner_Pri_V3.0 (1).dbc"
     key_source_files:
-      # 算法层 - 报警判断
-      - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
-      - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h"
-      # 平台状态机 - 第二套状态机
-      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
-      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
-      # 信号链路 - CAN映射
-      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c"
-      - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.h"
-      # 输出协调 - 左右雷达合并
-      - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
-      # 调度入口
-      - "coem\\GWM_B26\\components\\AswIfSchedule\\AswIfSchedule.c"
-      # 感知层
-      - "adas\\symmetry\\perception\\src\\objAttribCal.c"
-      - "adas\\symmetry\\perception\\src\\track.c"
-      - "adas\\symmetry\\perception\\src\\postProcess.c"
-      # 定义文件
-      - "adas\\symmetry\\perception\\include\\perception_public_def.h"
-      - "adas\\symmetry\\perception\\include\\structDefine.h"
-      - "adas\\symmetry\\perception\\include\\paraDefine.h"
-      - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
-      # RteLite - 信号接口声明 (GWM_B26)
-      - "coem\\GWM_B26\\components\\com\\AutoGen\\PriCan\
+      - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+      - "coem\\\\GWM_B26\\\\components\\\\AswIfSchedule\\\\AswIfSchedule.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+      - "coem\\\\GWM_B26\\\\components\\\\com\\\\AutoGen\\\\PriCan\
 teLite_PriCan.h"
   sc6h:
     display_name: "BYD-SC6H-cr60light (6代角雷达)"
-    source_code: "D:\\BYD-SC6H-cr60light\\cr60_light"
+    source_code: "D:\\\\BYD-SC6H-cr60light\\\\cr60_light"
     dbc_files:
       - "CR_DBC_V3.2_20260331.dbc"
       - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
       - "GWM_RearCorner_Pri_V3.0 (1).dbc"
     key_source_files:
-      # 算法层
-      - "coem\\BYD_UKE\\components\\AswPerception\\func\\adasFunc.c"
-      - "coem\\BYD_UKE\\components\\AswPerception\\func\\adasFunc.h"
-      # 平台状态机
-      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
-      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
-      # 信号链路
-      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\RteComMapping.c"
-      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\RteComMapping.h"
-      # 输出协调
-      - "coem\\BYD_UKE\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
-      # 感知层 (与 gwm_b26 共享)
-      - "adas\\symmetry\\perception\\src\\objAttribCal.c"
-      - "adas\\symmetry\\perception\\src\\track.c"
-      - "adas\\symmetry\\perception\\src\\postProcess.c"
-      # 定义文件
-      - "adas\\symmetry\\perception\\include\\perception_public_def.h"
-      - "adas\\symmetry\\perception\\include\\structDefine.h"
-      - "adas\\symmetry\\perception\\include\\paraDefine.h"
-      - "adas\\symmetry\\perception\\include\\globalVarDefine.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+      - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+      - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
   cr5cb:
     display_name: "BYD_OVS_CB (5代角雷达)"
-    source_code: "C:\\BYD_OVS_CB"
+    source_code: "C:\\\\BYD_OVS_CB"
     dbc_files: []
     key_source_files: []
 
@@ -231,3 +370,10 @@ auto_dream:
     max_snippet_chars: 40000
     # 是否启用 thinking 模式（质量更高但慢 3-5 倍）
     use_thinking: true
+
+# ── Harness Evaluation ──────────────────────────────────────────────────
+harness:
+  # LLM-as-judge 增强配置（默认关闭）
+  llm_judge:
+    enabled: false              # 设为 true 开启 LLM judge 增强
+    model_profile: "simple"     # simple=本地模型, complex=远端模型

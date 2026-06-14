@@ -60,30 +60,104 @@ def _get_default_project_key() -> str:
     return raw.get("default_project", "gwm_b26")
 
 
-def load_config(project_key: str | None = None) -> dict:
+def load_config(
+    project_key: str | None = None,
+    variant_id: str | None = None,
+    package_profile_id: str | None = None,
+) -> dict:
     """Load config.yaml, resolve env vars, and merge in project config.
 
-    Backward compat: code that reads config["paths"]["source_code"] still
-    works — the default project's values are backfilled.
+    New identity parameters:
+        variant_id:          Canonical variant ID (e.g. "gen6/gwm_b26").
+        package_profile_id:  Package profile ID (e.g. "gen6/gwm_b26/default").
+
+    Backward compat:
+        project_key:         Legacy project key (e.g. "gwm_b26").  Still works
+                             but maps to the new variant system internally.
+
+    Precedence: --variant > -P/--project > default_variant > default_project
     """
     global _config_cache
-    effective_key = project_key or _get_default_project_key()
+
+    from config import (
+        load_config as _load_config_base,
+        get_project,
+        resolve_variant_id,
+        resolve_source_code,
+    )
+
+    # Resolve the effective identifier
+    cfg = _load_config_base(PROJECT_ROOT / "config.yaml")
+
+    if variant_id:
+        effective_variant = variant_id
+    elif project_key:
+        effective_variant = resolve_variant_id(cfg, project_key)
+    else:
+        effective_variant = resolve_variant_id(cfg, None)
+
+    effective_key = effective_variant
     if effective_key in _config_cache:
         return _config_cache[effective_key]
 
-    from config import load_config as _load_config_base
-    from config import get_project
+    # Try new variant system first, fall back to legacy get_project
+    proj = {}
+    try:
+        from config import get_variant, get_package_profile
+        variant, codebase, platform = get_variant(cfg, effective_variant)
+        source_code = str(codebase.root_path)
 
-    cfg = _load_config_base(PROJECT_ROOT / "config.yaml")
-    proj = get_project(cfg, project_key)
+        # Resolve package profile
+        pkg = None
+        if package_profile_id:
+            pkg = get_package_profile(cfg, package_profile_id)
+        elif variant.default_package_profile:
+            try:
+                pkg = get_package_profile(cfg, variant.default_package_profile)
+            except ValueError:
+                pass
 
-    # Inject project paths into top-level config for backward compat
+        # Build derived paths
+        proj_safe = effective_variant.replace("/", "_").replace(" ", "_").lower()
+        proj = {
+            "display_name": variant.display_name,
+            "source_code": source_code,
+            "key_source_files": variant.key_source_files,
+            "dbc_files": [],
+            "source_domains": variant.source_domains,
+            "source_docs_dir": str(PROJECT_ROOT / "source_docs" / proj_safe),
+            "memory_dir": str(PROJECT_ROOT / "memory" / "projects" / proj_safe),
+            "codegraph_db_path": str(
+                PROJECT_ROOT / "memory" / "codegraph" / f"codegraph_{proj_safe}.db"
+            ),
+            "_project_key": variant.compat_project_key,
+            "_variant_id": variant.variant_id,
+        }
+        # Flatten DBC sets into a list
+        for dbc_set in variant.dbc_sets:
+            proj["dbc_files"].extend(dbc_set.files)
+    except (ValueError, ImportError):
+        # Fallback to legacy project system
+        legacy_key = resolve_variant_id(cfg, project_key) if project_key else None
+        proj = get_project(cfg, legacy_key)
+
+    # Inject into top-level config for backward compat
     cfg["paths"]["project_root"] = str(PROJECT_ROOT)
     cfg["paths"]["source_docs"] = proj["source_docs_dir"]
     cfg["paths"]["source_code"] = proj["source_code"]
     cfg["paths"]["key_source_files"] = proj.get("key_source_files", [])
     cfg["paths"]["dbc_files"] = proj.get("dbc_files", [])
     cfg["project"] = proj
+
+    # Store identity chain if available
+    if "_variant_id" in proj:
+        cfg["identity"] = {
+            "variant_id": proj["_variant_id"],
+            "project_key": proj.get("_project_key", ""),
+        }
+        if package_profile_id or (pkg and hasattr(pkg, "package_profile_id")):
+            pid = package_profile_id or (pkg.package_profile_id if pkg else "")
+            cfg["identity"]["package_profile_id"] = pid
 
     _config_cache[effective_key] = cfg
     return cfg
@@ -112,7 +186,21 @@ Examples:
         """,
     )
     parser.add_argument("case_dir", nargs="?", help="Case folder containing .bag/.blf files")
-    parser.add_argument("-P", "--project", default=None, help="Project key from config.yaml (default: uses default_project)")
+
+    # ── Identity selection (new + legacy) ──────────────────────────
+    # Identity arguments
+    id_group = parser.add_argument_group("Identity (variant/snapshot)")
+    id_group.add_argument("--variant", default=None,
+        help="Variant path (e.g. coem/GWM_B26). Overrides config.yaml variant.")
+    id_group.add_argument("--package-profile", default=None,
+        help="Package profile ID (e.g. gen6/gwm_b26/default). "
+             "Auto-resolved from variant if omitted.")
+    id_group.add_argument("--snapshot", default=None,
+        help="Snapshot ID to load (replay), 'auto' to create one for this run. "
+             "Default: 'auto' for diagnosis mode, None otherwise.")
+    id_group.add_argument("-P", "--project", default=None,
+        help="[LEGACY] Project key from config.yaml (default: uses default_project). "
+             "Prefer --variant instead.")
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--query", "-q", help="Data query (natural language question)")
@@ -134,10 +222,30 @@ Examples:
     args = parser.parse_args()
 
     # ── Load config early (needed by all sub-commands) ──────────────
-    config = load_config(args.project)
+    config = load_config(
+        project_key=args.project,
+        variant_id=args.variant,
+        package_profile_id=args.package,
+    )
+
+    # ── Resolve snapshot ────────────────────────────────────────────
+    snapshot_ctx = _resolve_snapshot(config, args.snapshot, PROJECT_ROOT)
+    if snapshot_ctx.get("snapshot_id"):
+        ident = config.setdefault("identity", {})
+        ident["snapshot_id"] = snapshot_ctx["snapshot_id"]
+        sid = snapshot_ctx["snapshot_id"]
+        action = snapshot_ctx.get("action", "unknown")
+        console.print(f"  [dim]Snapshot: {sid} ({action})[/dim]")
 
     if args.query and args.expected:
         parser.error("-e/--expected is only used with -p/--problem (diagnosis mode)")
+
+    # ── Show identity context ────────────────────────────────────────
+    ident = config.get("identity", {})
+    if ident:
+        vid = ident.get("variant_id", "")
+        pid = ident.get("package_profile_id", "")
+        console.print(f"  [dim]Identity: variant={vid}  package={pid}[/dim]")
 
     # ── Learn-constants only mode ───────────────────────────────────────
     if args.learn_constants:
@@ -217,6 +325,11 @@ Examples:
             console.print("[red]Invalid choice. Use 1 or 2.[/red]")
             sys.exit(1)
 
+    # ── Default snapshot to 'auto' for diagnosis mode ─────────────────
+    if mode == "diagnose" and args.snapshot is None:
+        args.snapshot = "auto"
+        console.print("[dim]Auto-enabling --snapshot auto for diagnosis mode[/dim]")
+
     # ── Route ───────────────────────────────────────────────────────────
     if mode == "query":
         _run_query(case_dir, args.query, config)
@@ -233,6 +346,124 @@ Examples:
         console.print(f"\n[dim]Problem:  {problem}[/dim]")
         console.print(f"[dim]Expected: {expected}[/dim]\n")
         _run_diagnosis(case_dir, problem, expected, config)
+
+
+# ── Snapshot resolution ──────────────────────────────────────────────
+
+def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
+    """Resolve or create a snapshot based on CLI --snapshot argument.
+
+    Returns dict with keys: snapshot_id, snapshot (object), action (created|loaded).
+    Returns empty dict if no snapshot requested.
+
+    When snapshot_arg == "auto", the snapshot is enriched with:
+      - code_snapshot: hashes of key source files from the variant
+      - dbc_snapshot: hashes of DBC files
+      - material_snapshot: hashes of registered materials
+      - metadata.summary: human-readable summary of captured artifacts
+    """
+    if snapshot_arg is None:
+        return {}
+
+    from core.snapshot_store import SnapshotStore
+    from core.identity import Snapshot, file_sha256
+    from core.materials import MaterialRegistry
+
+    store = SnapshotStore(project_root / "memory" / "snapshots")
+    # Resolve variant_id: prefer config.identity (injected by CLI), fall back
+    # to resolve_variant_id which reads default_variant/default_project.
+    variant_id = config.get("identity", {}).get("variant_id", "")
+    if not variant_id:
+        from config import resolve_variant_id
+        variant_id = resolve_variant_id(config, None)
+
+    if snapshot_arg == "auto":
+        # ── Enrich with code / DBC / material hashes ──────────────
+        code_snapshot = {}
+        dbc_snapshot = {}
+        material_snapshot = {}
+        summary_parts = []
+
+        # 1) Code snapshot — hash key source files from variant config
+        proj = config.get("project", {})
+        key_files = proj.get("key_source_files", [])
+        source_root = proj.get("source_code", "")
+        if source_root and key_files:
+            source_path = Path(source_root)
+            for rf in key_files:
+                fp = source_path / rf
+                if fp.exists():
+                    code_snapshot[str(fp.relative_to(source_path))] = file_sha256(fp)
+            summary_parts.append(f"code={len(code_snapshot)} files hashed")
+
+        # 2) DBC snapshot — hash DBC files referenced by variant
+        dbc_files = proj.get("dbc_files", [])
+        if dbc_files:
+            for dbc_name in dbc_files:
+                # DBC files may be at source_root or project_root
+                for candidate_root in [Path(source_root), project_root]:
+                    fp = candidate_root / dbc_name
+                    if fp.exists():
+                        dbc_snapshot[dbc_name] = file_sha256(fp)
+                        break
+            summary_parts.append(f"dbc={len(dbc_snapshot)} files hashed")
+
+        # 3) Material snapshot — discover registered materials for variant
+        if variant_id:
+            try:
+                registry = MaterialRegistry.for_variant(project_root, variant_id)
+                for mat in registry.list_by_variant(variant_id):
+                    material_snapshot[mat.material_id] = mat.hash
+                    # Also register the DBC files as authoritative materials
+            except Exception:
+                pass
+
+            # Auto-register DBC files as materials if they exist
+            if dbc_files and source_root:
+                try:
+                    reg = MaterialRegistry.for_variant(project_root, variant_id)
+                    for dbc_name in dbc_files:
+                        fp = Path(source_root) / dbc_name
+                        if fp.exists():
+                            m = reg.register(fp, variant_id, category="authoritative",
+                                             tags=["dbc", "auto_registered"])
+                            material_snapshot[m.material_id] = m.hash
+                except Exception:
+                    pass
+
+            if material_snapshot:
+                summary_parts.append(f"materials={len(material_snapshot)} registered")
+
+        # 4) Source docs snapshot
+        source_docs_dir = proj.get("source_docs_dir", "")
+        if source_docs_dir:
+            sdd = Path(source_docs_dir)
+            if sdd.exists():
+                doc_files = list(sdd.glob("*.md")) + list(sdd.glob("*.json"))
+                summary_parts.append(f"source_docs={len(doc_files)} files")
+
+        snap = Snapshot.create(
+            variant_id=variant_id,
+            package_profile_id=config.get("identity", {}).get("package_profile_id"),
+            code_snapshot=code_snapshot,
+            dbc_snapshot=dbc_snapshot,
+            material_snapshot=material_snapshot,
+            config_version=file_sha256(project_root / "config.yaml") if (project_root / "config.yaml").exists() else "",
+            model_profile={
+                "remote_model": config.get("ai", {}).get("remote", {}).get("model", ""),
+                "local_model": config.get("ai", {}).get("local", {}).get("model", ""),
+            },
+        )
+        snap.metadata["summary"] = "; ".join(summary_parts) if summary_parts else "empty snapshot"
+        snap.metadata["source_code"] = source_root
+        snap.metadata["variant_id"] = variant_id
+
+        store.save(snap)
+        return {"snapshot_id": snap.snapshot_id, "snapshot": snap, "action": "created"}
+    else:
+        # Load existing snapshot
+        snap = store.load(snapshot_arg)
+        return {"snapshot_id": snap.snapshot_id, "snapshot": snap, "action": "loaded"}
 
 
 # ── Dream ───────────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-> 最后更新: 2026-06-13 (优先级计划 + Harness Phase 2 完成)
-> 当前分支: `refactor/v2`
-> 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) 完成
-> PRD 版本: v2.1.0 (多项目支持 + 基础优先策略)
-> 综合评分: 8.3/10 — SIGNAL 100%，Harness 3 层评估上线(FCTA001 0.86)，知识沉淀闭环，多项目完全隔离
+| 最后更新: 2026-06-14 (底座收口完成：5个阻塞项全部修复)
+| 当前分支: `refactor/v2`
+| 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) + ADR-018(身份模型) + **底座收口(5阻塞项修复)** 完成
+| PRD 版本: v2.1.1 (多项目支持 + 基础优先策略 + variant/package/material 设计补充)
+| 综合评分: 8.5/10 — SIGNAL 100%，Harness 3 层评估上线(FCTA001 0.86)，知识沉淀闭环，多项目完全隔离，身份模型底座收口完成
 
 ---
 
@@ -15,6 +15,8 @@
 | **PRD** | `docs/PRD_refactor_v2.md` | 产品需求文档 — 改造目标、用户场景、功能需求 |
 | **实施规划** | `docs/IMPLEMENTATION_PLAN_v2.md` | 实施步骤 — Phase/任务/验收标准 |
 | **本文档** | `docs/technical/codegraph-handoff-master.md` | 跨会话 handoff — 当前状态 + 架构 + 决策记录 |
+| **后续计划** | `docs/technical/next-development-plan-2026-06-13.md` | 下一阶段详细开发计划（设计稿） |
+| **专题设计** | `docs/technical/variant-package-material-design-2026-06-13.md` | variant / 软件包 / 材料接入 / 审计产物设计 |
 | ai/ 模块 | `ai/AGENTS.md` | AI 分析模块说明 |
 | memory/ 模块 | `memory/AGENTS.md` | 记忆系统说明 |
 | parsers/ 模块 | `parsers/AGENTS.md` | 数据解析层说明 |
@@ -40,7 +42,8 @@
 | **6B: Harness Phase 1** | ✅ 完成 | StructuralEvaluator L0 (16项检查) + FCTA001 Golden Truth + pytest 4项通过 |
 | **6C: 知识沉淀闭环** | ✅ 完成 | 诊断完成后主动提取 expert_panel 知识，增量写入 L6 code_knowledge |
 | **6D: 多项目数据隔离** | ✅ 完成 | source_docs + L6 code_knowledge 按项目隔离 + 代码引用更新 + 向后兼容回退 |
-| **Harness Phase 2** | ⏳ 排队 | L1 语义准确性 + L2 根因追溯评估 |
+| **Harness Phase 2** | ✅ 完成 | L1 证据链覆盖度（确定性规则）+ L2 结论一致性（概念+关键词重叠 baseline，可选 LLM judge 作为增强项） |
+| **ADR-018: 身份模型** | ✅ 完成 | 5 层身份 dataclass (PlatformFamily/Codebase/Variant/PackageProfile/Snapshot) + MaterialRegistry + DiagnosisBundle + KnowledgeStore |
 
 ### 改造路线 (基础优先)
 
@@ -86,7 +89,7 @@
 ### 三个阻塞项（按优先级）
 
 1. **SIGNAL internal_var 映射（P0）** — ✅ **已完成** 301/301 (100%)。RX 信号映射到 `g_RteComMapping_RLWarnSig` 结构体字段，RSDS write 信号标注 CONSTANT/FLAG 标记。BLF CAN 信号现在可以完整关联到 C 变量。
-2. **Harness 实现（P1）** — 设计调研已完成，但不实现等于没有。没有评估体系就无法量化"诊断准不准"。
+2. **Harness 评估体系（P1）** — ✅ **已完成** Phase 6B + Harness Phase 2（L0/L1/L2）。当前阻塞从“有没有评估”变为“评估样本是否足够、L2 语义是否够准”。
 3. **知识沉淀闭环（P1）** — ✅ **已完成** Phase 6C。`_precipitate_knowledge` 在 deliver 阶段自动调用，从 expert_panel 结果中提取 alarm_logic/state_machine/calculation_chain/output_chain 知识，增量合并到 L6 code_knowledge。
 
 ### 详细发现
@@ -608,8 +611,10 @@ prompts/expert_panel/
 
 | 优先级 | Phase | 任务 | 预估工时 | 依赖 | 状态 |
 |--------|-------|------|----------|------|------|
+| **P0-0** | Architecture | Variant / Package / Snapshot / Material 底座 | 1-2 天 | 无 | ⏳ 排队 |
 | **P0-1** | Harness Phase 3 | 更多案例 ground truth（BSD001/FCTB002） | 2 天 | Harness Phase 2 | ⏳ 排队 |
 | **P0-2** | Harness Phase 3 | LLM-as-judge 增强 L2 因果匹配 | 1 天 | P0-1 ground truth | ⏳ 排队 |
+| **P0-3** | Engineering | 依赖治理：可选依赖分层（langgraph 等）+ 运行时缺失提示 | 0.5 天 | 无 | ⏳ 排队 |
 | **P1-1** | 5E.1 | ContextBudget 动态总预算 | 0.5 天 | 无 | ⏳ 排队 |
 | **P1-2** | 5E.2 | 记忆简化 6→3 层 | 1 天 | 无 | ⏳ 排队 |
 | **P1-3** | 5E.3 | 专家面板 prompt 多项目适配 | 1 天 | 5E.2（记忆简化） | ⏳ 排队 |
@@ -618,6 +623,22 @@ prompts/expert_panel/
 | **Deferred** | MF4 Parser | asammdf 依赖 | — | 内网安装 asammdf | ❌ BLOCKED |
 
 ### 详细说明
+
+#### P0-0: Architecture — Variant / Package / Snapshot / Material（1-2 天）
+
+**目标**: 先把“分析对象”和“审计对象”定义清楚，避免后续评估、知识沉淀、diff、仿真接口各自发明身份模型。
+
+**任务分解**:
+1. 定义 `variant`：客户项目级边界（如 `coem/GWM_B26`、`apl/byd`）
+2. 定义 `package_profile`：构建参数组合（build flags / patch / artifact rules）
+3. 定义 `snapshot`：代码/DBC/材料/config/model 的可复现快照
+4. 定义 `Material Registry` 和 `StructuredRequirementSet`
+5. 定义 `DiagnosisBundle`、`RootCausePattern`、`FixPlaybook`
+
+**验收标准**:
+- 所有诊断与评估结果都能引用 `snapshot_id`
+- 客户需求材料能绑定到 `variant` 并形成结构化约束
+- 多项目支持不再依赖单一 `project_key`
 
 #### P0-1: Harness Phase 3 — 更多案例 Ground Truth（2 天）
 
@@ -635,17 +656,30 @@ prompts/expert_panel/
 
 #### P0-2: Harness Phase 3 — LLM-as-judge 增强 L2（1 天）
 
-**目标**: 当前 L2 causal 匹配靠 TF-IDF（FCTA001 得 0.57），引入 LLM-as-judge 提升语义匹配准确度。
+**目标**: 当前 L2 causal 匹配是「概念命中 + 关键词重叠」baseline（FCTA001 causal≈0.57），引入 LLM-as-judge 提升语义匹配准确度，同时保留确定性 baseline 作为可复现下限。
 
 **方案**:
 - 在 ConclusionEvaluator 中增加 `causal_llm_judge` 子项
 - 将诊断报告根因与 ground truth 根因一起发给 LLM，让 LLM 判断一致性
-- LLM 打分与 TF-IDF 分数取 max（保留确定性 baseline）
+- LLM 打分与 baseline 分数取 max（保留确定性 baseline）
 - 新增 `recommendations_llm_judge` — LLM 评估修复建议质量
 
 **验收标准**:
-- FCTA001 L2 causal 从 0.57 提升到 0.7+
+- FCTA001 L2 causal 从 ~0.57 提升到 0.7+（仅开启 LLM judge 时）
 - 新增 LLM judge 项有清晰的 prompt 和评分标准
+
+#### P0-3: Engineering — 依赖治理（0.5 天）
+
+**目标**: 把“可运行能力”拆成清晰的依赖档位，避免因为可选依赖缺失导致 import-time 崩溃；并让开发者能一眼知道要装什么。
+
+**方案**:
+- 定义依赖档位：`base`（确定性链路）、`llm`（LLM 调用）、`panel`（LangGraph 专家面板）、`harness`（评估）
+- 文档化安装与运行矩阵（哪些命令需要哪些档位）
+- 运行时缺失依赖时：给出明确错误提示与降级路径（例如禁用专家面板/切换到简化推理）
+
+**验收标准**:
+- 新人只装 `base` 也能跑通“确定性步骤”（解析/窗口/TPE/报告生成）且报错可读
+- 开启专家面板时若缺 `langgraph`，提示“如何安装/如何降级”，而不是直接堆栈报错
 
 #### P1-1: ContextBudget 动态总预算（0.5 天）
 
@@ -680,6 +714,73 @@ prompts/expert_panel/
 
 ---
 
+## 设计审查结论（2026-06-13）
+
+**结论**: 项目方向与 PRD v2.1.0 一致，当前设计总体 OK；需要修正的是“评估/依赖/多项目 prompt”三块的工程化边界与文档一致性。
+
+1. **Harness L2 的 baseline 必须确定性**：当前采用“概念命中 + 关键词重叠”可复现；语义不足用可选 LLM judge 补强，不引入重量依赖作为默认路径。
+2. **变量过滤不应追求绝对数量**：验收从“<200 个”调整为“噪声为 0 + 抽样质量 + 召回率”。
+3. **依赖需要分档治理**：LangGraph/LLM/评估属于可选能力，应避免 import-time 直接崩溃，提供清晰安装矩阵与降级路径。
+4. **专家面板 prompt 需要真正多项目化**：prompt 中写死文件路径会破坏多项目支持，应转为配置/CodeGraph 动态注入。
+
+### 本次新增设计结论（variant/package/material）
+
+基于真实构建脚本补充后的结论：
+
+1. **客户项目边界按 `variant` 定义**：Gen6 的 `coem/<客户项目>` 与 Gen5 的 `apl/<customer>` 本质相同，都应作为知识隔离与配置覆盖的主键。
+2. **软件包差异单独抽象为 `package_profile`**：构建参数（如 `-v/-p/-a/-ct` 或 CMake args）决定软件包，不应滥拆成新的 `variant`。
+3. **可审计分析必须绑定 `snapshot`**：代码、DBC、材料、配置、模型版本都要进 `snapshot_id`。
+4. **客户需求材料必须成为正式输入层**：需求文档、状态机说明、参数表、DBC 需经解析后转为结构化约束对象，而不是散落在 prompt 中。
+5. **知识沉淀优先级明确**：先沉淀 `RootCausePattern` 和 `FixPlaybook`，且都必须带来源 case / snapshot / evidence。
+
+## 2026-06-13 实现评审（variant/package/material 首轮）
+
+> 评审对象：本轮已落地的 `core/identity.py`、`core/materials.py`、`core/diagnosis_bundle.py`、`config.py`、`cli.py`、`config.yaml`、Harness L2 增强相关改动。
+
+**评审结论**：方向正确，已经开始落地架构底座；但当前状态还不适合继续向上堆功能，需先做一轮“底座收口”。
+
+### 已确认的正向进展
+
+- 已新增身份模型：`PlatformFamily` / `Codebase` / `Variant` / `PackageProfile` / `Snapshot`
+- 已新增材料模型：`MaterialRegistry`、`RegisteredMaterial`、`StructuredRequirementSet`
+- 已新增诊断产物模型：`DiagnosisBundle`、`RootCausePattern`、`FixPlaybook`
+- CLI 已引入 `--variant` / `--package` / `--snapshot` 参数入口
+
+### 当前阻塞项（必须先修）
+
+1. **`dbc_sets` 映射解析错误**
+   - 现状：`config.yaml` 中 `dbc_sets.default.files` 结构未被正确解析，导致 `Variant.dbc_sets` 实际为空。
+   - 影响：`snapshot` 无法形成正确的 DBC 快照，后续材料/诊断/审计链条会失真。
+
+2. **Legacy `gwm_b26` 兼容路径指错代码库**
+   - 现状：`projects.gwm_b26.source_code` 仍指向错误 codebase。
+   - 影响：仍走旧 `project_key` 的路径会分析到错误仓，不能接受。
+
+3. **`--snapshot` 只有 CLI 参数，没有真正接入流程**
+   - 现状：只解析参数并显示 identity，没有创建/加载/绑定到诊断、Harness、知识沉淀。
+   - 影响：审计链未形成，`snapshot` 仍停留在 schema 层。
+
+4. **底层 `resolve_*` 仍主要依赖 `get_project()`**
+   - 现状：`resolve_codegraph_db` / `resolve_source_docs_dir` / `resolve_memory_dir` 仍以 legacy `project_key` 兼容层为主。
+   - 影响：一旦调用方开始广泛传 `variant_id`，底层 API 仍不稳。
+
+5. **LLM Judge 与现有 ground truth schema 未完全对齐**
+   - 现状：读取黄金答案字段的方式和现有 Harness ground truth 结构不一致。
+   - 影响：L2 增强分可能建立在错误上下文上。
+
+### 下一步实施顺序（不要跳步）
+
+P0 收口：
+1. 修 `dbc_sets` 解析
+2. 修 legacy `gwm_b26` 路径
+3. 让 `resolve_*` 同时稳定支持 `project_key` 和 `variant_id`
+4. 将 `snapshot` 接入最小闭环（创建/加载/落盘/被诊断或 Harness 引用）
+
+P1 继续：
+5. 将 `Material Registry` 与 `StructuredRequirementSet` 接入 `variant`
+6. 将 `DiagnosisBundle` 接入一次真实诊断结果落盘
+7. 再继续做更多 ground truth 与 L2 judge 增强
+
 ## 已知问题与待办（更新 2026-06-13）
 
 ### 已完成（不再阻塞）
@@ -692,12 +793,23 @@ prompts/expert_panel/
 | 4 | source_docs 根目录混杂 — 已迁移到 source_docs/{project}/ ✅ | 6D |
 | 5 | L6 code_knowledge 全局共享 — 已迁移到 memory/projects/{key}/code_knowledge/ ✅ | 6D |
 
+### 底座收口阻塞项 — 2026-06-14 已全部修复 ✅
+
+| # | 阻塞项 | 状态 | 修复内容 |
+|---|--------|------|---------|
+| 1 | `dbc_sets` 映射解析错误 | ✅ 已修复 | `Variant.from_dict` 新增 dict-of-DBCSet 分支：当 `dbc_raw` 无顶层 `files`/`name` 时，遍历 values() 解析。验证：3 个 DBC 文件正确加载。 |
+| 2 | Legacy `gwm_b26` 兼容路径指错代码库 | ✅ 已修复 | `projects.gwm_b26.source_code` 从 `D:\...\coem\GWM_B26` 改为 `D:\GWM-CR60LIGHT\cr60_light`（codebase root）。 |
+| 3 | `resolve_*` 不支持 variant_id | ✅ 已修复 | `resolve_codegraph_db`/`resolve_source_docs_dir`/`resolve_memory_dir` 新增 `variant_id` 参数，优先级：variant > project_key > config["project"] > global default。legacy 调用方不受影响。 |
+| 4 | `--snapshot` 未接入实际流程 | ✅ 已修复 | 新增 `core/snapshot_store.py`（创建/加载/列表/删除）。CLI `--snapshot auto` 自动创建并落盘 `memory/snapshots/`。`snapshot_id` 写入 `config["identity"]`，诊断报告 header 展示快照 ID。 |
+| 5 | LLM Judge 字段与 ground truth schema 不一致 | ✅ 已修复 | `llm_judge._build_prompt()` 改为读取 `problem_statement.function`（而非 `function_name`）、`ground_truth_root_cause.primary_cause`（而非整个 dict）。同时展示 causal_chain 和 fix_recommendations。 |
+
 ### 当前待办（按优先级）
 
 | # | 问题 | 优先级 | 计划 Phase |
 |---|------|--------|-----------|
 | 1 | Harness ground truth 仅 1 个案例 | P0-1 | Harness Phase 3 |
-| 2 | L2 因果匹配靠 TF-IDF，语义匹配不够准 | P0-2 | Harness Phase 3 |
+| 2 | L2 因果匹配靠概念/关键词重叠，语义匹配不够准 | P0-2 | Harness Phase 3 |
+| 2.1 | 依赖不透明（langgraph/LLM 相关依赖缺失时报错不友好） | P0-3 | Engineering |
 | 3 | ContextBudget 固定 60K | P1-1 | 5E.1 |
 | 4 | 记忆 6 层消费不均衡 | P1-2 | 5E.2 |
 | 5 | 专家面板 prompt 写死架构描述 | P1-3 | 5E.3 |
@@ -1174,18 +1286,15 @@ memory/code_knowledge/*.json → memory/projects/gwm_b26/code_knowledge/*.json
 | 检查项 | 权重 | 方法 | 说明 |
 |--------|------|------|------|
 | classification_exact | 1.5 | 精确匹配 | 主因分类（param/algorithm/sensor/logic/signal） |
-| classification_func | 1.0 | 函数类别匹配 | 18 个函数类别（TTC/distance/velocity 等） |
-| localization_file | 1.0 | 文件名模糊匹配 | FuzzyWuzzy > 70% |
-| localization_line | 1.0 | 行号范围匹配 | ±50 行容差 |
-| causal_tfidf | 2.5 | TF-IDF + Cosine | sklearn 中文分词 |
-| causal_keywords | 2.5 | 关键词重叠 | Jaccard 相似度 |
-| recommendations | 1.0 | 建议匹配 | 修复建议关键词 |
-| confidence_value | 1.0 | 数值对齐 | ±15 容差 |
+| localization_file | 1.0 | 精确匹配 | 从黄金答案主因/因果链提取文件名（.c/.h），检查报告是否提及 |
+| causal_concepts | 2.5 | 概念命中 | TTC/速度/阈值/状态机/过滤等概念词典命中 |
+| causal_keywords | 2.5 | 关键词重叠 | 主因章节关键词重叠（集合重叠，归一化打分） |
+| recommendations | 1.0 | 关键词匹配 | 修复建议关键词命中 |
+| confidence_value | 0.5 | 数值对齐 | 置信度数值容差 |
 
-- 分类/定位：精确规则匹配
-- 因果分析：TF-IDF 语义相似度（sklearn）
-- 置信度：数值对齐
-- FCTA001 得分: 0.70（主要差距在 causal 0.57）
+- 分类/定位：精确规则匹配（可复现）
+- 因果分析：概念命中 + 关键词重叠 baseline（可复现）
+- FCTA001 得分: 0.70（主要差距在 causal≈0.57，Phase 3 用 LLM judge 补强）
 
 **Ground Truth 格式**
 
@@ -1232,7 +1341,7 @@ L2: 0.7041 (class=1.00, loc=1.00, causal=0.57)
 
 **设计决策**:
 1. L1 用确定性规则而非 LLM — 可复现、可解释
-2. L2 用 TF-IDF + 关键词混合 — 平衡语义理解和精确匹配
+2. L2 先做确定性 baseline（概念+关键词重叠）— 作为可复现下限
 3. 权重分配 L2 > L1 > L0 — 结论正确性最重要
 4. L0 gate 防止结构残缺的报告被误判为合格
 5. Ground Truth 手工编写 — FCTA001 由专家编写，后续案例逐步积累
@@ -1242,3 +1351,52 @@ L2: 0.7041 (class=1.00, loc=1.00, causal=0.57)
 - Phase 3: LLM-as-judge 增强 L2 因果匹配
 - Phase 3: 统计报告（多案例聚合分析）
 
+---
+
+## ADR-018: 5 层身份模型 — variant / package_profile / snapshot / material（2026-06-13）
+
+**状态**: 已实施（基础层）
+**动机**: `project_key` 是扁平模型，无法表达 6 代中 "同一 codebase 下多个客户 variant，每个 variant 有多个构建参数组合（vehicleType/powerSupply/antenna/cyctime 等）" 的层次关系。需要分层身份模型以支持多 variant、多构建配置、多代码/DBC 快照的可追溯诊断。
+
+**架构**:
+
+```
+PlatformFamily  (技术平台 — gen6_c_radar, gen5_cpp_radar)
+  +-- Codebase   (物理代码仓 — D:\GWM-CR60LIGHT\cr60_light)
+        +-- Variant     (客户项目 — coem/GWM_B26, apl/byd)
+              +-- PackageProfile  (构建参数组合 — vehicleType + antenna + cyctime + ...)
+                    +-- Snapshot  (可审计快照 — 代码 + DBC + 材料 + 配置 + 模型)
+```
+
+**新增模块**:
+- `core/identity.py` — 5 层身份 dataclass (`PlatformFamily`, `Codebase`, `Variant`, `PackageProfile`, `Snapshot`, `BuildFlags`, `PatchSet`, `VariantScope`, `DBCSet`)
+- `core/materials.py` — 材料模型 (`MaterialRegistry`, `RegisteredMaterial`, `StructuredRequirementSet`, `RequirementSpec`, `MaterialCategory`)
+- `core/diagnosis_bundle.py` — 诊断产物 (`DiagnosisBundle`, `Evidence`, `RootCausePattern`, `FixPlaybook`, `KnowledgeStore`)
+- `core/__init__.py` — 统一导出 26 个符号
+- `config.py` — 新增 `get_platform()`, `get_codebase()`, `get_variant()`, `get_package_profile()`, `resolve_variant_id()` 访问器
+- `config.yaml` — 新增 `platforms/`, `codebases/`, `variants/`, `package_profiles/` 层级配置
+- `cli.py` — 新增 `--variant`, `--package`, `--snapshot` CLI 参数
+
+**向后兼容**:
+- `project_key` 仍作为 `variant_id` 的别名使用
+- `config.yaml` `projects.*` 块保持可用，`get_project()` 函数不受影响
+- `Variant.compat_project_key` 属性为遗留调用链提供桥接
+- `resolve_variant_id()` 内部映射: `gwm_b26` → `gen6/gwm_b26`，`sc6h` → `gen6/byd_sc6h`，`cr5cb` → `gen5/byd`
+
+**当前已切换**:
+- 配置加载: 新层级可独立解析
+- CLI 参数: 新增 `--variant/--package/--snapshot`
+- 模型定义: 完整 identity + materials + diagnosis_bundle schema
+
+**仍在使用兼容层**:
+- `cli.py` main(): 仍优先使用 `project_key` 路径加载 config
+- `ai/orchestrator.py`: 仍通过 `project_key` 获取配置
+- `memory/`, `source_docs/`: 仍按 `project_key` 隔离目录
+- `config.yaml` `default_project`: 仍驱动默认配置
+
+**后续步骤**:
+1. 在 orchestrator 中将 `project_key` 替换为 `Variant` + `PackageProfile` 链式访问
+2. memory/source_docs 目录结构从 `projects/{project_key}/` 迁移到 `variants/{variant_id}/`
+3. 实际诊断流程使用 `Snapshot` 记录可审计上下文
+4. 诊断输出从原始 dict 逐步迁移到 `DiagnosisBundle`
+5. `MaterialRegistry` 集成到诊断 pipeline 的材料加载步骤

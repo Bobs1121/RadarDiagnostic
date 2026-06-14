@@ -1,13 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Config loader with multi-project support.
+Config loader with multi-project support and identity hierarchy.
 
-Loads config.yaml, resolves environment variables, and provides a
-`get_project(key)` helper that returns the resolved project dict.
+Loads config.yaml, resolves environment variables, and provides helpers
+for both the legacy `project_key` model and the new five-layer identity
+hierarchy (PlatformFamily → Codebase → Variant → PackageProfile → Snapshot).
 
-Backward compatibility: code that reads config["paths"]["source_code"]
-will get a deprecation warning but still works — the value is forwarded
-from the default project's `source_code`.
+Backward compatibility:
+    - `get_project(key)` still works — internally bridges to Variant.
+    - `load_config()` backfills `paths.*` from the default project.
+    - New code should use `get_variant()`, `get_package_profile()`, etc.
+
+Public API:
+    load_config(path)               → full config dict
+    get_project(config, key)         → legacy project dict (bridged)
+    get_variant(config, variant_id)  → Variant object
+    get_codebase(config, codebase_id)→ Codebase object
+    get_platform(config, platform_id)→ PlatformFamily object
+    get_package_profile(config, pid) → PackageProfile object
+    resolve_variant_id(config, project_key_or_variant) → str
+    resolve_codegraph_db(...), resolve_source_docs_dir(...), resolve_memory_dir(...)
+    get_variable_filter(config)
+    should_include_variable(name, scope, filter_cfg)
 """
 from __future__ import annotations
 
@@ -15,6 +29,7 @@ import logging
 import re as _re
 import os
 from pathlib import Path
+from typing import Any, Optional
 
 import yaml
 
@@ -85,8 +100,22 @@ def load_config(config_path: str | Path | None = None) -> dict:
     return config
 
 
+# ─── Legacy: get_project (bridges to Variant internally) ──────────────
+
+# Mapping from legacy project_key → variant_id
+_PROJECT_KEY_TO_VARIANT: dict[str, str] = {
+    "gwm_b26": "gen6/gwm_b26",
+    "sc6h": "gen6/byd_sc6h",
+    "cr5cb": "gen5/byd",
+}
+
+
 def get_project(config: dict, project_key: str | None = None) -> dict:
     """Return the resolved project configuration dict.
+
+    LEGACY API — bridges to the new identity hierarchy.  If the variant
+    system has a matching entry, its data is used.  Otherwise falls back
+    to the old `projects.*` block.
 
     Args:
         config: Loaded configuration dict (from `load_config`).
@@ -128,45 +157,232 @@ def get_project(config: dict, project_key: str | None = None) -> dict:
     return proj
 
 
-def resolve_codegraph_db(config: dict, project_root: Path, project_key: str | None = None) -> Path:
-    """Resolve CodeGraph DB path from config, with fallback.
+# ─── New: Identity Hierarchy Accessors ───────────────────────────────
 
-    If project_key is given, uses get_project(config, project_key) to find
-    the per-project DB path.  Otherwise falls back to config["project"]
-    (injected by cli.load_config) or the global default.
+def _import_identity_models():
+    """Lazy import to avoid circular dependency."""
+    from core.identity import (
+        PlatformFamily, Codebase, Variant, VariantScope, DBCSet,
+        PackageProfile, BuildFlags, PatchSet,
+    )
+    return PlatformFamily, Codebase, Variant, VariantScope, DBCSet, PackageProfile, BuildFlags, PatchSet
+
+
+def get_platform(config: dict, platform_id: str) -> Any:
+    """Get a PlatformFamily by ID."""
+    platforms = config.get("platforms", {})
+    if platform_id not in platforms:
+        raise ValueError(f"Platform '{platform_id}' not found. Available: {list(platforms.keys())}")
+    PF, = _import_identity_models()[0],
+    pf_raw = {**platforms[platform_id], "platform_id": platform_id}
+    return PF.from_dict(pf_raw)
+
+
+def get_codebase(config: dict, codebase_id: str) -> Any:
+    """Get a Codebase by ID."""
+    codebases = config.get("codebases", {})
+    if codebase_id not in codebases:
+        raise ValueError(f"Codebase '{codebase_id}' not found. Available: {list(codebases.keys())}")
+    CB, = _import_identity_models()[1:2]
+    cb_raw = {**codebases[codebase_id], "codebase_id": codebase_id}
+    return CB.from_dict(cb_raw)
+
+
+def get_variant(config: dict, variant_id: str | None = None) -> tuple[Any, Any, Any]:
+    """Get a Variant by ID, resolving to full identity chain.
+
+    Returns:
+        (variant, codebase, platform) — all as dataclass objects.
     """
+    if not variant_id:
+        variant_id = config.get("default_variant", "")
+        if not variant_id:
+            # Fall back: derive from default_project
+            default_proj = config.get("default_project", "")
+            variant_id = _PROJECT_KEY_TO_VARIANT.get(default_proj, default_proj)
+
+    variants = config.get("variants", {})
+    if variant_id not in variants:
+        raise ValueError(f"Variant '{variant_id}' not found. Available: {list(variants.keys())}")
+
+    PF, CB, V = _import_identity_models()[:3]
+    v_raw = variants[variant_id]
+    # Inject variant_id into raw dict so from_dict can use it
+    v_raw_with_id = {**v_raw, "variant_id": variant_id}
+    variant = V.from_dict(v_raw_with_id)
+
+    cb_id = variant.codebase_id
+    codebase = get_codebase(config, cb_id)
+    platform = None
+    if codebase.platform_id:
+        try:
+            platform = get_platform(config, codebase.platform_id)
+        except ValueError:
+            pass
+
+    return variant, codebase, platform
+
+
+def get_package_profile(config: dict, profile_id: str | None = None) -> Any:
+    """Get a PackageProfile by ID."""
+    profiles = config.get("package_profiles", {})
+    if not profile_id:
+        # Default: resolve from default_variant's default_package_profile
+        variant, _, _ = get_variant(config)
+        profile_id = variant.default_package_profile
+
+    if profile_id not in profiles:
+        raise ValueError(f"PackageProfile '{profile_id}' not found. Available: {list(profiles.keys())}")
+
+    _, _, _, _, _, PP, _, _ = _import_identity_models()
+    # Inject package_profile_id into raw dict so from_dict can use it
+    pp_raw = {**profiles[profile_id], "package_profile_id": profile_id}
+    return PP.from_dict(pp_raw)
+
+
+def resolve_variant_id(config: dict, identifier: str | None) -> str:
+    """Resolve a project_key OR variant_id to a canonical variant_id.
+
+    Accepts:
+        - Legacy project_key (e.g. "gwm_b26") → maps to variant_id
+        - Variant_id (e.g. "gen6/gwm_b26") → returns as-is
+        - None → uses default_variant or default_project
+
+    This is the bridge function for CLI args and config resolution.
+    """
+    if not identifier:
+        identifier = config.get("default_variant", "")
+        if not identifier:
+            dp = config.get("default_project", "")
+            identifier = _PROJECT_KEY_TO_VARIANT.get(dp, dp)
+
+    # Check if it's already a variant_id
+    variants = config.get("variants", {})
+    if identifier in variants:
+        return identifier
+
+    # Try to map from project_key
+    mapped = _PROJECT_KEY_TO_VARIANT.get(identifier)
+    if mapped:
+        return mapped
+
+    # If neither, assume it's a variant_id anyway (may fail later)
+    return identifier
+
+
+def resolve_source_code(config: dict, project_key: str | None = None) -> str:
+    """Resolve the source_code path for a given project_key or variant_id.
+
+    Tries variant system first, falls back to legacy projects.*
+    """
+    try:
+        variant_id = resolve_variant_id(config, project_key)
+        variant, codebase, _ = get_variant(config, variant_id)
+        return str(codebase.root_path)
+    except ValueError:
+        pass
+
+    # Fallback to legacy
+    proj = get_project(config, project_key)
+    return proj.get("source_code", "")
+
+
+def resolve_codegraph_db(config: dict, project_root: Path, project_key: str | None = None, variant_id: str | None = None) -> Path:
+    """Resolve CodeGraph DB path from config.
+
+    Supports both legacy project_key and new variant_id.
+    Priority: variant_id > project_key > config["project"] (injected by CLI) > global default.
+    """
+    # 1. Try variant system
+    if variant_id or project_key:
+        effective_variant = resolve_variant_id(config, variant_id or project_key)
+        try:
+            variant, codebase, _ = get_variant(config, effective_variant)
+            proj_safe = effective_variant.replace("/", "_").replace(" ", "_").lower()
+            return project_root / "memory" / "codegraph" / f"codegraph_{proj_safe}.db"
+        except ValueError:
+            pass
+
+    # 2. Try legacy project_key
     if project_key:
-        proj = get_project(config, project_key)
-        return Path(proj.get("codegraph_db_path", project_root / "memory" / "codegraph.db"))
+        try:
+            proj = get_project(config, project_key)
+            return Path(proj.get("codegraph_db_path", project_root / "memory" / "codegraph.db"))
+        except ValueError:
+            pass
+
+    # 3. Fall back to config["project"] (injected by cli.load_config)
     proj = config.get("project", {})
-    return Path(proj.get("codegraph_db_path", project_root / "memory" / "codegraph.db"))
+    if proj:
+        path = proj.get("codegraph_db_path")
+        if path:
+            return Path(path)
+
+    # 4. Global default
+    return project_root / "memory" / "codegraph.db"
 
 
-def resolve_source_docs_dir(config: dict, project_root: Path, project_key: str | None = None) -> Path:
-    """Resolve source_docs directory from config, with fallback.
+def resolve_source_docs_dir(config: dict, project_root: Path, project_key: str | None = None, variant_id: str | None = None) -> Path:
+    """Resolve source_docs directory from config.
 
-    If project_key is given, uses get_project(config, project_key) to find
-    the per-project source_docs_dir.  Otherwise falls back to config["paths"]
-    (injected by cli.load_config) or the global default.
+    Supports both legacy project_key and new variant_id.
+    Priority: variant_id > project_key > config["paths"] > global default.
     """
+    # 1. Try variant system
+    if variant_id or project_key:
+        effective_variant = resolve_variant_id(config, variant_id or project_key)
+        try:
+            variant, codebase, _ = get_variant(config, effective_variant)
+            proj_safe = effective_variant.replace("/", "_").replace(" ", "_").lower()
+            return project_root / "source_docs" / proj_safe
+        except ValueError:
+            pass
+
+    # 2. Try legacy project_key
     if project_key:
-        proj = get_project(config, project_key)
-        return Path(proj.get("source_docs_dir", project_root / "source_docs"))
+        try:
+            proj = get_project(config, project_key)
+            return Path(proj.get("source_docs_dir", project_root / "source_docs"))
+        except ValueError:
+            pass
+
+    # 3. Fall back to config["paths"] (injected by cli.load_config)
     return Path(config.get("paths", {}).get("source_docs", project_root / "source_docs"))
 
 
-def resolve_memory_dir(config: dict, project_root: Path, project_key: str | None = None) -> Path:
-    """Resolve memory directory from config, with fallback.
+def resolve_memory_dir(config: dict, project_root: Path, project_key: str | None = None, variant_id: str | None = None) -> Path:
+    """Resolve memory directory from config.
 
-    If project_key is given, uses get_project(config, project_key) to find
-    the per-project memory_dir.  Otherwise falls back to config["project"]
-    (injected by cli.load_config) or the global default.
+    Supports both legacy project_key and new variant_id.
+    Priority: variant_id > project_key > config["project"] > global default.
     """
+    # 1. Try variant system
+    if variant_id or project_key:
+        effective_variant = resolve_variant_id(config, variant_id or project_key)
+        try:
+            variant, codebase, _ = get_variant(config, effective_variant)
+            proj_safe = effective_variant.replace("/", "_").replace(" ", "_").lower()
+            return project_root / "memory" / "projects" / proj_safe
+        except ValueError:
+            pass
+
+    # 2. Try legacy project_key
     if project_key:
-        proj = get_project(config, project_key)
-        return Path(proj.get("memory_dir", project_root / "memory"))
+        try:
+            proj = get_project(config, project_key)
+            return Path(proj.get("memory_dir", project_root / "memory"))
+        except ValueError:
+            pass
+
+    # 3. Fall back to config["project"] (injected by cli.load_config)
     proj = config.get("project", {})
-    return Path(proj.get("memory_dir", project_root / "memory"))
+    if proj:
+        path = proj.get("memory_dir")
+        if path:
+            return Path(path)
+
+    # 4. Global default
+    return project_root / "memory"
 
 
 # ── Variable Filter (Phase 5B) ─────────────────────────────────────────────

@@ -47,21 +47,30 @@ class ConclusionEvaluationResult:
         cls_checks = [c for c in self.checks if c.category == "classification"]
         if not cls_checks:
             return 0.0
-        return sum(c.score * c.weight for c in cls_checks) / sum(c.weight for c in cls_checks)
+        total_weight = sum(c.weight for c in cls_checks)
+        if total_weight == 0:
+            return 0.0
+        return sum(c.score * c.weight for c in cls_checks) / total_weight
 
     @property
     def localization_score(self) -> float:
         loc_checks = [c for c in self.checks if c.category == "localization"]
         if not loc_checks:
             return 0.0
-        return sum(c.score * c.weight for c in loc_checks) / sum(c.weight for c in loc_checks)
+        total_weight = sum(c.weight for c in loc_checks)
+        if total_weight == 0:
+            return 0.0
+        return sum(c.score * c.weight for c in loc_checks) / total_weight
 
     @property
     def causal_score(self) -> float:
         causal_checks = [c for c in self.checks if c.category == "causal"]
         if not causal_checks:
             return 0.0
-        return sum(c.score * c.weight for c in causal_checks) / sum(c.weight for c in causal_checks)
+        total_weight = sum(c.weight for c in causal_checks)
+        if total_weight == 0:
+            return 0.0
+        return sum(c.score * c.weight for c in causal_checks) / total_weight
 
 
 class ConclusionEvaluator:
@@ -72,6 +81,9 @@ class ConclusionEvaluator:
     输出：score (0-1) + 各检查项明细
 
     核心逻辑：从 ground_truth 中提取预期结论，检查报告结论的一致性。
+
+    Args:
+        llm_judge: 可选的 LLMJudge 实例。为 None 时不使用 LLM judge。
     """
 
     # 子维度权重
@@ -95,8 +107,9 @@ class ConclusionEvaluator:
         "scaling": ["缩放", "scaling", "因子", "factor", "系数"],
     }
 
-    def __init__(self):
+    def __init__(self, llm_judge=None):
         self.checks: list[ConclusionCheck] = []
+        self.llm_judge = llm_judge  # Optional[LLMJudge]
 
     def evaluate(
         self,
@@ -138,6 +151,10 @@ class ConclusionEvaluator:
         # Compute weighted score
         score = self._compute_score()
 
+        # LLM judge enhancement (optional — takes max of baseline and LLM score)
+        if self.llm_judge is not None:
+            score = self._apply_llm_judge_enhancement(score, report_text, golden_truth)
+
         passed = sum(1 for c in self.checks if c.passed)
         total = len(self.checks)
         summary = f"L2 结论评估: {score:.2f} ({passed}/{total} 项通过)"
@@ -149,6 +166,155 @@ class ConclusionEvaluator:
         )
 
         return result
+
+    def _apply_llm_judge_enhancement(
+        self,
+        baseline_score: float,
+        report_text: str,
+        golden_truth: dict,
+    ) -> float:
+        """
+        运行 LLM judge 增强，对每个维度取 max(baseline, llm) 作为最终分数。
+
+        返回：增强后的综合分数
+        """
+        # 计算各维度的 baseline 分数
+        baseline_classification = self.classification_score_from_checks(self.checks)
+        baseline_localization = self.localization_score_from_checks(self.checks)
+        baseline_causal = self.causal_score_from_checks(self.checks)
+
+        # 对每个维度运行 LLM judge
+        categories = [
+            ("classification", baseline_classification),
+            ("localization", baseline_localization),
+            ("causal", baseline_causal),
+        ]
+
+        enhanced_checks = []
+        for category, baseline_cat_score in categories:
+            judge_result = self.llm_judge.judge(
+                report_text=report_text,
+                ground_truth=golden_truth,
+                category=category,
+                baseline_score=baseline_cat_score,
+            )
+
+            # 添加 LLM judge 结果作为额外的 check 记录
+            llm_check = ConclusionCheck(
+                category=f"{category}_llm",
+                name=f"llm_judge_{category}",
+                passed=judge_result.final_score() >= 0.5,
+                score=judge_result.final_score(),
+                description=f"LLM judge {category}: {judge_result.score:.2f}",
+                detail=judge_result.reasoning,
+                weight=0.0,  # 不直接计入权重，只用于审计
+            )
+            enhanced_checks.append(llm_check)
+
+        # 将 LLM judge 的 check 追加到结果中（用于审计）
+        self.checks.extend(enhanced_checks)
+
+        # 计算增强后的分数：对每个维度取 max，然后重新加权
+        enhanced_scores = {}
+        for category, baseline_cat_score in categories:
+            matching = [c for c in enhanced_checks if c.name == f"llm_judge_{category}"]
+            if matching:
+                enhanced_scores[category] = matching[0].score
+            else:
+                enhanced_scores[category] = baseline_cat_score
+
+        # 最终分数：用增强后的维度分数替代 baseline
+        # 重新计算加权分（只替换 LLM judge 覆盖的维度）
+        final_score = self._compute_score_with_enhancement(
+            baseline_score,
+            enhanced_scores,
+        )
+
+        return final_score
+
+    @staticmethod
+    def classification_score_from_checks(checks: list) -> float:
+        cls_checks = [c for c in checks if c.category == "classification"]
+        if not cls_checks:
+            return 0.0
+        total_weight = sum(c.weight for c in cls_checks)
+        if total_weight == 0:
+            return 0.0
+        return sum(c.score * c.weight for c in cls_checks) / total_weight
+
+    @staticmethod
+    def localization_score_from_checks(checks: list) -> float:
+        loc_checks = [c for c in checks if c.category == "localization"]
+        if not loc_checks:
+            return 0.0
+        total_weight = sum(c.weight for c in loc_checks)
+        if total_weight == 0:
+            return 0.0
+        return sum(c.score * c.weight for c in loc_checks) / total_weight
+
+    @staticmethod
+    def causal_score_from_checks(checks: list) -> float:
+        causal_checks = [c for c in checks if c.category == "causal"]
+        if not causal_checks:
+            return 0.0
+        total_weight = sum(c.weight for c in causal_checks)
+        if total_weight == 0:
+            return 0.0
+        return sum(c.score * c.weight for c in causal_checks) / total_weight
+
+    def _compute_score_with_enhancement(
+        self,
+        baseline_score: float,
+        enhanced_scores: dict,
+    ) -> float:
+        """
+        计算增强后的综合分数。
+
+        策略：对 LLM judge 覆盖的维度，用 max(baseline, llm) 替换该维度的分数。
+        未被 LLM judge 覆盖的维度保持 baseline 分数。
+        """
+        # 计算非 LLM 维度的权重和分数（fix + confidence）
+        non_llm_checks = [c for c in self.checks if c.category in ("fix", "confidence")]
+        llm_covered_categories = {"classification", "localization", "causal"}
+
+        # LLM 覆盖维度的权重
+        llm_weight = sum(
+            c.weight for c in self.checks
+            if c.category in llm_covered_categories
+        )
+
+        # 非 LLM 维度的权重
+        non_llm_weight = sum(c.weight for c in non_llm_checks)
+
+        # LLM 覆盖维度的增强分数（加权平均）
+        llm_weights_map = {
+            "classification": self.WEIGHT_CLASSIFICATION,
+            "localization": self.WEIGHT_LOCALIZATION,
+            "causal": self.WEIGHT_CAUSAL,
+        }
+
+        total_llm_weighted = 0.0
+        total_llm_weight = 0.0
+        for cat, score in enhanced_scores.items():
+            w = llm_weights_map.get(cat, 1.0)
+            total_llm_weighted += score * w
+            total_llm_weight += w
+
+        llm_dim_score = total_llm_weighted / total_llm_weight if total_llm_weight > 0 else 0.0
+
+        # 非 LLM 维度的分数
+        if non_llm_checks:
+            non_llm_score = sum(c.score * c.weight for c in non_llm_checks) / non_llm_weight
+        else:
+            non_llm_score = 0.0
+
+        # 综合分数
+        total_weight = llm_weight + non_llm_weight
+        if total_weight == 0:
+            return baseline_score
+
+        final = (llm_dim_score * llm_weight + non_llm_score * non_llm_weight) / total_weight
+        return final
 
     # ---- Check methods ----
 

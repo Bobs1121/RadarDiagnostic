@@ -1,6 +1,6 @@
 # radarAnalyze — 角雷达 ADAS AI 诊断系统改造 PRD
 
-> 版本: 2.1.0
+> 版本: 2.1.1
 > 日期: 2026-06-09
 > 作者: AI Agent (PM + 架构师 + 开发者)
 > 状态: Confirmed — 用户已确认方向
@@ -13,8 +13,8 @@
 | 项 | 值 |
 |---|---|
 | 产品名称 | radarAnalyze — 角雷达 ADAS AI 诊断系统 |
-| 版本 | 2.1.0 (多项目支持 + 基础加固版) |
-| 修订历史 | v2.0.0: 第一性原理重构规划 (2026-06-08) → v2.1.0: 多项目支持 + 基础优先策略 (2026-06-09) |
+| 版本 | 2.1.1 (多项目支持 + 基础加固 + 变体/软件包/材料设计补充) |
+| 修订历史 | v2.0.0: 第一性原理重构规划 (2026-06-08) → v2.1.0: 多项目支持 + 基础优先策略 (2026-06-09) → v2.1.1: variant/package/material 设计补充 (2026-06-13) |
 | 目标用户 | 内部 ASW 工程师 — ADAS 软件问题分析 |
 | 术语表 | **BAG**: ROS1 录制数据; **BLF**: Vector CAN 日志; **MF4**: ASAM MCDF 测量数据; **TPE**: 时序模式引擎; **CodeGraph**: C 源码静态分析图谱; **FrameStore**: SQLite 内存数据库 |
 | 干系人 | 产品经理=用户; 架构师+开发者=Agent; 终端用户=Bosch ADAS ASW 工程师 |
@@ -53,6 +53,27 @@
 | `cr5cb` | BYD_OVS_CB — 5 代角雷达 | `C:\BYD_OVS_CB` | CR5CB 平台，17 子模块，CodeGraph 24,186 文件 |
 | `sc6h` | BYD-SC6H-cr60light — 6 代角雷达 | `D:\BYD-SC6H-cr60light\cr60_light` | CR60Light 平台，CodeGraph 1,381 节点 |
 | *(可扩展)* | 未来新增平台 | 配置添加 | 无需修改代码，仅配置驱动 |
+
+### 2.3.1 多项目身份模型（设计补充）
+
+多项目不能再由单一 `project_key` 表达；真实工程对象至少包含：
+
+| 层级 | 作用 | 示例 |
+|------|------|------|
+| `platform_family` | 技术族/平台插件 | `gen6_c_radar`, `gen5_cpp_radar` |
+| `codebase` | 实际代码工作区 | `D:\GWM-CR60LIGHT\cr60_light`, `C:\BYD_OVS_CB` |
+| `variant` | 客户项目级变体（知识隔离主键） | `coem/GWM_B26`, `coem/BYD_SC6H`, `apl/byd` |
+| `package_profile` | 构建参数组合，决定软件包形态 | `GWM_B26 + KL15 + SYMMETRY + T66MS` |
+| `snapshot` | 一次可复现分析快照 | `代码/DBC/材料/config/model` 的 hash 组合 |
+
+设计原则：
+- 客户项目隔离按 `variant` 定义，不按 repo 或单文件路径定义
+- 软件包差异按 `package_profile` 定义，不滥拆 `variant`
+- DBC/需求材料变化默认进入新的 `snapshot`
+
+构建脚本依据：
+- Gen6: `coem/<variant>/buildscripts/build.bat` 通过 `coemDir + build.cfg + patch + scons_gen.bat 参数` 决定软件包
+- Gen5: `apl/<customer>/tools/build.bat` 通过客户子目录 + `cmake_gen.bat` 参数决定软件包
 
 ### 2.4 当前系统的核心矛盾
 
@@ -171,41 +192,80 @@
 
 **目标**: 支持多个角雷达项目，通过配置切换，无需修改代码。
 
+**设计升级**:
+- 用户入口短期仍可保留 `-P <project_key>`，但内部主身份应升级为 `variant_id`
+- `variant_id` 表示客户项目级边界
+- `package_profile_id` 表示构建包配置
+- `snapshot_id` 表示一次可审计分析快照
+- `project_key` 仅作为过渡兼容字段，不再承担全部身份语义
+
 **设计方案**:
 
 ```yaml
-# config.yaml — 项目配置
-projects:
-  sc6h:    # 6 代角雷达
-    display_name: "BYD-SC6H-cr60light (6代角雷达)"
-    source_code: "D:\\BYD-SC6H-cr60light\\cr60_light"
-    dbc_files:
-      - "CR_DBC_V3.2_20260331.dbc"
-    key_source_files: [...]    # 该平台特有的关键源文件
-    source_domains: [...]      # 该平台特有的源域定义
-  cr5cb:   # 5 代角雷达
-    display_name: "BYD_OVS_CB (5代角雷达)"
-    source_code: "C:\\BYD_OVS_CB"
-    dbc_files: [...]
-    key_source_files: [...]
-    source_domains: [...]
+# config.yaml — 设计演进方向
+platforms:
+  gen6_c_radar:
+    language: c
+    build_system: scons
+  gen5_cpp_radar:
+    language: cpp
+    build_system: cmake
+
+codebases:
+  gwm_cr60light:
+    root: "D:\\GWM-CR60LIGHT\\cr60_light"
+    platform: gen6_c_radar
+  byd_ovs_cb:
+    root: "C:\\BYD_OVS_CB"
+    platform: gen5_cpp_radar
+
+variants:
+  gen6/gwm_b26:
+    codebase: gwm_cr60light
+    scope:
+      include:
+        - "coem/GWM_B26/**"
+    build_entry: "coem/GWM_B26/buildscripts/build.bat"
+    dbc_sets:
+      default:
+        files: ["CR_DBC_V3.2_20260331.dbc"]
+    file_hints:
+      key_source_files: [...]
+    overlays:
+      source_domains: [...]
+
+package_profiles:
+  gen6/gwm_b26/default:
+    variant: gen6/gwm_b26
+    build_flags:
+      vehicleType: GWM_B26
+      powerSupply: KL15
+      antenna: SYMMETRY
+      cyctime: T66MS
+      swBuildType: DEVELOP
+      funTestType: "OFF"
 
 # 全局配置（所有项目共享）
-default_project: "sc6h"        # 默认项目
+default_variant: "gen6/gwm_b26"
 ai: ...                         # 模型配置（全局共享）
 functions: ...                  # ADAS 功能定义（全局共享）
 auto_dream: ...                 # AutoDream 配置（全局共享）
 ```
 
-**CLI 参数**: `-P <project_key>` 或 `--project <project_key>`，省略时使用 `default_project`。
+**CLI 参数**:
+- 短期：`-P <project_key>` 或 `--project <project_key>`
+- 中期：`--variant <variant_id>` + `--package <package_profile_id>`
+- 长期：所有诊断、评估、知识沉淀统一绑定 `snapshot_id`
 
 **项目隔离策略**:
 
 | 资源 | 隔离方式 | 示例 |
 |------|---------|------|
-| CodeGraph DB | 文件名隔离 | `memory/codegraph_sc6h.db`, `memory/codegraph_cr5cb.db` |
-| source_docs | 目录隔离 | `source_docs/sc6h/`, `source_docs/cr5cb/` |
-| 记忆系统 | 目录隔离 | `memory/projects/sc6h/`, `memory/projects/cr5cb/` |
+| CodeGraph DB | `variant` 级隔离 | `memory/codegraph/gen6_gwm_b26.db` |
+| source_docs | `variant` 级隔离 | `source_docs/gen6_gwm_b26/` |
+| 记忆系统 | `variant` 级隔离 | `memory/variants/gen6_gwm_b26/` |
+| 构建包配置 | `package_profile` 级隔离 | `build_profiles/gen6_gwm_b26/default.yaml` |
+| 审计快照 | `snapshot` 级追踪 | 代码/DBC/材料/config/model hash 组合 |
 | 案例数据 | 不隔离 | `cases/` 共享，案例内标记来源项目 |
 | 模型配置 | 共享 | 所有项目使用同一组 LLM 端点 |
 
@@ -255,9 +315,12 @@ SIGNAL 节点扩展字段：
 | 状态机变量 (`State_e`, `Mode_e` 等枚举) | 函数参数 |
 | 校准参数 (`Calib_` 前缀) | 标准库函数内部变量 |
 
-**实现**: 在 `ast_parser.py` 的 `extract_variables` 和 `extract_var_writes` 中增加过滤逻辑。
+**实现**: 在 CodeGraph 构建阶段增加变量过滤逻辑（规则可配置，允许不同项目按需覆盖）。
 
-**验收标准**: CodeGraph 变量数从 797 降到 <200，且 90%+ 与诊断相关。
+**验收标准**（从“数量目标”改为“质量目标”）:
+- 噪声变量（C 关键字/短循环变量/常见临时变量名）在 CodeGraph 中为 0
+- 抽样检查 100 个保留变量，≥95% 可用于诊断（状态/阈值/输出/门控/关键中间量）
+- 关键变量召回率 ≥95%（以关键文件白名单 + SIGNAL/输出链路相关变量为基准）
 
 #### FR-003: CodeGraph 语义层填充 (P1 — 基础)
 
@@ -394,6 +457,69 @@ memory/
 - 方案 B: 使用 mf4-converter CLI 工具转 BLF 后处理
 - 方案 C: 等待网络环境支持后补全
 
+#### FR-009: Harness 评估体系 — 诊断质量可量化 (P0 — 基础)
+
+**目标**: 建立可复现、可扩展的评估体系，回答“诊断准不准、好不好用、迭代有没有变好”。
+
+**评估层级**:
+- **L0 结构完整性**：报告结构/字段是否齐全（确定性规则）
+- **L1 证据链覆盖度**：关键信号/条件/窗口/链路是否被引用与解释（确定性规则）
+- **L2 结论一致性**：根因分类/定位/因果描述/修复建议是否与黄金答案一致（确定性 baseline）
+
+**设计原则**:
+- 默认不引入重量依赖（例如 sklearn），先用确定性 baseline 跑通“可复现下限”
+- 在 baseline 之上增加可选增强：**LLM-as-judge**（仅提升 L2 语义一致性，不替代确定性评分）
+
+**验收标准**:
+- 至少 3 个案例具备 ground truth（覆盖 rear/front 各至少 1 个功能）
+- Harness 可批量跑全量案例并输出聚合报告（平均分、最差分、回归对比）
+- L0/L1 在无 LLM 环境下可运行；L2 baseline 在无 LLM 环境下可运行；LLM judge 缺失时自动跳过
+
+#### FR-010: 客户需求材料接入与结构化转化 (P0 — 基础)
+
+**目标**: 将客户需求材料纳入正式诊断约束源，而不是作为散乱 prompt 上下文。
+
+**输入材料范围**:
+- 规范类：客户需求文档、功能说明、状态机说明、接口协议
+- 标定/配置类：DBC、参数表、阈值表、功能开关
+- 验证类：测试用例、issue 单、验收标准
+
+**设计原则**:
+- 权威材料 (`AuthoritativeMaterial`) 优先于经验知识 (`LearnedKnowledge`)
+- 材料先解析，再转结构化对象；诊断链路消费结构化对象，不直接消费原文
+- 材料接入按 `variant` 绑定，材料版本变化进入新的 `snapshot`
+
+**结构化对象**:
+- `RequirementSpec`
+- `SignalConstraint`
+- `StateMachineConstraint`
+- `ThresholdRule`
+- `AcceptanceCriterion`
+- `ProjectGlossary`
+
+**验收标准**:
+- 至少支持 `pdf/md/xlsx/dbc/json/yaml` 六类材料导入
+- 每份材料生成 `material_id/hash/version`
+- 结构化结果可关联到 `variant`、信号、文件、函数、状态机
+
+#### FR-011: 可审计诊断产物与修复知识沉淀 (P0 — 基础)
+
+**目标**: 将输出从单纯报告升级为可审计的结构化诊断包，并优先沉淀“根因模式 + 修复逻辑”。
+
+**核心对象**:
+- `DiagnosisBundle`
+- `RootCausePattern`
+- `FixPlaybook`
+
+**门禁规则**:
+- 无完整证据链，不输出 `confirmed_root_cause`
+- 无可靠代码定位，不输出可执行 `diff`
+
+**验收标准**:
+- 每次诊断绑定 `snapshot_id`
+- 每条根因模式与修复逻辑都携带来源 case、来源快照、证据引用
+- 报告、diff、Harness 评估都能回链到同一 `DiagnosisBundle`
+
 ---
 
 ## 5. 数据模型
@@ -401,11 +527,48 @@ memory/
 ### 5.1 核心实体关系
 
 ```
-Project (项目配置)
-  ├── source_code (源码根目录)
-  ├── dbc_files (DBC 文件列表)
-  ├── key_source_files (关键源文件)
-  └── source_domains (源域定义)
+PlatformFamily (平台插件)
+  ├── language (C / C++)
+  ├── build_system (SCons / CMake)
+  ├── codegraph_plugin
+  └── parser_plugin
+
+Codebase (代码工作区)
+  ├── root_path
+  ├── repo_url / branch / commit (可选)
+  └── platform_family
+
+Variant (客户项目级变体)
+  ├── code_scope (include/exclude globs)
+  ├── build_entry
+  ├── dbc_sets
+  ├── file_hints
+  └── requirement_overlays
+
+PackageProfile (软件包配置)
+  ├── build_flags
+  ├── patch_set
+  └── artifact_rules
+
+Snapshot (可复现分析快照)
+  ├── code_snapshot
+  ├── dbc_snapshot
+  ├── material_snapshot
+  ├── config_version
+  └── model_profile
+
+Material (材料注册)
+  ├── source_path
+  ├── material_type
+  ├── hash / version
+  └── authoritative
+
+StructuredRequirementSet (结构化需求)
+  ├── RequirementSpec
+  ├── SignalConstraint
+  ├── StateMachineConstraint
+  ├── ThresholdRule
+  └── AcceptanceCriterion
 
 Case (案例)
   ├── BAG/BLF Files (数据源)
@@ -415,11 +578,13 @@ Case (案例)
   │     ├── radar_objects
   │     ├── radar_debug
   │     └── warning_events
-  ├── DiagnosisResult (诊断结果)
-  │     ├── classification
-  │     ├── evidence
-  │     ├── expert_verdict
-  │     └── code_fix
+  ├── DiagnosisBundle (诊断包)
+  │     ├── evidence_chain
+  │     ├── reasoning_graph
+  │     ├── root_cause_assessment
+  │     ├── code_localization
+  │     ├── change_proposal
+  │     └── requirement_trace
   └── Reports (报告产物)
         ├── report.md
         ├── report.html
@@ -439,6 +604,10 @@ Memory (记忆系统 — 按项目隔离)
   ├── project.md (项目级)
   ├── knowledge/ (功能级 + 代码级 + 模式库)
   └── sessions/ (会话日志 — 最近 20 条)
+
+LearnedKnowledge
+  ├── RootCausePattern
+  └── FixPlaybook
 ```
 
 ### 5.2 SIGNAL 节点数据模型（扩展）
@@ -506,7 +675,7 @@ CREATE TABLE signals (
 | 依赖 | 用途 | 状态 |
 |------|------|------|
 | tree-sitter + tree-sitter-c | C 代码 AST 解析 | ✅ 已安装 |
-| langgraph | 专家面板编排 | ✅ 已安装 |
+| langgraph | 专家面板编排 | ✅ 需要（专家面板路径）；建议作为可选依赖/单独安装说明，缺失时需有降级路径 |
 | cantools | DBC 解码 | ✅ 已安装 |
 | rosbags | BAG 解析 | ✅ 已安装 |
 | asammdf / mffparser | MF4 解析 | ❌ Deferred |
@@ -539,7 +708,7 @@ CREATE TABLE signals (
 
 | # | 任务 | 工时 | 验收标准 |
 |---|------|------|---------|
-| 5B.1 | ast_parser.py 增加变量过滤规则 | 1 天 | 变量数 797→<200 |
+| 5B.1 | 增加变量过滤规则（构建阶段） | 1 天 | 噪声变量为 0 + 抽样质量 ≥95% |
 | 5B.2 | 过滤规则可配置（白名单/黑名单） | 0.5 天 | config.yaml 可覆盖默认规则 |
 | 5B.3 | CodeGraph 重建 + 验证 | 0.5 天 | 验证保留变量均为诊断相关 |
 
@@ -568,6 +737,18 @@ CREATE TABLE signals (
 | 5E.1 | ContextBudget 动态总预算 | 0.5 天 | 根据 CodeGraph 大小调整 |
 | 5E.2 | 记忆系统简化 6→3 层 | 1 天 | API 向后兼容 |
 | 5E.3 | 端到端回归测试 | 0.5 天 | 两个项目 × FCTA001 均通过 |
+
+### Phase 6: 评估与闭环 (P0-P2 — 按优先级推进)
+
+| # | 任务 | 工时 | 验收标准 |
+|---|------|------|---------|
+| 6A | SIGNAL internal_var 映射补全 | 1 天 | 301/301 SIGNAL 具备 internal_var，BLF 信号可关联到 C 变量 |
+| 6B | Harness Phase 1（L0） | 1-2 天 | StructuralEvaluator + 首个 ground truth + pytest 可跑 |
+| 6C | 知识沉淀闭环 | 1-2 天 | 每次诊断可增量沉淀到 L6 code_knowledge |
+| 6D | source_docs + L6 按项目隔离 | 1 天 | 多项目不互相污染，含 legacy fallback |
+| 6E | 专家面板 prompt 多项目适配 | 1 天 | prompt 中不写死文件路径，来自配置/CodeGraph 动态生成 |
+| H2 | Harness Phase 2（L1/L2） | 1 天 | L1/L2 baseline 可运行，输出 overall + 明细 |
+| H3 | Harness Phase 3（样本扩充 + L2 增强） | 2-3 天 | 3-5 个案例基线 + 可选 LLM judge + 聚合报告 |
 
 ### Deferred: 待改造项
 

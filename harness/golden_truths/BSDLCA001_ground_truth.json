@@ -1,0 +1,123 @@
+{
+  "case_id": "BSDLCA001",
+  "version": "1.0.0",
+  "created": "2026-06-13",
+  "project": "gwm_b26",
+
+  "problem_statement": {
+    "function": "LCA",
+    "description": "左侧LCA报警延迟；目标dy一直较大导致LCA没有触发，直到进入BSD报警区域才报警",
+    "expected": "左侧LCA应在目标进入LCA ROI区域时正常触发告警，不应延迟到BSD区域才报警",
+    "actual": "LCA报警延迟456帧、790帧，最终由BSD兜底报警"
+  },
+
+  "ground_truth_root_cause": {
+    "primary_cause": "外部开关信号LCASwtReq不稳定，导致内部使能变量bLCAEnable在[0,1]间震荡",
+    "causal_chain": [
+      "外部开关信号LCASwtReq不稳定（来源：CAN/网关映射层）",
+      "RteComMapping将LCASwtReq映射为bLCAEnable，该变量在[0,1]间频繁跳变",
+      "bLCAEnable=0时触发adasFunc.c:3998 HoldRelease逻辑，清零警告计数器lcaLeftFrmCount",
+      "状态机从Active态复位至Off态",
+      "需重新满足激活条件（Speed>12km/h等）才能恢复计数",
+      "连续有效帧数无法累积到KEEPWARNINGFRM=3的阈值",
+      "LCA告警未触发，目标继续行驶进入BSD ROI区域",
+      "BSD独立逻辑不受LCA计数器影响，正常触发报警"
+    ],
+    "key_signals": [
+      {"signal": "LCASwtReq", "value": "不稳定[0,1]", "significance": "外部开关信号震荡源头"},
+      {"signal": "bLCAEnable", "value": "震荡[0,1]", "significance": "内部使能变量，直接控制LCA功能开关"},
+      {"signal": "lcaLeftFrmCount", "value": "无法累积到3", "significance": "警告计数器被频繁清零"},
+      {"signal": "KEEPWARNINGFRM", "value": "3 frames", "significance": "连续有效帧阈值"}
+    ]
+  },
+
+  "condition_checks": [
+    {
+      "condition": "LCA功能使能",
+      "threshold": "持续为TRUE(1)",
+      "actual": "混合[0,1]震荡",
+      "satisfied": false,
+      "data_source": "Variable Probe lca_enable"
+    },
+    {
+      "condition": "自车速度",
+      "threshold": "≥12.0 km/h",
+      "actual": "21.2~26.9 km/h",
+      "satisfied": true,
+      "data_source": "Variable Probe actual_spd"
+    },
+    {
+      "condition": "横向ROI距离",
+      "threshold": "≤4.288 m",
+      "actual": "p50=1.65m, Max=3.92m",
+      "satisfied": true,
+      "data_source": "Variable Probe dist_y (R2修正)"
+    },
+    {
+      "condition": "TTC预警时间",
+      "threshold": "<4.0 s",
+      "actual": "3.68~3.95 s",
+      "satisfied": true,
+      "data_source": "观测层·告警事件"
+    }
+  ],
+
+  "key_fix_recommendations": [
+    "排查LCASwtReq物理线路或网关映射，确保开关节点电平稳定",
+    "在RteComMapping或AdasState入口增加LCASwtReq软件去抖逻辑（如50ms低通滤波）",
+    "增加硬件滤波电阻，避免单次毛刺触发状态机复位"
+  ],
+
+  "data_chains": [
+    {
+      "chain": "CAN LCASwtReq → RteComMapping → bLCAEnable(震荡) → adasFunc.c:3998(HoldRelease/CloseLcaFunc) → lcaLeftFrmCount=0/State=Off → LCA报警不输出",
+      "description": "主链路：开关信号震荡导致LCA功能反复开关，计数器无法累积"
+    }
+  ],
+
+  "confidence": {
+    "value": 85,
+    "uncertainty_factors": [
+      "缺乏原始CAN波形验证Enable=0的具体持续时间",
+      "8秒延迟的精确数学拟合未验证"
+    ],
+    "certain_factors": [
+      "变量探针统计确认bLCAEnable震荡模式",
+      "逻辑推导排除感知干扰（dist_y在LCA ROI范围内）"
+    ]
+  },
+
+  "test_windows": [
+    {"id": 1, "start": 1776242122.8, "end": 1776242126.8, "event": "报警变化"},
+    {"id": 2, "start": 1776242137.4, "end": 1776242145.3, "event": "报警变化"},
+    {"id": 3, "start": 1776242149.9, "end": 1776242159.7, "event": "报警变化"},
+    {"id": 4, "start": 1776242159.8, "end": 1776242163.8, "event": "报警变化"},
+    {"id": 5, "start": 1776242173.7, "end": 1776242199.0, "event": "报警变化"},
+    {"id": 6, "start": 1776242208.0, "end": 1776242216.1, "event": "报警变化"},
+    {"id": 7, "start": 1776242219.9, "end": 1776242234.4, "event": "报警变化"},
+    {"id": 8, "start": 1776242236.3, "end": 1776242240.4, "event": "报警变化"},
+    {"id": 9, "start": 1776242241.6, "end": 1776242247.2, "event": "报警变化"},
+    {"id": 10, "start": 1776242253.1, "end": 1776242264.7, "event": "报警变化"},
+    {"id": 11, "start": 1776242265.0, "end": 1776242269.0, "event": "报警变化"},
+    {"id": 12, "start": 1776242269.7, "end": 1776242285.3, "event": "报警变化"}
+  ],
+
+  "scenario_analysis": {
+    "function_roi": "LCA横向ROI ≤4.288m，纵向范围较远",
+    "bsd_roi": "BSD纵向起点更近(-5.143m)，横向ROI与LCA部分重叠",
+    "scenario_essence": "LCA因使能抖动失效后，目标继续行驶进入BSD区域，由BSD独立逻辑兜底报警"
+  },
+
+  "evaluation_criteria": {
+    "structural_minimum": 0.90,
+    "semantic_target": 0.70,
+    "required_elements": [
+      "root_cause_with_causal_chain",
+      "condition_check_table",
+      "evidence_chain_with_signals",
+      "fix_recommendations",
+      "confidence_score",
+      "data_chain_analysis"
+    ]
+  }
+}

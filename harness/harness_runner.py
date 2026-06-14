@@ -10,6 +10,7 @@ HarnessRunner — 诊断质量评估统一入口
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,7 @@ from datetime import datetime
 from harness.structural_evaluator import StructuralEvaluator, StructuralEvaluationResult
 from harness.evidence_evaluator import EvidenceEvaluator, EvidenceEvaluationResult
 from harness.conclusion_evaluator import ConclusionEvaluator, ConclusionEvaluationResult
+from harness.llm_judge import LLMJudge
 
 HARNESS_DIR = Path(__file__).parent
 BASE_DIR = HARNESS_DIR.parent
@@ -42,6 +44,11 @@ class HarnessResult:
         self.overall_score: float = 0.0
         self.passed: bool = False
         self.errors: list[str] = []
+        # ── Bundle/Snapshot metadata (audit linkage) ────────────────
+        self.bundle_id: str = ""
+        self.snapshot_id: str = ""
+        self.variant_id: str = ""
+        self.bundle_path: str = ""
 
     @property
     def passing_score(self) -> float:
@@ -88,6 +95,11 @@ class HarnessResult:
             "overall_score": round(self.overall_score, 4),
             "passed": self.passed,
             "passing_threshold": self.passing_score,
+            # ── Audit metadata ────────────────────────────────────
+            "bundle_id": self.bundle_id,
+            "snapshot_id": self.snapshot_id,
+            "variant_id": self.variant_id,
+            **({"bundle_path": self.bundle_path} if self.bundle_path else {}),
             "l0_structural": None,
             "l1_evidence": None,
             "l2_conclusion": None,
@@ -152,10 +164,21 @@ class HarnessRunner:
         print(result.to_json())
     """
 
-    def __init__(self):
+    def __init__(self, config: Optional[dict] = None, router=None):
+        self.config = config or {}
+        self.router = router
         self.structural_eval = StructuralEvaluator()
         self.evidence_eval = EvidenceEvaluator()
-        self.conclusion_eval = ConclusionEvaluator()
+
+        # 初始化 LLM judge（可选）
+        llm_judge = None
+        if router is not None:
+            harness_cfg = self.config.get("harness", {})
+            llm_judge_cfg = harness_cfg.get("llm_judge", {})
+            if llm_judge_cfg.get("enabled", False):
+                llm_judge = LLMJudge(router, llm_judge_cfg)
+
+        self.conclusion_eval = ConclusionEvaluator(llm_judge=llm_judge)
 
     def run_case(
         self,
@@ -192,6 +215,19 @@ class HarnessRunner:
             return result
 
         report_text = report_path.read_text(encoding="utf-8")
+
+        # ── Auto-load DiagnosisBundle for audit linkage ────────────
+        case_dir = report_path.parent
+        bundle_path = case_dir / "diagnosis_bundle.json"
+        if bundle_path.exists():
+            try:
+                bundle_data = json.loads(bundle_path.read_text(encoding="utf-8"))
+                result.bundle_id = bundle_data.get("bundle_id", "")
+                result.snapshot_id = bundle_data.get("snapshot_id", "")
+                result.variant_id = bundle_data.get("variant_id", "")
+                result.bundle_path = str(bundle_path)
+            except Exception:
+                pass  # Bundle is optional; harness still works without it
 
         # 2. 加载黄金答案
         golden_truth = None
@@ -260,16 +296,47 @@ class HarnessRunner:
 def main():
     """CLI 入口"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="radarAnalyze Harness Runner")
     parser.add_argument("case_id", nargs="?", default=None, help="Case ID to evaluate")
     parser.add_argument("--report", help="Path to report.md (optional)")
     parser.add_argument("--golden-truth", help="Path to ground_truth.json (optional)")
     parser.add_argument("--all", action="store_true", help="Run all available cases")
     parser.add_argument("--json", action="store_true", help="Output JSON format")
-    
+    parser.add_argument("--enable-llm-judge", action="store_true",
+                        help="Enable LLM-as-judge enhancement for L2 evaluation")
+
     args = parser.parse_args()
-    runner = HarnessRunner()
+
+    # 加载配置和 router（如果需要 LLM judge）
+    config = {}
+    router = None
+    if args.enable_llm_judge:
+        import yaml
+        config_path = BASE_DIR / "config.yaml"
+        if config_path.exists():
+            raw_config = config_path.read_text(encoding="utf-8")
+            # 简单环境变量替换
+            import os
+            for match_obj in re.finditer(r'\$\{(\w+)(?::-([^}]*))?\}', raw_config):
+                env_var = match_obj.group(1)
+                default_val = match_obj.group(2) or ""
+                raw_config = raw_config.replace(match_obj.group(0), os.environ.get(env_var, default_val))
+            config = yaml.safe_load(raw_config)
+
+        # 开启 LLM judge 配置
+        if "harness" not in config:
+            config["harness"] = {}
+        config["harness"]["llm_judge"] = {
+            "enabled": True,
+            "model_profile": config["harness"].get("llm_judge", {}).get("model_profile", "simple"),
+        }
+
+        # 初始化 router
+        from ai.model_router import ModelRouter
+        router = ModelRouter(config)
+
+    runner = HarnessRunner(config=config, router=router)
     
     if args.all or args.case_id is None:
         results = runner.run_all_cases()
