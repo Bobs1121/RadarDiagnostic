@@ -1,0 +1,115 @@
+{
+  "case_id": "FCTA002",
+  "version": "1.0.0",
+  "created": "2026-06-14",
+  "project": "gwm_b26",
+
+  "problem_statement": {
+    "function": "FCTB",
+    "description": "FCTB在20km/h场景下没有触发",
+    "expected": "FCTB有效触发，完成制动",
+    "actual": "制动未生效，保持时间未达阈值"
+  },
+
+  "ground_truth_root_cause": {
+    "primary_cause": "AEB 抑制信号 AEBBAActv_0x137 持续为 0，导致 bAEBBAActiveFlg=FALSE，触发 Release Brake Hold 逻辑，保持时间 0.91s 未达 3.0s 阈值",
+    "causal_chain": [
+      "CAN 信号 ESP_FD2.AEBBAActv_0x137 持续为 0（99.7% 帧）",
+      "RteComMapping 映射到 bAEBBAActiveFlg = FALSE",
+      "adasFunc.c 判断 bAEBBAActiveFlg == FALSE，执行 Release Brake Hold 逻辑",
+      "FCTB 保持时间 fFctbHoldTimeThresh 统计均值 0.91s，远小于阈值 3.0s",
+      "仅单侧雷达（Radar=2 FR）检测到目标，融合置信度不足",
+      "制动未生效"
+    ],
+    "key_signals": [
+      {"signal": "ESP_FD2.AEBBAActv_0x137", "value": "0 (99.7% 帧)", "significance": "AEB 激活标志持续为 FALSE，触发抑制"},
+      {"signal": "fctb_obj_flag", "value": "On->Off 同帧跳变", "significance": "FCTB 标志尝试激活后立即被切断"},
+      {"signal": "fFctbHoldTimeThresh", "value": "0.91s (统计均值)", "significance": "保持时间未达 3.0s 阈值"},
+      {"signal": "Radar=2 (FR)", "value": "仅单侧雷达目标", "significance": "双侧融合不满足"}
+    ]
+  },
+
+  "condition_checks": [
+    {
+      "condition": "FCTB 系统保持时间",
+      "threshold": ">=",
+      "actual": "0.91s",
+      "satisfied": false,
+      "data_source": "条件检查表"
+    },
+    {
+      "condition": "AEB 刹车激活标志",
+      "threshold": "== TRUE",
+      "actual": "99.7% 为 FALSE",
+      "satisfied": false,
+      "data_source": "抑制信号实测"
+    },
+    {
+      "condition": "自车速度范围",
+      "threshold": "[0.5, 21.0] km/h",
+      "actual": "4.95~5.01 km/h",
+      "satisfied": true,
+      "data_source": "测试窗口"
+    },
+    {
+      "condition": "左右雷达目标融合",
+      "threshold": "双侧有效",
+      "actual": "仅 Radar=2 (FR)",
+      "satisfied": false,
+      "data_source": "架构专家"
+    }
+  ],
+
+  "key_fix_recommendations": [
+    "核查 AEBBAActv 信号定义极性及功能依赖逻辑，确认非 AEB 场景下是否应强制 FCTB",
+    "检查雷达融合策略，确认单侧目标出现时是否允许 FCTB 独立使能",
+    "评估 FCTB 保持时间阈值（3.0s）是否合理，是否需要动态调整",
+    "补充双侧雷达测试场景，验证融合逻辑是否按预期工作"
+  ],
+
+  "data_chains": [
+    {
+      "chain": "CAN ESP_FD2.AEBBAActv_0x137 (0) -> RteComMapping -> bAEBBAActiveFlg (FALSE) -> adasFunc.c 判断 (==FALSE) -> 状态机跳转 Release -> 制动失效",
+      "description": "AEB 抑制信号链：外部 CAN 信号导致内部标志位持续为 FALSE，触发释放逻辑"
+    }
+  ],
+
+  "confidence": {
+    "value": 85,
+    "uncertainty_factors": [
+      "AEBBAActv 信号极性需结合代码二次确认（实测标记含极性交叉警告）",
+      "单侧雷达融合策略是否为设计意图尚不明确"
+    ],
+    "certain_factors": [
+      "AEBBAActv 信号持续为 0 的数据支撑充分",
+      "保持时间 0.91s < 3.0s 阈值客观可验证"
+    ]
+  },
+
+  "test_windows": [
+    {"id": 1, "start": 1775982875.7, "end": 1775982895.6, "event": "报警变化 + 状态跳变 + 目标出现 + 速度变化"},
+    {"id": 5, "start": 1775982946.1, "end": 1775982950.1, "event": "报警变化（fctb_obj_flag 同帧跳变）"},
+    {"id": 9, "start": 1775983009.5, "end": 1775983016.1, "event": "报警变化 + 目标出现"}
+  ],
+
+  "scenario_analysis": {
+    "reported_speed": "20km/h",
+    "actual_speed": "4.95~5.01km/h",
+    "discrepancy": "申报 20km/h，实际约 5km/h 低速场景",
+    "fctb_design_range": "低速泊车/窄路会车（激活上限通常 20km/h）",
+    "scenario_essence": "低速场景下 AEB 未激活导致 FCTB 被抑制，且单侧雷达目标检测不足"
+  },
+
+  "evaluation_criteria": {
+    "structural_minimum": 0.90,
+    "semantic_target": 0.70,
+    "required_elements": [
+      "root_cause_with_causal_chain",
+      "condition_check_table",
+      "evidence_chain_with_signals",
+      "fix_recommendations",
+      "confidence_score",
+      "data_chain_analysis"
+    ]
+  }
+}

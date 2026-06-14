@@ -225,7 +225,7 @@ Examples:
     config = load_config(
         project_key=args.project,
         variant_id=args.variant,
-        package_profile_id=args.package,
+        package_profile_id=args.package_profile,
     )
 
     # ── Resolve snapshot ────────────────────────────────────────────
@@ -356,11 +356,9 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
     Returns dict with keys: snapshot_id, snapshot (object), action (created|loaded).
     Returns empty dict if no snapshot requested.
 
-    When snapshot_arg == "auto", the snapshot is enriched with:
-      - code_snapshot: hashes of key source files from the variant
-      - dbc_snapshot: hashes of DBC files
-      - material_snapshot: hashes of registered materials
-      - metadata.summary: human-readable summary of captured artifacts
+    Independent of CLI-injected config["project"]: resolves variant/codebase
+    directly from config.raw yaml via get_variant, then derives source_code,
+    key_source_files, and dbc_files from the Variant model.
     """
     if snapshot_arg is None:
         return {}
@@ -368,14 +366,36 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
     from core.snapshot_store import SnapshotStore
     from core.identity import Snapshot, file_sha256
     from core.materials import MaterialRegistry
+    from config import resolve_variant_id, get_variant
 
     store = SnapshotStore(project_root / "memory" / "snapshots")
-    # Resolve variant_id: prefer config.identity (injected by CLI), fall back
-    # to resolve_variant_id which reads default_variant/default_project.
+
+    # ── Resolve variant_id without relying on config["identity"] ──────
     variant_id = config.get("identity", {}).get("variant_id", "")
     if not variant_id:
-        from config import resolve_variant_id
         variant_id = resolve_variant_id(config, None)
+
+    # ── Resolve variant + codebase from config.yaml directly ───────────
+    source_root = ""
+    key_files: list[str] = []
+    dbc_files: list[str] = []
+    source_docs_dir = ""
+
+    try:
+        variant, codebase, _ = get_variant(config, variant_id)
+        source_root = str(codebase.root_path)
+        key_files = variant.key_source_files or []
+        for dbc_set in (variant.dbc_sets or []):
+            dbc_files.extend(dbc_set.files)
+        proj_safe = variant_id.replace("/", "_").replace(" ", "_").lower()
+        source_docs_dir = str(project_root / "source_docs" / proj_safe)
+    except (ValueError, AttributeError):
+        # Fallback: try legacy config["project"] if it exists
+        proj = config.get("project", {})
+        source_root = proj.get("source_code", "")
+        key_files = proj.get("key_source_files", [])
+        dbc_files = proj.get("dbc_files", [])
+        source_docs_dir = proj.get("source_docs_dir", "")
 
     if snapshot_arg == "auto":
         # ── Enrich with code / DBC / material hashes ──────────────
@@ -385,9 +405,6 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
         summary_parts = []
 
         # 1) Code snapshot — hash key source files from variant config
-        proj = config.get("project", {})
-        key_files = proj.get("key_source_files", [])
-        source_root = proj.get("source_code", "")
         if source_root and key_files:
             source_path = Path(source_root)
             for rf in key_files:
@@ -397,10 +414,8 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
             summary_parts.append(f"code={len(code_snapshot)} files hashed")
 
         # 2) DBC snapshot — hash DBC files referenced by variant
-        dbc_files = proj.get("dbc_files", [])
         if dbc_files:
             for dbc_name in dbc_files:
-                # DBC files may be at source_root or project_root
                 for candidate_root in [Path(source_root), project_root]:
                     fp = candidate_root / dbc_name
                     if fp.exists():
@@ -414,7 +429,6 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
                 registry = MaterialRegistry.for_variant(project_root, variant_id)
                 for mat in registry.list_by_variant(variant_id):
                     material_snapshot[mat.material_id] = mat.hash
-                    # Also register the DBC files as authoritative materials
             except Exception:
                 pass
 
@@ -435,7 +449,6 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
                 summary_parts.append(f"materials={len(material_snapshot)} registered")
 
         # 4) Source docs snapshot
-        source_docs_dir = proj.get("source_docs_dir", "")
         if source_docs_dir:
             sdd = Path(source_docs_dir)
             if sdd.exists():
@@ -461,7 +474,6 @@ def _resolve_snapshot(config: dict, snapshot_arg, project_root: Path) -> dict:
         store.save(snap)
         return {"snapshot_id": snap.snapshot_id, "snapshot": snap, "action": "created"}
     else:
-        # Load existing snapshot
         snap = store.load(snapshot_arg)
         return {"snapshot_id": snap.snapshot_id, "snapshot": snap, "action": "loaded"}
 

@@ -1,6 +1,6 @@
 # radarAnalyze — Master Handoff Document
 
-| 最后更新: 2026-06-14 (底座收口完成：5个阻塞项全部修复)
+| 最后更新: 2026-06-14 (CLI 参数修复 + orchestrator regex bug + _resolve_snapshot 重构)
 | 当前分支: `refactor/v2`
 | 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) + ADR-018(身份模型) + **底座收口(5阻塞项修复)** 完成
 | PRD 版本: v2.1.1 (多项目支持 + 基础优先策略 + variant/package/material 设计补充)
@@ -803,6 +803,18 @@ P1 继续：
 | 4 | `--snapshot` 未接入实际流程 | ✅ 已修复 | 新增 `core/snapshot_store.py`（创建/加载/列表/删除）。CLI `--snapshot auto` 自动创建并落盘 `memory/snapshots/`。`snapshot_id` 写入 `config["identity"]`，诊断报告 header 展示快照 ID。 |
 | 5 | LLM Judge 字段与 ground truth schema 不一致 | ✅ 已修复 | `llm_judge._build_prompt()` 改为读取 `problem_statement.function`（而非 `function_name`）、`ground_truth_root_cause.primary_cause`（而非整个 dict）。同时展示 causal_chain 和 fix_recommendations。 |
 
+### 2026-06-14 本轮新增修复（CLI/Orchestrator 底座问题）
+
+| # | 问题 | 文件 | 修复内容 |
+|---|------|------|---------|
+| 1 | `--package-profile` 参数名与 args 属性不匹配 | `cli.py:228` | `args.package` → `args.package_profile`。argparse 将 `--package-profile` 转为 `package_profile` 属性，原代码使用 `args.package` 导致 `AttributeError`。 |
+| 2 | Panel summary 正则解包 ValueError | `ai/orchestrator.py:2062-2063` | 正则 `r'([a-zA-Z_][\w/]*/[\w.]+\.(c\|h\|cpp))\s*:?(\d+)?'` 有 3 个捕获组（文件路径、扩展名、行号），但解包 `for fp, line in code_refs` 只期望 2 个。改为 `r'([a-zA-Z_][\w/]*/[\w.]+\.w*)\s*:?(\d+)?'`，将扩展名部分改为非捕获。 |
+| 3 | `_resolve_snapshot()` 依赖 CLI 注入态 | `cli.py:354` | 原代码通过 `config["project"]` 获取 `key_source_files`/`source_code`/`dbc_files`/`source_docs_dir`，这些是 `load_config()` 注入的 CLI 态。重构后直接从 `get_variant(config, variant_id)` 解析 Variant + Codebase model，推导所有路径。Legacy `config["project"]` 作为回退。函数现在是底层独立可调用。 |
+
+### 验证结果
+- `python cli.py` — 正常输出 usage，无 AttributeError
+- `python tests/test_infrastructure_verification.py` — 58 passed, 1 failed（Test 1 `identity section exists` 是已知预期失败，config.yaml 中 identity 节可选）
+
 ### 当前待办（按优先级）
 
 | # | 问题 | 优先级 | 计划 Phase |
@@ -810,11 +822,12 @@ P1 继续：
 | 1 | Harness ground truth 仅 1 个案例 | P0-1 | Harness Phase 3 |
 | 2 | L2 因果匹配靠概念/关键词重叠，语义匹配不够准 | P0-2 | Harness Phase 3 |
 | 2.1 | 依赖不透明（langgraph/LLM 相关依赖缺失时报错不友好） | P0-3 | Engineering |
-| 3 | ContextBudget 固定 60K | P1-1 | 5E.1 |
-| 4 | 记忆 6 层消费不均衡 | P1-2 | 5E.2 |
-| 5 | 专家面板 prompt 写死架构描述 | P1-3 | 5E.3 |
-| 6 | CodeGraph 语义层为空 | P2-1 | 5C.5（BLOCKED） |
-| 7 | Harness 缺少多案例统计报告 | P2-2 | Harness Phase 3 |
+| 3 | config.yaml 无 `identity` 顶层节（测试预期与现状不符） | P1-4 | Engineering |
+| 4 | ContextBudget 固定 60K | P1-1 | 5E.1 |
+| 5 | 记忆 6 层消费不均衡 | P1-2 | 5E.2 |
+| 6 | 专家面板 prompt 写死架构描述 | P1-3 | 5E.3 |
+| 7 | CodeGraph 语义层为空 | P2-1 | 5C.5（BLOCKED） |
+| 8 | Harness 缺少多案例统计报告 | P2-2 | Harness Phase 3 |
 
 ### Deferred (暂不处理)
 

@@ -1,0 +1,130 @@
+{
+  "case_id": "sc6hrcta001",
+  "version": "1.0.0",
+  "created": "2026-06-14",
+  "project": "sc6h",
+
+  "problem_statement": {
+    "function": "RCTA",
+    "description": "RCTA没有触发",
+    "expected": "应该触发",
+    "actual": "RCTA 未触发，关键 CAN 信号缺失导致无法判断激活条件"
+  },
+
+  "ground_truth_root_cause": {
+    "primary_cause": "BLF 文件缺失所有关键外部抑制信号（GearPos, CarSpd, RCTASwtReq 等），导致无法解析 RCTA 激活条件；最可能的因果链为关键 CAN 信号未录制 → ECU 无法确认 RCTA 激活条件（Gear=7, Spd<15km/h）→ 系统处于 Passive/Off 状态",
+    "causal_chain": [
+      "BLF 文件缺失所有关键外部抑制信号（GearPos, CarSpd, RCTASwtReq 等）",
+      "无法解析 adasFunc.c 中的状态机逻辑",
+      "Variable Probe 显示无满足 TTM <= 4.2s 的目标",
+      "ECU 无法确认 RCTA 激活条件（Gear=7 倒挡, Spd<15km/h）",
+      "系统处于 Passive/Off 状态",
+      "抑制目标检测与报警逻辑",
+      "RCTA 未触发"
+    ],
+    "key_signals": [
+      {"signal": "GearPos", "value": "缺失", "significance": "缺少档位信号，无法判断是否满足倒挡条件"},
+      {"signal": "CarSpd", "value": "缺失", "significance": "缺少车速信号，无法判断是否在 0-15km/h 激活范围内"},
+      {"signal": "ttc (内部变量)", "value": "0 行满足 <= 4.2s", "significance": "无目标满足 TTC 警告阈值，可能系统未激活导致未计算"},
+      {"signal": "ddci", "value": "0 行数据", "significance": "无目标在 ROI 内"},
+      {"signal": "bRctaLeftWarningFlg", "value": "无法解析", "significance": "TPE 无法追踪标志位时序，因缺乏底层 CAN 信号支撑"}
+    ]
+  },
+
+  "condition_checks": [
+    {
+      "condition": "系统激活状态",
+      "threshold": "rctaSystemState == 3 (Active)",
+      "actual": "无法确认（信号缺失）",
+      "satisfied": null,
+      "data_source": "抑制信号实测/TPE",
+      "note": "N/A - 关键信号缺失"
+    },
+    {
+      "condition": "档位 (Gear)",
+      "threshold": "actual_gear == 7 (Reverse)",
+      "actual": "未在BLF中找到",
+      "satisfied": null,
+      "data_source": "抑制信号实测",
+      "note": "N/A - 关键信号缺失"
+    },
+    {
+      "condition": "自车速度",
+      "threshold": "[0.0, 15.0] km/h",
+      "actual": "未在BLF中找到",
+      "satisfied": null,
+      "data_source": "抑制信号实测/Variable Probe",
+      "note": "N/A - 关键信号缺失"
+    },
+    {
+      "condition": "功能使能",
+      "threshold": "bRCTAEnable == TRUE",
+      "actual": "未在BLF中找到",
+      "satisfied": null,
+      "data_source": "抑制信号实测",
+      "note": "N/A - 关键信号缺失"
+    },
+    {
+      "condition": "目标 TTM",
+      "threshold": "<= 4.2s",
+      "actual": "0 行数据（无目标满足）",
+      "satisfied": false,
+      "data_source": "Variable Probe (ttc)"
+    },
+    {
+      "condition": "目标 DDCI",
+      "threshold": "DDCI 在 ROI 内",
+      "actual": "0 行数据",
+      "satisfied": false,
+      "data_source": "Variable Probe (ddci)"
+    }
+  ],
+
+  "key_fix_recommendations": [
+    "检查数据录制配置，确认 BLF 文件是否包含车身 CAN 总线信号（特别是 GearPos, CarSpd, AccPedPos）",
+    "验证测试工况，确认测试时车辆是否挂入 R 档且车速 < 15km/h，并开启 RCTA 功能开关",
+    "检查 DBC 映射，若 CAN 信号存在但解析失败，需检查 DBC 文件是否正确映射了 GearPos 等信号"
+  ],
+
+  "data_chains": [
+    {
+      "chain": "CAN信号(GearPos, CarSpd, RCTASwtReq) -> 缺失/未录制 -> 内部变量(g_egoCarAddInfo.actual_gear, adasEnable.bRCTAEnable) -> 值未知/默认0 -> 状态机判断(ASWIN_SystemState.c) -> 系统状态保持 Passive/Off -> adasFunc.c 目标处理逻辑被跳过 -> bRctaLeft/RightWarningFlg 保持 False -> RCTA 未触发",
+      "description": "完整数据链路：从 CAN 信号缺失到 RCTA 未触发的完整因果链"
+    }
+  ],
+
+  "confidence": {
+    "value": 60,
+    "uncertainty_factors": [
+      "关键 CAN 信号完全缺失，无法区分是系统因工况不满足而未激活还是数据录制配置错误导致信号丢失",
+      "若假设数据完整，则根因置信度提升至 90%（未挂倒挡）；若数据缺失，则无法进行算法层根因分析"
+    ],
+    "certain_factors": [
+      "BLF 文件确实缺失所有关键外部抑制信号",
+      "Variable Probe 确认无目标满足 TTM 警告阈值"
+    ]
+  },
+
+  "test_windows": [],
+
+  "scenario_analysis": {
+    "reported_speed": "未知（信号缺失）",
+    "actual_speed": "未知（CarSpd 信号缺失）",
+    "discrepancy": "问题性质从算法逻辑判断转变为数据完整性/测试配置问题",
+    "rcta_design_range": "倒车场景（挂 R 档，车速 < 15km/h）",
+    "scenario_essence": "无法区分是工况不对（没挂倒挡）还是数据没录（没录 CAN），需要重新录制数据或检查录制配置"
+  },
+
+  "evaluation_criteria": {
+    "structural_minimum": 0.90,
+    "semantic_target": 0.70,
+    "required_elements": [
+      "root_cause_with_causal_chain",
+      "condition_check_table",
+      "evidence_chain_with_signals",
+      "fix_recommendations",
+      "confidence_score",
+      "data_chain_analysis"
+    ]
+  }
+}

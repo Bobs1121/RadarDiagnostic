@@ -2059,7 +2059,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
                 # Extract code locations from panel findings
                 import re
-                code_refs = re.findall(r'([a-zA-Z_][\w/]*/[\w.]+\.(c|h|cpp))\s*:?(\d+)?', summary)
+                code_refs = re.findall(r'([a-zA-Z_][\w/]*/[\w.]+\.\w*)\s*:?(\d+)?', summary)
                 for fp, line in code_refs:
                     bundle.code_localization.append(CodeLocation(
                         file_path=fp,
