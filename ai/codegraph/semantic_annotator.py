@@ -417,7 +417,7 @@ class SemanticAnnotator:
 
         # 获取需要标注的文件列表
         files_to_annotate = self._get_files_to_annotate(core_files_only)
-        log.info(f"LLM annotation: {len(files_to_annotations)} files to process")
+        log.info(f"LLM annotation: {len(files_to_annotate)} files to process")
 
         for file_info in files_to_annotate:
             file_path = file_info["path"]
