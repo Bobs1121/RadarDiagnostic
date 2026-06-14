@@ -23,7 +23,7 @@ from .parameter_analyzer import (
 )
 from .visualizer import build_report as build_html_report
 from .utils import parse_json_from_llm, ALL_FUNCTIONS
-from .context_budget import ContextBudget
+from .context_budget import ContextBudget, compute_budget
 from .data_probe import DataProbe
 from .variable_query_planner import VariableQueryPlanner, render_probe_results_for_prompt
 from .fallback import safe_llm_call, fallback_understand, fallback_expert_panel
@@ -568,7 +568,33 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 根因 = 信号输入层或代码逻辑层的具体问题。**禁止将观测层的状态直接作为根因。**
 追溯方法: 看到异常状态 → 查代码中哪行赋值了此状态 → 该赋值依赖哪个变量/条件 → 该变量来自哪个CAN信号 → CAN信号实际值是什么"""
 
-        budget = ContextBudget(total_chars=60_000)
+        # Dynamic ContextBudget — scales with case complexity
+        # Estimate case duration from store time range
+        _case_duration = 0.0
+        if store is not None:
+            try:
+                _tr = store.get_time_range()
+                if _tr:
+                    _case_duration = (_tr[1] - _tr[0]).total_seconds() if hasattr(_tr[1], 'total_seconds') else float(_tr[1] - _tr[0])
+            except Exception:
+                pass
+        _cg_nodes = 0
+        try:
+            _cg_db = self.codegraph_db_path
+            if _cg_db.exists():
+                import sqlite3 as _sql
+                _conn = _sql.connect(str(_cg_db))
+                _cg_nodes = _conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+                _conn.close()
+        except Exception:
+            pass
+        _budget_total = compute_budget(
+            codegraph_nodes=_cg_nodes,
+            test_window_count=len(windows) if windows else 0,
+            case_duration_sec=_case_duration,
+        )
+
+        budget = ContextBudget(total_chars=_budget_total)
         budget.add("methodology",   methodology_block, priority=100, min_chars=400)
         budget.add("key_facts",     f"## ★ 关键事实(必读) ★\n{key_facts}", priority=100, min_chars=2000)
         budget.add("tpe",           tpe_section,       priority=95,  min_chars=2000)

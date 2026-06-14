@@ -11,6 +11,11 @@ Usage:
 
 All functions return the file content as a string. If the file is missing,
 a RuntimeError is raised with the expected path.
+
+Multi-project support:
+    Pass project_key (e.g. "sc6h", "gwm_b26", "cr5cb") to load_expert_system().
+    The loader checks prompts/expert_panel/experts/<project_key>/<expert_id>.md
+    first, falling back to the default experts/<expert_id>.md.
 """
 
 from __future__ import annotations
@@ -29,8 +34,18 @@ def _read(name: str) -> str:
     return p.read_text(encoding="utf-8").strip()
 
 
-def load_expert_system(expert_id: str) -> str:
-    """Load system prompt for a specific expert (signal_chain, algorithm, etc.)."""
+def load_expert_system(expert_id: str, project_key: str = "") -> str:
+    """Load system prompt for a specific expert (signal_chain, algorithm, etc.).
+
+    If project_key is provided, checks for project-specific override first:
+        prompts/expert_panel/experts/<project_key>/<expert_id>.md
+    Falls back to the default:
+        prompts/expert_panel/experts/<expert_id>.md
+    """
+    if project_key:
+        override = _PROMPTS_DIR / "experts" / project_key / f"{expert_id}.md"
+        if override.exists():
+            return override.read_text(encoding="utf-8").strip()
     return _read(f"experts/{expert_id}.md")
 
 

@@ -1,12 +1,23 @@
-rosbags>=0.9.0
-python-can>=4.0.0
-cantools>=39.0.0
-openai>=1.0.0
-pandas>=2.0.0
-pyyaml>=6.0
-python-dotenv>=1.0.0
-rich>=13.0.0
-plotly>=5.20.0
-markdown>=3.5
-asteval>=1.0.0
+# ── Base — 核心运行时依赖（必须） ───────────────────────────────────────
+pyyaml>=6.0              # 配置文件解析
+python-dotenv>=1.0.0     # 环境变量加载
+rich>=13.0.0             # CLI 输出渲染
+python-can>=4.0.0        # CAN 总线数据解析 (BLF)
+cantools>=39.0.0         # DBC 数据库解析
+rosbags>=0.9.0           # ROS bag 文件解析
+asteval>=1.0.0           # 表达式安全求值
 
+# ── LLM — 大模型 API 客户端 ──────────────────────────────────────────
+openai>=1.0.0            # OpenAI-compatible API 客户端 (ModelRouter)
+
+# ── Panel — 专家面板 (LangGraph 状态机) ──────────────────────────────
+# 安装方式: pip install -r requirements.txt --extra-index-url ... 或单独 pip install langgraph
+# 注意: langgraph 依赖 networkx、pydantic 等，体积较大
+langgraph>=0.2.0         # 专家面板状态机 (expert_panel_langgraph)
+
+# ── Visualize — 可视化 (可选，有 fallback) ───────────────────────────
+plotly>=5.20.0           # HTML 报告图表渲染 (visualizer.py 有 fallback)
+markdown>=3.5            # Markdown 渲染
+
+# ── Test — 测试依赖 (不安装也可运行) ─────────────────────────────────
+pytest>=7.0              # 单元测试框架

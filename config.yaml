@@ -3,7 +3,7 @@ ai:
   local:
     base_url: "${LOCAL_BASE_URL:-http://localhost:11434/v1}"
     api_key: "${LOCAL_API_KEY:-ollama}"
-    model: "qwen3:14b"
+    model: "qwen2.5:7b"
   # 远端服务器模型（复杂推理任务）
   remote:
     base_url: "${REMOTE_BASE_URL}"

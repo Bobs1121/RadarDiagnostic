@@ -35,7 +35,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
 
-from langgraph.graph import StateGraph, END
+try:
+    from langgraph.graph import StateGraph, END
+    _LANGGRAPH_AVAILABLE = True
+except ImportError:
+    _LANGGRAPH_AVAILABLE = False
+    StateGraph = None  # type: ignore
+    END = None  # type: ignore
 
 from .model_router import ModelRouter
 from .utils import parse_json_from_llm
@@ -83,11 +89,15 @@ def _load_prompts():
 ) = _load_prompts()
 
 
-def _get_expert_system(expert_id: str, hardcoded: str) -> str:
-    """Load expert system prompt from file, falling back to hardcoded value."""
+def _get_expert_system(expert_id: str, hardcoded: str, project_key: str = "") -> str:
+    """Load expert system prompt from file, falling back to hardcoded value.
+
+    project_key enables multi-project support: the loader checks for
+    project-specific overrides in prompts/expert_panel/experts/<project_key>/.
+    """
     if _load_expert_system is not None:
         try:
-            return _load_expert_system(expert_id)
+            return _load_expert_system(expert_id, project_key=project_key)
         except Exception:
             pass
     return hardcoded
@@ -373,6 +383,13 @@ class ExpertPanelLangGraph:
     """
 
     def __init__(self, router: ModelRouter, config: dict, project_root: Path):
+        if not _LANGGRAPH_AVAILABLE:
+            raise ImportError(
+                "langgraph is not installed. Install it with:\n"
+                "  pip install langgraph\n\n"
+                "LangGraph is required for the expert panel. "
+                "Without it, diagnosis will fall back to the procedural panel."
+            )
         self.router = router
         self.config = config
         self.project_root = project_root
@@ -380,6 +397,11 @@ class ExpertPanelLangGraph:
         self._source_cache: dict[str, str] = {}
         self._thinking = router.thinking_mode
         self._graph: Optional[StateGraph] = None
+        # Multi-project: extract project_key from config for prompt overrides
+        self.project_key = config.get("project_key", "")
+        if not self.project_key:
+            identity = config.get("identity", {})
+            self.project_key = identity.get("project_key", "")
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -621,7 +643,7 @@ class ExpertPanelLangGraph:
     ) -> str:
         """Single expert's independent analysis."""
         src = source_code[:MAX_SOURCE_CHARS_R1]
-        system = _get_expert_system(expert_id, expert_def["system"])
+        system = _get_expert_system(expert_id, expert_def["system"], self.project_key)
         prompt = None
         if _load_expert_analyze_prompt is not None:
             try:
@@ -680,7 +702,7 @@ class ExpertPanelLangGraph:
         my_analysis: str, question: str, all_opinions: str,
     ) -> str:
         """Expert responds to moderator challenge."""
-        system = _get_expert_system(expert_id, expert_def["system"])
+        system = _get_expert_system(expert_id, expert_def["system"], self.project_key)
         sc = source_code[:MAX_SOURCE_CHARS_R2]
         prompt = None
         if _load_expert_respond_prompt is not None:

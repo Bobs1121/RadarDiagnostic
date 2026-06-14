@@ -22,6 +22,16 @@ pieces fit, they are concatenated as-is; when they exceed the budget,
 lower-priority pieces are truncated first, down to their declared
 ``min_chars`` floor (so every piece retains its most critical information).
 
+Dynamic budget calculation
+--------------------------
+``compute_budget()`` calculates total_chars from:
+  - Base: 40 KB minimum
+  - CodeGraph scale: +5 KB per 500 nodes (more code = more context needed)
+  - Test windows: +2 KB per window (more windows = more timeline data)
+  - Case duration: +1 KB per 100s of recording
+  - Model context window: clamp to 75% of model's available context (default 128K tokens)
+  - Caps: 30 KB minimum, 120 KB maximum
+
 Priorities (recommended)
 ------------------------
   100   evidence / KEY_FACTS / timeline         # what actually happened
@@ -44,6 +54,49 @@ Typical usage
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+
+def compute_budget(
+    codegraph_nodes: int = 0,
+    test_window_count: int = 0,
+    case_duration_sec: float = 0.0,
+    model_context_tokens: int = 128_000,
+) -> int:
+    """Compute dynamic context budget based on case complexity and model capacity.
+
+    Args:
+        codegraph_nodes: Number of nodes in CodeGraph (0 = unknown, uses base).
+        test_window_count: Number of test windows detected (0 = unknown).
+        case_duration_sec: Total recording duration in seconds (0 = unknown).
+        model_context_tokens: Model's context window in tokens (default 128K).
+
+    Returns:
+        total_chars: Dynamic budget in characters (30K–120K range).
+    """
+    # 1 char ≈ 0.5 token for mixed Chinese/English
+    # Use 80% of model context as hard ceiling (leave 20% for response)
+    max_chars = int(model_context_tokens * 0.5 * 0.8)
+
+    # Base budget
+    budget = 40_000
+
+    # CodeGraph scale: more code → more context for code snippets
+    if codegraph_nodes > 0:
+        budget += int(codegraph_nodes / 500) * 5_000
+
+    # Test windows: more windows → more timeline/timing data
+    if test_window_count > 0:
+        budget += test_window_count * 2_000
+
+    # Case duration: longer recordings → more data summary needed
+    if case_duration_sec > 0:
+        budget += int(case_duration_sec / 100) * 1_000
+
+    # Clamp: model ceiling, hard floor 30K, hard cap 120K
+    budget = min(budget, max_chars)
+    budget = max(30_000, min(120_000, budget))
+
+    return budget
 
 
 @dataclass

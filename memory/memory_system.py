@@ -150,7 +150,10 @@ class MemorySystem:
     # ── L4: Session Memory ──────────────────────────────────────────────
 
     def create_session(self, case_id: str, problem: str, expected: str) -> str:
-        """Create a new diagnosis session, return session_id."""
+        """Create a new diagnosis session, return session_id.
+
+        会话上限: 只保留最近 20 条，超出时自动清理最旧的。
+        """
         session_id = f"{case_id}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         session = {
             "session_id": session_id,
@@ -163,6 +166,8 @@ class MemorySystem:
             "findings": [],
         }
         self._write_session(session_id, session)
+        # 清理过期 session — 只保留最近 20 条
+        self._prune_old_sessions(max_count=20)
         return session_id
 
     def log_step(self, session_id: str, step_name: str, detail: Any) -> None:
