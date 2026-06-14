@@ -314,21 +314,82 @@ class MemorySystem:
         path = self.memory_dir / "sessions" / f"{session_id}.json"
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # ── L5: Case Memory ─────────────────────────────────────────────────
+    def _prune_old_sessions(self, max_count: int = 20) -> int:
+        """清理过期 session，只保留最近 max_count 条。
+
+        清理策略：按 created_at 排序，移除超出限制的 session 文件。
+        返回被清理的 session 数量。
+        """
+        sessions_dir = self.memory_dir / "sessions"
+        if not sessions_dir.exists():
+            return 0
+
+        # 收集所有 session 文件及时间戳
+        sessions_with_mtime: list[tuple[Path, float]] = []
+        for fp in sessions_dir.glob("*.json"):
+            sessions_with_mtime.append((fp, fp.stat().st_mtime))
+
+        if len(sessions_with_mtime) <= max_count:
+            return 0
+
+        # 按 mtime 排序，移除最旧的
+        sessions_with_mtime.sort(key=lambda x: x[1])
+        to_remove = sessions_with_mtime[:len(sessions_with_mtime) - max_count]
+
+        removed = 0
+        for fp, _ in to_remove:
+            try:
+                fp.unlink()
+                removed += 1
+            except OSError:
+                pass
+
+        return removed
+
+    # ── L5: Case Memory ── (merged into L3 patterns since v2) ──────────
 
     def read_case_memory(self, case_dir: Path) -> dict:
-        """Read per-case persistent memory."""
+        """Read per-case persistent memory.
+
+        v2 模式: 优先从 case_dir/memory.json 读取（兼容旧数据），
+        若不存在则从 L3 patterns 中查找匹配的条目。
+        """
+        # 兼容旧数据：仍然可以读 case_dir/memory.json
         path = case_dir / "memory.json"
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
+
+        # v2: 从 patterns 查找 — case_dir 名作为 symptom 匹配
+        case_name = case_dir.name if case_dir.name else str(case_dir)
+        patterns = self.read_patterns()
+        matches = [p for p in patterns if p.get("symptom", "") == case_name or case_name in p.get("case_id", "")]
+        if matches:
+            return {"patterns": matches, "_source": "patterns"}
         return {}
 
     def write_case_memory(self, case_dir: Path, memory: dict) -> None:
-        """Write per-case persistent memory."""
+        """Write per-case persistent memory.
+
+        v2 模式: case 记忆自动转换为 pattern 条目写入 L3。
+        同时将原始数据写入 case_dir/memory.json 以保持兼容。
+        """
         memory["_updated"] = datetime.datetime.now().isoformat()
+        # 保持旧格式兼容
         (case_dir / "memory.json").write_text(
             json.dumps(memory, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        # v2: 自动转换为 pattern 条目
+        case_name = case_dir.name if case_dir.name else str(case_dir)
+        pattern = {
+            "function": memory.get("function", memory.get("func_name", "UNKNOWN")),
+            "symptom": memory.get("problem", memory.get("symptom", case_name)),
+            "root_cause": memory.get("root_cause", memory.get("conclusion", "")),
+            "keywords": memory.get("keywords", []),
+            "fix_hint": memory.get("fix_hint", memory.get("fix", "")),
+            "case_id": case_name,
+            "_learned_at": datetime.datetime.now().isoformat(),
+        }
+        self.add_pattern(pattern)
 
     # ── L6: Code Knowledge (auto-dream 学到的代码知识) ─────────────────
 

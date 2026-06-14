@@ -65,7 +65,7 @@ radarAnalyze/
 | data_probe | orchestrator (probe step) | ProbeResult dict |
 | expert_panel | orchestrator (diagnose step) | panel_result dict |
 | parameter_analyzer | orchestrator (params, tune/verify) | SensitivityReport, WhatIfEntry |
-| context_budget | orchestrator (panel_prompt) | truncated prompt str |
+| context_budget | orchestrator (panel_prompt) | ContextBudget + compute_budget() → dynamic budget |
 | visualizer | orchestrator (visualize step) | VisualizerResult |
 | memory_system | orchestrator, auto_dream, data_query_engine | L1-L6 读写 |
 | code_learner | auto_dream Phase 0, orchestrator._ensure_source_docs | L6 JSON, overview MD |
@@ -81,7 +81,7 @@ radarAnalyze/
 2. 修改公开 API 签名（参数、类型、默认值）
 3. 修改 AI prompt 内容（system/user prompt、JSON schema）
 4. 修改缓存/失效策略（hash、mtime、路径）
-5. 修改阈值/魔数（如 `total_chars=60000`、`_PADDING_SEC=2.0`）
+5. 修改阈值/魔数（如 `compute_budget()` 因子、`_PADDING_SEC=2.0`）
 6. 修改数据结构 schema（FrameStore 表、JSON 文件、evidence dict）
 7. 修改管线步骤顺序或新增步骤
 8. 修改专家面板配置或记忆层级 API

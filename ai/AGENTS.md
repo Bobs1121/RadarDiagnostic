@@ -82,14 +82,16 @@ class Orchestrator:
 | 1346-1350 | `router.chat(..., complexity="simple", max_tokens=1024)` | 帧分析中文短摘要 |
 | 1514-1518 | `router.chat(..., complexity="simple", max_tokens=1024)` | 诊断 → pattern JSON |
 
-### ContextBudget 配置 (460-476)
+### ContextBudget 配置 (orchestrator ~571)
 
-`total_chars=60_000`，各块按 priority/min_chars 裁剪:
-- key_facts: priority=100
-- timeline: priority=80
-- conditions_text: priority=70
-- tpe_section, suppression, output: priority=60
-- evidence_text: priority=40
+`total_chars` 由 `compute_budget()` 动态计算（base 40K + CG 节点 + 窗口数 + 时长，上限 model_context * 0.5 * 0.8，硬底 30K/硬顶 120K）。
+
+各块按 priority/min_chars 裁剪:
+- methodology, key_facts: priority=100
+- tpe: priority=95, constants: priority=94, probe: priority=93, suppression: priority=92
+- output, windows: priority=90, transitions: priority=85, conditions: priority=80
+- threshold: priority=75, codegraph: priority=72, semantics: priority=73
+- params: priority=70, timeline: priority=60, frame_anal: priority=55, evidence: priority=55, data_summary: priority=40
 
 ### Review 关注点
 
@@ -248,7 +250,7 @@ LLM 失败时 `_fallback_plan` 提供基础查询 (dist_y + side, ttc 等)。
 
 | 签名 | 行号 |
 |------|------|
-| `ExpertPanel.__init__(self, router, config, project_root)` | 209 |
+| `ExpertPanel.__init__(self, router, config, project_root)` | 385 | 从 config 提取 project_key 用于 prompt 多项目适配 |
 | `ExpertPanel.select_experts(fail_type="OTHER") -> dict` (static) | 219-223 |
 | `ExpertPanel.run_panel(problem, expected, func_name, data_summary, memory_context="", on_status=None, fail_type="OTHER", task_type="diagnose") -> dict` | 225-235 |
 
@@ -275,6 +277,18 @@ LLM 失败时 `_fallback_plan` 提供基础查询 (dist_y + side, ttc 等)。
 - R1/R2 专家 + R2 主持人: `thinking_mode == "full"` 时 `thinking=True`
 - R3 综合: `thinking_mode in ("synth", "full")` 时 `thinking=True`
 - 本文件**仅使用** `router.complex`
+
+### langgraph 依赖
+
+- ExpertPanel 基于 LangGraph StateGraph 构建，需安装 `langgraph`
+- 未安装时 `__init__` 抛出 ImportError（含安装指引），诊断降级为 procedural panel
+- prompt 外部化：通过 `prompts/expert_panel/loader.py` 加载，支持项目级覆写（`experts/<project_key>/`）
+
+### prompt 多项目适配
+
+- `load_expert_system(expert_id, project_key)` 先查 `prompts/expert_panel/experts/<project_key>/<id>.md`，不存在回退默认
+- `ExpertPanel` 从 `config.get("project_key")` 或 `config["identity"]["project_key"]` 提取 project_key
+- 项目覆写目录：sc6h/ gwm_b26/ cr5cb/
 
 ---
 
@@ -451,7 +465,17 @@ local 失败时自动回退 remote (119-138)。
 
 ## context_budget.py
 
-`ContextBudget(total_chars=60_000)` — 字符级软上限，按 priority 降序分配，超预算先压缩低优先级块，每块保留 ≥ min_chars。
+`compute_budget()` — 动态计算总预算字符数。因子：base 40K + 5K/500 CG 节点 + 2K/测试窗口 + 1K/100s 时长。上限 model_context_tokens * 0.5 * 0.8。硬底 30K，硬顶 120K。
+
+`ContextBudget(total_chars=N)` — 字符级软上限，按 priority 降序分配，超预算先压缩低优先级块，每块保留 >= min_chars。
+
+| 公开 API | 说明 |
+|----------|------|
+| `compute_budget(codegraph_nodes, test_window_count, case_duration_sec, model_context_tokens) -> int` | 动态预算计算 |
+| `ContextBudget(total_chars).add(name, content, priority, min_chars)` | 注册内容块 |
+| `ContextBudget.render() -> list[(name, truncated_text)]` | 按预算渲染 |
+| `ContextBudget.format_report() -> str` | 人类可读预算使用统计 |
+| `ContextBudget.concat(joiner) -> str` | 合并为单字符串 |
 
 ---
 

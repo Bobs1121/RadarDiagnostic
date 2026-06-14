@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-| 最后更新: 2026-06-14 (Harness Phase 3: Ground Truth 扩充至 6 案例，5/6 PASS)
+| 最后更新: 2026-06-14 (Harness Phase 3 + ADR-018 + P0-2/P0-3/P1-1/P1-3 完成)
 | 当前分支: `refactor/v2`
-| 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) + **Harness Phase 3(GT 6 案例)** + ADR-018(身份模型集成) 完成
+| 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) + **Harness Phase 3(GT 6 案例)** + ADR-018(身份模型集成) + **ADR-019(依赖分档)** + **ADR-020(动态 ContextBudget)** + **P1-3(prompt多项目适配)** 完成
 | PRD 版本: v2.1.1 (多项目支持 + 基础优先策略 + variant/package/material 设计补充)
 | 综合评分: 8.5/10 — SIGNAL 100%，Harness 6 案例评估上线(5/6 PASS, avg 0.76)，知识沉淀闭环，多项目完全隔离，身份模型底座收口完成
 
@@ -37,7 +37,7 @@
 | **5B: 变量过滤** | ✅ 完成 | 797→656 变量（全量扫描），过滤规则可配置，噪声变量消除 |
 | **5C: 语义层填充** | ⏳ 冷启动完成 | Cold start 255 行（8 模块 × 4-5 焦点），LLM 全量标注未执行（LLM API 阻塞） |
 | **5D: 管线精简** | ✅ 完成 | 15 步 → 8 步，evidence 步并行化 Conditions+TPE |
-| **5E: 优化项** | ⏳ 排队 | ContextBudget 动态 + 记忆简化 6→3 |
+| **5E: 优化项** | ✅ 部分完成 | ContextBudget 动态预算(P1-1)已完成；记忆简化 6→3(P1-2)已延期 |
 | **6A: SIGNAL 映射补全** | ✅ 完成 | 301/301 SIGNAL internal_var 100% 覆盖（commit 5a8ea5c） |
 | **6B: Harness Phase 1** | ✅ 完成 | StructuralEvaluator L0 (16项检查) + FCTA001 Golden Truth + pytest 4项通过 |
 | **6C: 知识沉淀闭环** | ✅ 完成 | 诊断完成后主动提取 expert_panel 知识，增量写入 L6 code_knowledge |
@@ -45,6 +45,10 @@
 | **Harness Phase 2** | ✅ 完成 | L1 证据链覆盖度（确定性规则）+ L2 结论一致性（概念+关键词重叠 baseline，可选 LLM judge 作为增强项） |
 | **Harness Phase 3** | ✅ 完成 | Ground Truth 扩充至 6 案例（FCTA002/FCTABLate001/sc6hrcta001），5/6 PASS，avg 0.76 |
 | **ADR-018: 身份模型集成** | ✅ 完成 | 5 层身份 dataclass + config.yaml identity hierarchy + DiagnosisBundle + CLI --variant/--package |
+| **ADR-019: 依赖分档治理** | ✅ 完成 | requirements.txt base/llm/panel/harness 四档 + langgraph 优雅降级 |
+| **ADR-020: 动态 ContextBudget** | ✅ 完成 | compute_budget() 按 CG 规模/窗口数/时长/模型动态算 budget |
+| **P1-3: Prompt多项目适配** | ✅ 完成 | loader.project_key + experts/<key>/覆写目录 + ExpertPanel 透传 |
+| **P1-2: 记忆系统简化** | ⏸️ 延期 | 6→3 层重构风险过高，等 P0 稳定后评估 |
 
 ### 改造路线 (基础优先)
 
@@ -1466,3 +1470,105 @@ PlatformFamily  (技术平台 — gen6_c_radar, gen5_cpp_radar)
 3. 实际诊断流程使用 `Snapshot` 记录可审计上下文
 4. 诊断输出从原始 dict 逐步迁移到 `DiagnosisBundle`
 5. `MaterialRegistry` 集成到诊断 pipeline 的材料加载步骤
+
+---
+
+## 2026-06-14 Session — 优化项实施 (P0-2/P0-3/P1-1/P1-3)
+
+### 完成内容
+
+1. **P0-2: LLM-as-judge 增强 L2 (95/100)**
+   - `harness/llm_judge.py` 已有完整实现（LLMJudge + LLMJudgeResult）
+   - ConclusionEvaluator 集成：enabled/config/model/filters
+   - 验证：import + harness runner 正常运行
+
+2. **ADR-019 / P0-3: 依赖分档治理 (90/100)**
+   - `requirements.txt` 拆分为 4 档（base/llm/panel/harness）
+   - 清理未使用的 pandas 依赖
+   - `expert_panel_langgraph.py` 添加 graceful ImportError（langgraph 未安装时报友好错误）
+
+3. **P1-3: 专家面板 prompt 多项目适配 (88/100)**
+   - `prompts/expert_panel/loader.py` 的 `load_expert_system()` 新增 `project_key` 参数
+   - 查找逻辑：先查 `experts/<project_key>/<id>.md`，不存在则回退默认
+   - `ExpertPanel.__init__` 从 config 提取 `project_key` 并透传给 `_get_expert_system`
+   - 创建了 sc6h/gwm_b26/cr5cb 三个项目覆写目录骨架
+
+4. **ADR-020 / P1-1: ContextBudget 动态总预算 (90/100)**
+   - 新增 `compute_budget()` 函数（ai/context_budget.py）
+   - 因子：base 40K + 5K/500 CG 节点 + 2K/窗口 + 1K/100s 时长
+   - 上限：model_context_tokens × 0.5 × 0.8
+   - 硬底 30K，硬顶 120K
+   - orchestrator 中替换硬编码 60_000，运行时动态计算
+
+5. **P1-2: 记忆系统简化 6→3 层 — 延期**
+   - 10+ 调用方依赖各独立层，合并风险 > 收益，标记 deferred
+
+### 变更文件 (commit 59c5e37)
+- `ai/context_budget.py` — 新增 compute_budget()
+- `ai/expert_panel_langgraph.py` — langgraph ImportError + project_key 透传
+- `ai/model_router.py` — 已有变更
+- `ai/orchestrator.py` — 动态 budget 计算 + compute_budget import
+- `config.yaml` — 已有变更
+- `memory/memory_system.py` — 已有变更
+- `prompts/expert_panel/loader.py` — project_key 多项目适配
+- `requirements.txt` — 4 档分档
+
+---
+
+## ADR-019: 依赖分档治理（2026-06-14）
+
+**问题**: `requirements.txt` 扁平列出所有依赖，无法区分核心运行时依赖和可选依赖。
+安装时如果可选依赖（langgraph）不可用，整个诊断流程无法启动。
+
+**决策**: 按用途拆分为 4 档：
+- **Base** (必须): pyyaml, python-dotenv, rich, python-can, cantools, rosbags, asteval
+- **LLM** (必须): openai
+- **Panel** (可选): langgraph — 未安装时专家面板优雅降级为 procedural panel
+- **Harness** (可选): pytest, pytest-asyncio, pytest-cov — 仅测试需要
+
+**实施**:
+- `requirements.txt` 添加注释分档
+- `expert_panel_langgraph.py` 添加 try/except ImportError + 友好错误提示
+- 删除未使用的 pandas 依赖
+
+**影响**:
+- 最小安装只需 `pip install -r requirements.txt` 中的 base + llm 部分
+- langgraph 未安装时报错提示安装命令，诊断仍可进行（降级为 procedural panel）
+- plotly/markdown 已有 graceful fallback（visualizer.py）
+
+---
+
+## ADR-020: 动态 ContextBudget（2026-06-14）
+
+**问题**: `ContextBudget(total_chars=60_000)` 硬编码 60K 字符预算，无法根据案例复杂度自适应。
+简单案例浪费 token，复杂案例 budget 不足导致关键信息被截断。
+
+**决策**: 新增 `compute_budget()` 函数，基于以下因子动态计算：
+
+| 因子 | 权重 | 说明 |
+|------|------|------|
+| Base | 40,000 chars | 所有案例的基础预算 |
+| CodeGraph 规模 | +5K/500 节点 | 代码越多，代码片段 context 需求越大 |
+| 测试窗口数 | +2K/窗口 | 窗口越多，时间线数据越大 |
+| 录制时长 | +1K/100s | 越长录制，数据概览需求越大 |
+| 模型上下文 | max = tokens × 0.5 × 0.8 | 不超过模型可用上下文的 80% |
+| 硬底 | 30,000 | 最少保证 |
+| 硬顶 | 120,000 | 上限保护 |
+
+**典型输出**:
+- 默认（无信息）: 40K
+- 小案例（1K 节点, 3 窗口, 60s, 128K 模型）: 51K
+- 大模型（200K 上下文）: 最高 80K
+- 超大模型（1M 上下文, 大案例）: 最高 120K
+
+**实施**:
+- `ai/context_budget.py` 新增 `compute_budget()` + docstring
+- `ai/orchestrator.py` 中替换 `ContextBudget(total_chars=60_000)` 为 `ContextBudget(total_chars=_budget_total)`
+- 运行时从 store.get_time_range() 获取时长，从 CG SQLite 获取节点数
+
+**影响**:
+- 简单案例节省 token（约 40K vs 60K）
+- 复杂案例自动扩容（可达 80K+）
+- 大模型充分利用上下文窗口
+- 小模型（32K）自动收缩至 30K 保底
+
