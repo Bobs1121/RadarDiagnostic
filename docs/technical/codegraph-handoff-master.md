@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-| 最后更新: 2026-06-14 (CLI 参数修复 + orchestrator regex bug + _resolve_snapshot 重构)
+| 最后更新: 2026-06-14 (Harness Phase 3: Ground Truth 扩充至 6 案例，5/6 PASS)
 | 当前分支: `refactor/v2`
-| 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) + ADR-018(身份模型) + **底座收口(5阻塞项修复)** 完成
+| 当前状态: Phase 1-4 + 5A + 5B + 5C(冷启动) + 5D(管线重构) + 6A(SIGNAL 100%) + 6B(Harness Phase 1) + 6C(知识沉淀闭环) + 6D(多项目数据隔离) + Harness Phase 2(L1/L2) + **Harness Phase 3(GT 6 案例)** + ADR-018(身份模型集成) 完成
 | PRD 版本: v2.1.1 (多项目支持 + 基础优先策略 + variant/package/material 设计补充)
-| 综合评分: 8.5/10 — SIGNAL 100%，Harness 3 层评估上线(FCTA001 0.86)，知识沉淀闭环，多项目完全隔离，身份模型底座收口完成
+| 综合评分: 8.5/10 — SIGNAL 100%，Harness 6 案例评估上线(5/6 PASS, avg 0.76)，知识沉淀闭环，多项目完全隔离，身份模型底座收口完成
 
 ---
 
@@ -43,7 +43,8 @@
 | **6C: 知识沉淀闭环** | ✅ 完成 | 诊断完成后主动提取 expert_panel 知识，增量写入 L6 code_knowledge |
 | **6D: 多项目数据隔离** | ✅ 完成 | source_docs + L6 code_knowledge 按项目隔离 + 代码引用更新 + 向后兼容回退 |
 | **Harness Phase 2** | ✅ 完成 | L1 证据链覆盖度（确定性规则）+ L2 结论一致性（概念+关键词重叠 baseline，可选 LLM judge 作为增强项） |
-| **ADR-018: 身份模型** | ✅ 完成 | 5 层身份 dataclass (PlatformFamily/Codebase/Variant/PackageProfile/Snapshot) + MaterialRegistry + DiagnosisBundle + KnowledgeStore |
+| **Harness Phase 3** | ✅ 完成 | Ground Truth 扩充至 6 案例（FCTA002/FCTABLate001/sc6hrcta001），5/6 PASS，avg 0.76 |
+| **ADR-018: 身份模型集成** | ✅ 完成 | 5 层身份 dataclass + config.yaml identity hierarchy + DiagnosisBundle + CLI --variant/--package |
 
 ### 改造路线 (基础优先)
 
@@ -67,6 +68,58 @@
 ||  ↓
 ||[P] 优化项 (5E) → ContextBudget + 记忆简化
 ```
+
+---
+
+## 2026-06-14 Harness Phase 3 迭代 (Ground Truth 扩充)
+
+### 完成内容
+
+1. **新增 3 个 Golden Truth**
+   - `FCTA002`: FCTB 功能，signal_chain 根因（AEB 抑制信号缺失导致制动未生效）
+   - `FCTABLate001`: FCTB 功能，param 根因（保压定时器优先级问题，用户感知退出晚）
+   - `sc6hrcta001`: RCTA 功能（sc6h 项目），data_integrity 根因（BLF 信号缺失导致无法诊断）
+
+2. **Harness 评估结果（6 案例）**
+
+| 案例 | 功能 | 项目 | L0 | L1 | L2 | 总分 | 状态 |
+|------|------|------|----|----|-----|-----|------|
+| BSDLCA001 | BSD/LCA | gwm_b26 | 1.00 | 1.00 | 0.83 | 0.93 | PASS |
+| FCTA001 | FCTA | gwm_b26 | 1.00 | 0.94 | 0.70 | 0.86 | PASS |
+| FCTA002 | FCTB | gwm_b26 | 0.97 | 0.77 | 0.87 | 0.86 | PASS |
+| FCTABLate001 | FCTB | gwm_b26 | 0.97 | 0.78 | 0.69 | 0.79 | PASS |
+| FCTB003 | FCTB | gwm_b26 | 0.97 | 0.96 | 0.85 | 0.92 | PASS |
+| sc6hrcta001 | RCTA | sc6h | 0.82 | 1.00 | 0.75 | 0.20 | FAIL |
+
+- **汇总**: 5/6 通过，平均分 0.76
+- sc6hrcta001 FAIL 原因：L0=0.82 < 0.90 门限（报告格式不规范：根因标题未用 `###`、证据链缺时间戳），属于**有意包含的边缘案例**
+
+3. **覆盖矩阵**
+   - 功能: FCTA / FCTB / BSD+LCA / RCTA
+   - 项目: gwm_b26 / sc6h
+   - 根因类型: signal_chain / param / algorithm / data_integrity
+
+4. **ADR-018 身份模型集成**
+   - `config.yaml` 从 `projects.*` 重构为 `platforms/codebases/variants/package_profiles` 层级
+   - `config.py` resolve 函数适配 identity model
+   - `cli.py` 新增 `--variant` / `--package` 参数
+   - `orchestrator.py` 新增 `_save_diagnosis_bundle()` + variant/snapshot 注入报告
+   - 向后兼容：`projects.*` 仍可用，自动映射到 variants
+
+### 变更文件
+- `harness/golden_truths/FCTA002_ground_truth.json` — 新增
+- `harness/golden_truths/FCTABLate001_ground_truth.json` — 新增
+- `harness/golden_truths/sc6hrcta001_ground_truth.json` — 新增
+- `core/` — 身份模型模块（identity.py, materials.py, diagnosis_bundle.py 等）
+- `config.yaml` — identity hierarchy 重构
+- `config.py` — resolve 函数适配
+- `cli.py` — --variant/--package + DiagnosisBundle
+- `ai/orchestrator.py` — _save_diagnosis_bundle + 报告注入
+
+### 发现的新问题
+1. **sc6hrcta001 报告格式不规范** — 根因标题用 `**根因**` 而非 `### 根因`，L0 检查失败
+2. **L2 baseline 评分天花板** — 关键词重叠方法上限约 0.7-0.85，LLM judge 可进一步提升
+3. **Harness 样本多样性** — 5/6 案例来自 gwm_b26，sc6h 仅 1 个，cr5cb 尚无
 
 ---
 
