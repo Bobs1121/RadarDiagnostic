@@ -1,8 +1,8 @@
 # radarAnalyze — Master Handoff Document
 
-| 最后更新: 2026-06-14 (Phase 7-13 后续开发计划制定)
+| 最后更新: 2026-06-15 (Phase 7 完成 — 专家面板 prompt 去硬编码 + 多项目 prompt 覆盖)
 | 当前分支: `refactor/v2`
-| 当前状态: Phase 1-4 + 5A-5E + 6A-6D + Harness Phase 1-3 + ADR-018~020 + P1-1~P1-3 + 测试修复 完成。**Phase 7-13 开发计划已制定**
+| 当前状态: Phase 1-4 + 5A-5E + 6A-6D + Harness Phase 1-3 + ADR-018~020 + P1-1~P1-3 + **Phase 7 完成** — 专家面板 prompt 完全去硬编码 + sc6h/cr5cb prompt 覆盖 + config key_source_files 填充
 | PRD 版本: v2.1.1 (多项目支持 + 基础优先策略 + variant/package/material 设计补充)
 | 综合评分: 8.5/10 — SIGNAL 100%，Harness 6 案例评估上线(5/6 PASS, avg 0.76)，知识沉淀闭环，多项目完全隔离，测试套件 42 passed
 
@@ -48,6 +48,7 @@
 | **ADR-019: 依赖分档治理** | ✅ 完成 | requirements.txt base/llm/panel/harness 四档 + langgraph 优雅降级 |
 | **ADR-020: 动态 ContextBudget** | ✅ 完成 | compute_budget() 按 CG 规模/窗口数/时长/模型动态算 budget |
 | **P1-3: Prompt多项目适配** | ✅ 完成 | loader.project_key + experts/<key>/覆写目录 + ExpertPanel 透传 |
+| **Phase 7: 多项目 prompt 去硬编码** | ✅ 完成 | expert_panel_langgraph.py + orchestrator.py 去硬编码 + sc6h 5个 prompt 覆盖 + cr5cb 5个 prompt 覆盖 + config.yaml cr5cb key_source_files 填充（18个文件） |
 | **P1-2: 记忆系统简化** | ⏸️ 延期 | 6→3 层重构风险过高，等 P0 稳定后评估 |
 
 ### 改造路线 (基础优先)

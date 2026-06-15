@@ -174,15 +174,17 @@ class DiagnosisState(TypedDict):
 
 # ── Expert Definitions (reused from expert_panel.py) ──────────────────────
 
+# Expert definitions — source_files are resolved dynamically from config.
+# The "source_file_patterns" field maps expert_id → list of filename patterns
+# (e.g. "RteComMapping.c") that the resolver matches against config's
+# project.key_source_files. At runtime, ExpertPanelLangGraph.__init__ populates
+# the effective source_files based on the active project's config.
 EXPERTS = {
     "signal_chain": {
         "name": "信号链路专家",
         "emoji": "🔗",
         "domain": "CAN信号→内部变量映射",
-        "source_files": [
-            "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
-            "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.h",
-        ],
+        "source_file_patterns": ["RteComMapping.c", "RteComMapping.h"],
         "system": """你是**信号链路专家**。你的任务:
 1. 查看「条件检查表」中涉及的CAN信号(功能开关/使能/外部系统标志/DTC)
 2. 在「数据时间线」和「关键事实」中找到这些信号的实际值
@@ -203,12 +205,8 @@ EXPERTS = {
     "algorithm": {
         "name": "算法逻辑专家",
         "emoji": "⚙️",
-        "domain": "adasFunc.c报警条件与阈值",
-        "source_files": [
-            "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-            "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h",
-            "adas\\symmetry\\perception\\include\\paraDefine.h",
-        ],
+        "domain": "报警条件与阈值逻辑",
+        "source_file_patterns": ["adasFunc.c", "adasFunc.h", "paraDefine.h"],
         "system": """你是**算法逻辑专家**。你的任务:
 1. 查看「条件检查表」中列出的所有激活条件和阈值
 2. 在「关键事实」和「数据时间线」中找到对应的实际值
@@ -234,10 +232,7 @@ EXPERTS = {
         "name": "系统状态专家",
         "emoji": "🔄",
         "domain": "双状态机与功能使能",
-        "source_files": [
-            "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c",
-            "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h",
-        ],
+        "source_file_patterns": ["ASWIN_SystemState.c", "ASWIN_SystemState.h"],
         "system": """你是**系统状态专家**。你的任务:
 1. 从「关键事实」读取状态机的实际值分布(system_state=?)
 2. 从「状态跳变」看是否有状态转移
@@ -245,13 +240,13 @@ EXPERTS = {
 4. 逐条检查哪个条件阻止了预期的状态转移
 
 双状态机:
-- adasFunc.c: 感知侧写 *SystemState (基于速度/故障)
-- ASWIN_SystemState.c: 平台侧写同一 *SystemState (基于自检/使能/速度)
+- 感知侧核心文件: 感知侧写 *SystemState (基于速度/故障)
+- 平台侧核心文件: 平台侧写同一 *SystemState (基于自检/使能/速度)
 - AdasStateActive(): Standby(2)→Active(3) 需要 adasWarning 非零
 
 **关键 — 区分观测层与代码层**:
 - 「关键事实」中的[配置层·ADAS使能]数据来自雷达端outputData，是ECU内部决策的**结果**
-- 如果看到某功能enable=0，必须追溯: ASWIN_SystemState.c中哪个条件导致使能关闭？
+- 如果看到某功能enable=0，必须追溯: 平台侧状态文件中哪个条件导致使能关闭？
   → bXxxEnable的赋值依赖哪些CAN信号？→ 这些信号的实际值是什么？
 - 不要直接说"<某功能>使能被关闭所以不工作"——要说明**为什么被关闭**
 
@@ -261,12 +256,7 @@ EXPERTS = {
         "name": "感知与目标专家",
         "emoji": "👁️",
         "domain": "目标属性与过滤",
-        "source_files": [
-            "adas\\symmetry\\perception\\src\\objAttribCal.c",
-            "adas\\symmetry\\perception\\src\\track.c",
-            "adas\\symmetry\\perception\\src\\postProcess.c",
-            "adas\\symmetry\\perception\\include\\structDefine.h",
-        ],
+        "source_file_patterns": ["objAttribCal.c", "track.c", "postProcess.c", "structDefine.h"],
         "system": """你是**感知与目标专家**。你的任务:
 1. 从「关键事实」和「数据时间线」读取目标属性(vel_x, dist_x/y, ttc)
 2. 从「条件检查表」读取目标筛选条件(速度范围、类型、角度)
@@ -289,9 +279,7 @@ rcw_flag / rcta_flag / rctb_flag / fcta_flag / fctb_flag），均为 int8（-128
         "name": "架构专家",
         "emoji": "📡",
         "domain": "左右雷达与输出合并",
-        "source_files": [
-            "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c",
-        ],
+        "source_file_patterns": ["ASWOUT_OutCalc.c"],
         "system": """你是**架构专家**。你的任务:
 1. 确认数据来自哪个角雷达(front_left/front_right)
 2. 检查「测试窗口」中左右数据是否一致
@@ -335,7 +323,7 @@ MODERATOR_SYSTEM = """你是角雷达问题分析的**研讨主持人**。
   L3 雷达观测:   radar_objects中的告警标志、ADAS使能状态（雷达端的观测值）
   L2.5 时序耦合: 代码中的"保持-释放/累积-清零/防抖/滞回/边沿"等行为模式在
                  数据时序上是否被触发(由TPE段自动分析)
-  L2 ECU逻辑:    adasFunc.c中的条件判断、状态机跳变、hold/release逻辑
+  L2 ECU逻辑:    算法核心文件中的条件判断、状态机跳变、hold/release逻辑
   L1 信号输入:   CAN信号值 → RteComMapping → 内部变量（最底层触发源）
 
 ### 分析方法:
@@ -402,6 +390,8 @@ class ExpertPanelLangGraph:
         if not self.project_key:
             identity = config.get("identity", {})
             self.project_key = identity.get("project_key", "")
+        # Resolve expert source_files dynamically from config's project.key_source_files
+        self._expert_source_files = self._resolve_expert_source_files(config)
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -956,9 +946,58 @@ CAN信号→内部变量→判断条件→结果 (一条链路一行)
 
         return "\n\n".join(parts)
 
+    def _resolve_expert_source_files(self, config: dict) -> dict[str, list[str]]:
+        """Resolve expert source_files from config's project.key_source_files.
+
+        For each expert, matches source_file_patterns against the project's
+        key_source_files and returns the matching full relative paths.
+
+        Falls back to EXPERTS[expert_id]["source_file_patterns"] if no match.
+        """
+        # Get project key_source_files from config
+        key_files = []
+        # Try new project config
+        project_key = self.project_key or config.get("project_key", "")
+        if project_key:
+            try:
+                from config import get_project
+                proj = get_project(config, project_key)
+                key_files = proj.get("key_source_files", [])
+            except (ValueError, ImportError):
+                pass
+        # Fallback: try config["project"]["key_source_files"]
+        if not key_files:
+            cfg_project = config.get("project", {})
+            if cfg_project:
+                key_files = cfg_project.get("key_source_files", [])
+
+        resolved = {}
+        for eid, edef in EXPERTS.items():
+            patterns = edef.get("source_file_patterns", [])
+            matched = []
+            for kf in key_files:
+                kf_norm = kf.replace("\\", "/")
+                for pat in patterns:
+                    pat_norm = pat.replace("\\", "/")
+                    if pat_norm in kf_norm:
+                        matched.append(kf)
+                        break
+            # Fall back to patterns themselves if no match (backward compat)
+            resolved[eid] = matched if matched else patterns
+        return resolved
+
     def _load_expert_sources(self, expert_def: dict) -> str:
+        """Load source files for an expert, using dynamically resolved paths."""
+        # Get expert_id from expert_def (match by domain or name)
+        expert_id = None
+        for eid, edata in EXPERTS.items():
+            if edata.get("domain") == expert_def.get("domain"):
+                expert_id = eid
+                break
+        # Use resolved source_files if available
+        source_files = self._expert_source_files.get(expert_id, expert_def.get("source_files", expert_def.get("source_file_patterns", [])))
         parts = []
-        for rel_path in expert_def.get("source_files", []):
+        for rel_path in source_files:
             if rel_path in self._source_cache:
                 parts.append(self._source_cache[rel_path])
                 continue

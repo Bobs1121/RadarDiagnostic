@@ -1,379 +1,777 @@
 ai:
+
   # 本地 Ollama 模型（简单任务）— 可选: qwen3:14b, gemma4:26b, gemma4:latest
+
   local:
+
     base_url: "${LOCAL_BASE_URL:-http://localhost:11434/v1}"
+
     api_key: "${LOCAL_API_KEY:-ollama}"
+
     model: "qwen2.5:7b"
+
   # 远端服务器模型（复杂推理任务）
+
   remote:
+
     base_url: "${REMOTE_BASE_URL}"
+
     api_key: "${REMOTE_API_KEY}"
+
     model: "Qwen3.5-27B-FP16"
+
   # Coder 模型 — 编码专用（代码生成/重构/审查）
+
   # 注意: 单 GPU 跑满，KV cache 有限，max_tokens 控制在 2000 以内
+
   coder:
+
     base_url: "${CODER_BASE_URL:-http://10.190.161.39:8080/v1}"
+
     api_key: "${CODER_API_KEY:-ollama}"
+
     model: "${CODER_MODEL:-qwen3-coder:30b}"
+
     max_tokens: 2000
+
   # 思考模式 — Qwen3.5 专属能力
+
   # "off"    : 全部关闭（最快，日常诊断推荐）
+
   # "synth"  : 仅 Round 3 综合收敛开启（平衡：质量↑ 耗时略增）
+
   # "full"   : 所有 complex 调用开启（最慢，token 消耗 3-5x，深度分析用）
+
   thinking: "full"
 
+
+
   # ── Variable Query Probe（Phase 3.57）───────────────────────────────────
+
   # 诊断时让 AI 根据「问题 + L6 代码知识」规划要查哪些变量/表达式，
+
   # 再由 DataProbe 在 SQLite 上执行统计查询，把结果注入 Expert Panel prompt。
+
   # 这是"按需证据采集"机制，避免把单点调查经验硬编码进分析流水线。
+
   variable_probe:
+
     enabled: true
+
     max_queries: 6        # planner 最多产出几条查询
+
     max_chars: 6000       # 渲染进 prompt 的最大字符数
+
     use_thinking: false   # planner 是轻量任务，默认不开 thinking
 
+
+
 # ─── Identity Hierarchy (variant / package_profile / snapshot) ────────
+
 #
+
 # NEW: The five-layer identity model replaces the flat project_key.
+
 #   platforms.*       → PlatformFamily (tech plugin)
+
 #   codebases.*       → Codebase (physical workspace)
+
 #   variants.*        → Variant (customer project boundary)
+
 #   package_profiles* → PackageProfile (build parameter combo)
+
 #
+
 # LEGACY: `projects.*` is still supported for backward compatibility.
+
 #   On load, legacy projects are automatically mapped to variants.
+
 #   New configurations should use the identity hierarchy below.
+
 #
+
 # CLI:
+
 #   Legacy:  python cli.py -P gwm_b26 <case_dir>   (project_key mode)
+
 #   New:     python cli.py --variant gen6/gwm_b26 <case_dir>
+
 #   Full:    python cli.py --variant gen6/gwm_b26 --package gen6/gwm_b26/default <case_dir>
 
+
+
 # ── Platform Families ────────────────────────────────────────────────
+
 platforms:
+
   gen6_c_radar:
+
     language: c
+
     build_system: scons
+
   gen5_cpp_radar:
+
     language: cpp
+
     build_system: cmake
 
+
+
 # ── Codebases ────────────────────────────────────────────────────────
+
 codebases:
+
   gwm_cr60light:
+
     root_path: "D:\\\\GWM-CR60LIGHT\\\\cr60_light"
+
     platform_id: gen6_c_radar
+
   byd_sc6h_cr60light:
+
     root_path: "D:\\\\BYD-SC6H-cr60light\\\\cr60_light"
+
     platform_id: gen6_c_radar
+
   byd_ovs_cb:
+
     root_path: "C:\\\\BYD_OVS_CB"
+
     platform_id: gen5_cpp_radar
 
+
+
 # ── Variants (customer project boundaries) ───────────────────────────
+
 variants:
+
   gen6/gwm_b26:
+
     codebase_id: gwm_cr60light
+
     display_name: "GWM_B26 (CR60Light)"
+
     build_entry: "coem/GWM_B26/buildscripts/build.bat"
+
     scope:
+
       include:
+
         - "coem/GWM_B26/**"
+
     default_package_profile: gen6/gwm_b26/default
+
     key_source_files:
+
       - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIfSchedule\\\\AswIfSchedule.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\com\\\\AutoGen\\\\PriCan\
+
 teLite_PriCan.h"
+
     dbc_sets:
+
       default:
+
         files:
+
           - "CR_DBC_V3.2_20260331.dbc"
+
           - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+
           - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+
     source_domains:
+
       system_state:
+
         - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+
         - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+
       algorithm:
+
         - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+
         - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+
         - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+
       signal_chain:
+
         - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+
       perception:
+
         - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+
         - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+
         - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+
       output:
+
         - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
 
+
+
   gen6/byd_sc6h:
+
     codebase_id: byd_sc6h_cr60light
+
     display_name: "BYD-SC6H-cr60light (6代角雷达)"
+
     build_entry: "coem/BYD_SC6H/buildscripts/build.bat"
+
     scope:
+
       include:
+
         - "coem/BYD_SC6H/**"
+
         - "coem/BYD_UKE/**"
+
     default_package_profile: gen6/byd_sc6h/default
+
     key_source_files:
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+
     dbc_sets:
+
       default:
+
         files:
+
           - "CR_DBC_V3.2_20260331.dbc"
+
           - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+
           - "GWM_RearCorner_Pri_V3.0 (1).dbc"
 
+
+
   gen5/byd:
+
     codebase_id: byd_ovs_cb
+
     display_name: "BYD_OVS_CB (5代角雷达)"
+
     build_entry: "apl/byd/tools/build.bat"
+
     scope:
+
       include:
+
         - "apl/byd/**"
+
     key_source_files: []
+
     dbc_sets: []
 
+
+
 # ── Package Profiles (build parameter combos) ────────────────────────
+
 package_profiles:
+
   gen6/gwm_b26/default:
+
     variant_id: gen6/gwm_b26
+
     build_flags:
+
       vehicle_type: GWM_B26
+
       power_supply: KL15
+
       antenna: SYMMETRY
+
       cycle_time: T66MS
+
       sw_build_type: DEVELOP
+
       fun_test_type: "OFF"
+
     patch_set:
+
       source_dir: coem/GWM_B26/buildscripts/patch
 
+
+
   gen6/byd_sc6h/default:
+
     variant_id: gen6/byd_sc6h
+
     build_flags:
+
       vehicle_type: BYD_SC6H
+
       power_supply: KL15
+
       antenna: SYMMETRY
+
       cycle_time: T66MS
+
       sw_build_type: DEVELOP
+
       fun_test_type: "OFF"
 
+
+
 # ── Default variant ──────────────────────────────────────────────────
+
 default_variant: "gen6/gwm_b26"
 
+
+
 # ── Legacy projects block (backward compat — auto-mapped to variants) ──
+
 # Kept so existing -P gwm_b26 etc. still works.  On load these are
+
 # merged into the variant system.  New projects should be added to
+
 # `variants.*` above instead.
+
 projects:
+
   gwm_b26:
+
     display_name: "GWM_B26 (CR60Light)"
+
     source_code: "D:\\\\GWM-CR60LIGHT\\\\cr60_light"
+
     dbc_files:
+
       - "CR_DBC_V3.2_20260331.dbc"
+
       - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+
       - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+
     key_source_files:
+
       - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+
       - "coem\\\\GWM_B26\\\\components\\\\AswIfSchedule\\\\AswIfSchedule.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+
       - "coem\\\\GWM_B26\\\\components\\\\com\\\\AutoGen\\\\PriCan\
+
 teLite_PriCan.h"
+
   sc6h:
+
     display_name: "BYD-SC6H-cr60light (6代角雷达)"
+
     source_code: "D:\\\\BYD-SC6H-cr60light\\\\cr60_light"
+
     dbc_files:
+
       - "CR_DBC_V3.2_20260331.dbc"
+
       - "GAC_CR_FR&FL_Private_CAN_V1.3.dbc"
+
       - "GWM_RearCorner_Pri_V3.0 (1).dbc"
+
     key_source_files:
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+
       - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+
       - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
+
       - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+
   cr5cb:
     display_name: "BYD_OVS_CB (5代角雷达)"
-    source_code: "C:\\\\BYD_OVS_CB"
+    source_code: "C:\\BYD_OVS_CB"
     dbc_files: []
-    key_source_files: []
+    key_source_files:
+      # FCT FSM - 功能状态机（BSD/LCA/DOW/FCTA/RCTA）
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\bsd\\fct_s_bsdStateMachine.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\dow\\fct_s_dowStateMachine.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\fcta\\fct_s_fctaInfoStateMachine.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\fcta\\fct_s_fctaAebStateMachine.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\fcta\\fct_s_fctaStartPrevStateMachine.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\lca\\fct_s_lcaStateMachine.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\fct\\fsm\\pssFunctions\\rcta\\fct_s_rctaStateMachine.cpp"
+      # FCT SPP - ovrs25 信号处理（2295行核心逻辑）
+      - "apl\\byd\\bindings\\ovrs25\\component\\fct\\modules\\spp\\golf_fct_spp.cpp"
+      - "apl\\byd\\bindings\\ovrs25\\component\\fct\\modules\\spp\\golf_fct_spp.hpp"
+      - "apl\\byd\\bindings\\ovrs25\\component\\fct\\runnables\\spp\\src\\golf_fct_runnableSpp.cpp"
+      - "apl\\byd\\bindings\\ovrs25\\component\\fct\\modules\\spp\\golf_fct_signalValues.hpp"
+      # XGU TGU - 目标输出链（CAN 信号打包输出）
+      - "apl\\byd\\bindings\\byd\\component\\xgu\\runnables\\tgu\\omi\\src\\tguOmiRunnable.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\xgu\\runnables\\tgu\\omi\\src\\tguOmiRunnable.hpp"
+      - "apl\\byd\\bindings\\byd\\component\\xgu\\runnables\\tgu\\input\\src\\tguInputRunnable.cpp"
+      - "apl\\byd\\bindings\\byd\\component\\xgu\\runnables\\tgu\\objectCollector\\src\\tguObjectCollectorRunnable.cpp"
+      # CCR NET - 信号映射（CAN Rx/Tx）
+      - "apl\\byd\\bindings\\ovrs25\\component\\ccr\\modules\\net\\gen\\BYD_PRI\\rbNetCom_BusReceiverBYD_PRI.cpp"
+      - "apl\\byd\\bindings\\ovrs25\\component\\ccr\\modules\\net\\gen\\BYD_PRI\\rbNetCom_BusSenderBYD_PRI.cpp"
+      # FCT HMI - HMI 输出
+      - "apl\\byd\\bindings\\byd\\component\\fct\\runnables\\hmi\\src\\golf_fct_runnableHmi.cpp"
+      # FCT 全局配置
+      - "apl\\base\\component\\fct\\config\\common\\fct_s_globalDefinitions.hpp"
 
 default_project: "gwm_b26"
 
+
+
 paths:
+
   cases_dir: "./cases"
 
+
+
 functions:
+
   rear:  [BSD, LCA, DOW, RCW, RCTA, RCTB]
+
   front: [FCTA, FCTB]
 
+
+
 # ── source_domains ─────────────────────────────────────────────────────
+
 # Per-project domain definitions.  Use projects.<key>.source_domains.
+
 # Legacy global `source_domains` is deprecated but kept for backward compat.
+
 # (Orchestrator now reads from get_project() which merges these in.)
 
+
+
 # Legacy global source_domains — deprecated.  Kept for backward compat.
+
 # New projects should define source_domains inside projects.<key>.source_domains
+
 source_domains:
+
   system_state:
+
     - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c"
+
     - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h"
+
   algorithm:
+
     - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c"
+
     - "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h"
+
     - "adas\\symmetry\\perception\\include\\paraDefine.h"
+
   signal_chain:
+
     - "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c"
+
   perception:
+
     - "adas\\symmetry\\perception\\src\\objAttribCal.c"
+
     - "adas\\symmetry\\perception\\src\\track.c"
+
     - "adas\\symmetry\\perception\\src\\postProcess.c"
+
   output:
+
     - "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
 
+
+
 # ── Variable Filter (Phase 5B) ────────────────────────────────────────────
+
 # Filter rules for CodeGraph variable extraction.  Variables that don't
+
 # match any include rule are discarded.  C keywords, library functions,
+
 # and short local variables are excluded by default.
+
 variable_filter:
+
   # Minimum name length — variables shorter than this are excluded
+
   min_name_length: 4
 
+
+
   # Exclude patterns — regex patterns; if name matches, variable is excluded
+
   exclude_patterns:
+
     # C keywords
+
     - "^(for|while|if|else|return|break|continue|switch|case|default)$"
+
     # C types
+
     - "^(int|float|double|bool|char|void|static|const|unsigned|signed|short|long|struct|typedef|enum|sizeof|extern|volatile)$"
+
     # Common literals
+
     - "^(true|false|TRUE|FALSE|NULL)$"
+
     # Standard library functions (common noise from function calls mistaken as vars)
+
     - "^(fabs|fabsf|fmodf|floorf|ceilf|sinf|cosf|tanf|sqrtf|powf|abs|max|min)$"
+
     # Memory/string ops
+
     - "^(memcpy|memset|strcpy|strcmp|strncpy|sprintf|snprintf|malloc|free|calloc|realloc)$"
+
     # I/O
+
     - "^(printf|fprintf|scanf|sscanf)$"
+
     # Generic noise
+
     - "^(noise|bias|num|pts|res|tmp|idx|cnt|p|next|prev)$"
 
+
+
   # Include patterns — regex patterns; if name matches any, variable is KEPT
+
   # (takes precedence over default exclusion of local variables)
+
   include_patterns:
+
     # RTE / signal variables
+
     - "^Rte_"
+
     # Calibration parameters
+
     - "^Calib"
+
     # State/mode/flag variables (diagnostic value)
+
     - "(State|Mode|Status|Flag|Flg)[A-Z]"
+
     - "[A-Z](State|Mode|Status|Flag|Flg)"
+
     - "Flg$"
+
     # Distance/gap/speed/angle — core ADAS measurements
+
     - "(Distance|Gap|Speed|Vel|Angle|YawAng)[A-Z]"
+
     - "[A-Z](Distance|Gap|Speed|Vel|Angle|YawAng)"
+
     # Object/target tracking
+
     - "(Object|Target|Track|Clu|Obj|Tar)"
+
     # Brake/steer/alarm/warning
+
     - "(Brake|Steer|Alarm|Warn|Bld)[A-Z]"
+
     - "[A-Z](Brake|Steer|Alarm|Warn|Bld)"
+
     # Direction/location keywords
+
     - "(Front|Rear|Left|Right|Corner|Blind|Lane|Road)[A-Z]"
+
     - "[A-Z](Front|Rear|Left|Right|Corner|Blind|Lane|Road)"
+
     # Vehicle/pedestrian/cross
+
     - "(Vehicle|Pedestrian|Cross|Traffic|Sign|Light|Emergency)"
+
     # TTC — time-to-critical
+
     - "TTC"
+
     # Enable/disable/active
+
     - "(Enable|Disable|Active|Passive)[A-Z]"
+
     # FIFO ring buffer (common in ADAS for temporal filtering)
+
     - "^FIFO"
+
     # ADAS Hungarian naming: f(b)ool, (b)ool, n(umber) prefix
+
     # Only keep if name length > min_name_length (configured above)
+
     - "^[fbnFBNR][A-Z]"
 
+
+
   # Scope filtering — which scopes to include
+
   scopes:
+
     - "global"
+
     - "file_static"
+
     # "local" is excluded by default — local variables are diagnostic noise
+
     # Uncomment to include local variables (not recommended):
+
     # - "local"
 
+
+
 # ── Auto-Dream 代码学习增强 ─────────────────────────────────────────────
+
 # 每次 dream 时自动读取上述源码，按“功能 × 焦点”网格增量学习并固化为知识。
+
 # 首次全量学习需 N = len(priority_functions) × len(rotation_focuses) 轮；
+
 # 源码未变动时跳过；源码变动后仅重新学习受影响的 (func, focus) 对。
+
 auto_dream:
+
   code_learning:
+
     enabled: true
+
     # 一次 dream 中最多学习多少个 (function, focus) 组合（控制 token 预算）
+
     # 首次 dream 会学 warmup_pairs 个，后续常规 dream 学 pairs_per_dream 个
+
     warmup_pairs: 8            # 首次冷启动多学一些，快速填充知识库
+
     pairs_per_dream: 2         # 常规做梦每次学 2 个焦点/功能组合
+
     # 焦点轮转顺序（每个 focus 都会应用到每个 function 上）
+
     rotation_focuses:
+
       - alarm_logic           # 报警触发/取消/退出逻辑
+
       - calculation_chain     # 关键变量计算流程（TTC/TTM/距离/速度派生）
+
       - output_chain          # 外发链路（内部变量→RteComMapping→CAN 信号→下游）
+
       - state_machine         # 状态机 (None/Init/Standby/Active/Off/Failure/Passive)
+
     # 优先学习的功能（按此顺序轮转）
+
     priority_functions: [FCTB, FCTA, RCTB, RCTA, BSD, LCA, DOW, RCW]
+
     # 每次 AI 调用允许的源码片段最大字符数（避免超长 prompt）
+
     max_snippet_chars: 40000
+
     # 是否启用 thinking 模式（质量更高但慢 3-5 倍）
+
     use_thinking: true
 
+
+
 # ── Harness Evaluation ──────────────────────────────────────────────────
+
 harness:
+
   # LLM-as-judge 增强配置（默认关闭）
+
   llm_judge:
+
     enabled: false              # 设为 true 开启 LLM judge 增强
+
     model_profile: "simple"     # simple=本地模型, complex=远端模型
+

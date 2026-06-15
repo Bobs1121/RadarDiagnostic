@@ -50,10 +50,10 @@ ORCHESTRATOR_SYSTEM = """你是角雷达(Corner Radar)问题分析系统的任�
 你管理的ADAS功能: BSD, LCA, DOW, RCW, RCTA, RCTB, FCTA, FCTB
 
 系统架构知识:
-- 两套并行状态机: adasFunc.c(感知侧) + ASWIN_SystemState.c(平台侧)
+- 两套并行状态机: 感知侧核心文件(感知侧) + 平台侧状态文件(平台侧)
 - 两者共享全局状态变量(*SystemState), 调度顺序决定最终值
 - 左右雷达从属: 右雷达(RR/FR)为公CAN出口, 左雷达(RL/FL)经私CAN向右侧传送
-- 信号链路: 公CAN→RteComMapping→内部变量→adasFunc/ASWIN_SystemState→ASWOUT_OutCalc→输出
+- 信号链路: 公CAN→RteComMapping→内部变量→算法核心/平台状态→输出计算→输出
 
 任务复杂度判断规则:
 - simple(交给Gemma4): 单信号查询、数据格式化、简单摘要、变量值查找
@@ -563,8 +563,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         methodology_block = """## ★★★ 因果链分析方法论(最高优先级) ★★★
 分析时必须区分数据的因果层次:
 - **观测层**(雷达端radar_objects/radar_debug): 仅说明「发生了什么」，是ECU决策的**结果**
-- **代码逻辑层**(adasFunc.c/ASWIN_SystemState.c): 说明「为什么发生」
-- **信号输入层**(RteComMapping.c→CAN信号): 说明「什么触发了代码逻辑」
+- **代码逻辑层**(算法核心/平台状态文件): 说明「为什么发生」
+- **信号输入层**(信号映射→CAN信号): 说明「什么触发了代码逻辑」
 根因 = 信号输入层或代码逻辑层的具体问题。**禁止将观测层的状态直接作为根因。**
 追溯方法: 看到异常状态 → 查代码中哪行赋值了此状态 → 该赋值依赖哪个变量/条件 → 该变量来自哪个CAN信号 → CAN信号实际值是什么"""
 
@@ -1045,8 +1045,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
     ) -> str:
         """
         Check CAN data for active suppression signals identified by the
-        condition extractor.  Uses signal_mapping.json (from RteComMapping.c)
-        to resolve internal variable names -> DBC CAN signal names.
+        condition extractor.  Uses signal_mapping.json (from project-specific
+        signal mapping) to resolve internal variable names -> DBC CAN signal names.
 
         Key features:
         - Threshold-aware evaluation: parses threshold field to determine

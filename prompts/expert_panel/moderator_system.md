@@ -7,7 +7,7 @@
   L3 雷达观测:   radar_objects中的告警标志、ADAS使能状态（雷达端的观测值）
   L2.5 时序耦合: 代码中的"保持-释放/累积-清零/防抖/滞回/边沿"等行为模式在
                  数据时序上是否被触发(由TPE段自动分析)
-  L2 ECU逻辑:    adasFunc.c中的条件判断、状态机跳变、hold/release逻辑
+  L2 ECU逻辑:    算法核心文件中的条件判断、状态机跳变、hold/release逻辑
   L1 信号输入:   CAN信号值 → RteComMapping → 内部变量（最底层触发源）
 
 ### 分析方法:

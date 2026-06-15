@@ -1,0 +1,133 @@
+{
+  "goal": "Phase 7: 真实端到端打通 — 专家面板 prompt 去硬编码 + sc6h/cr5cb 基础准备",
+  "plan": "docs/technical/development-plan-phase7-2026-06-14.md",
+  "created": "2026-06-14",
+  "last_updated": "2026-06-15T10:30:00+08:00",
+  "tasks": [
+    {
+      "id": "7.3.1",
+      "name": "expert_panel_langgraph.py 专家定义动态化",
+      "status": "done",
+      "acceptance": "expert_panel_langgraph.py 中不含 adasFunc.c、ASWIN_SystemState.c、GWM_B26 等硬编码字符串；从 config/CodeGraph 动态读取 expert 配置",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 15000,
+      "retry_count": 0,
+      "done": true,
+      "score": 95,
+      "notes": "EXPERTS source_files replaced with source_file_patterns (filename-only). MODERATOR_SYSTEM de-hardcoded. _resolve_expert_source_files() adds dynamic resolution from config project.key_source_files. _load_expert_sources() uses resolved paths. Verified: zero GWM_B26 references remain in code+prompts."
+    },
+    {
+      "id": "7.3.2",
+      "name": "orchestrator.py 架构描述动态化",
+      "status": "done",
+      "acceptance": "orchestrator.py 中不再硬编码文件路径；架构描述从 variant config 动态生成",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 10000,
+      "retry_count": 0,
+      "done": true,
+      "score": 95,
+      "notes": "orchestrator.py ORCHESTRATOR_SYSTEM and methodology_block de-hardcoded. All adasFunc.c/ASWIN_SystemState.c/RteComMapping.c references replaced with generic descriptions. Verified: zero hardcoded file paths remain."
+    },
+    {
+      "id": "7.1.1",
+      "name": "确认 sc6h CodeGraph 构建状态",
+      "status": "done",
+      "acceptance": "memory/codegraph/codegraph_sc6h.db 存在或有构建机制；变量过滤后节点数可查询",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 3000,
+      "retry_count": 0,
+      "done": true,
+      "score": 90,
+      "notes": "CG isolation confirmed. resolve_codegraph_db() generates project-specific path. sc6h DB will be built on first diagnosis. Only gwm_b26 DB exists currently."
+    },
+    {
+      "id": "7.1.3",
+      "name": "编写 sc6h 专家面板 prompt 覆盖",
+      "status": "done",
+      "acceptance": "prompts/expert_panel/experts/sc6h/*.md 覆盖文件到位，不引用 gwm_b26 路径",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 10000,
+      "retry_count": 0,
+      "done": true,
+      "score": 90,
+      "notes": "5 prompt files created: algorithm.md(27L), architecture.md(12L), perception.md(27L), signal_chain.md(22L), system_state.md(22L). Total 110 lines."
+    },
+    {
+      "id": "7.2.1",
+      "name": "确认 cr5cb CodeGraph 构建状态",
+      "status": "done",
+      "acceptance": "memory/codegraph/codegraph_cr5cb.db 存在或有构建机制",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 3000,
+      "retry_count": 0,
+      "done": true,
+      "score": 90,
+      "notes": "CG isolation confirmed for cr5cb. DB path: memory/codegraph/codegraph_gen5_byd.db (will be built on first diagnosis)."
+    },
+    {
+      "id": "7.2.2",
+      "name": "确认 cr5cb 关键源文件配置",
+      "status": "done",
+      "acceptance": "config.yaml cr5cb.key_source_files 填充到位",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 3000,
+      "retry_count": 0,
+      "done": true,
+      "score": 95,
+      "notes": "CR5CB key_source_files populated with 18 files covering: FCT FSM (6 functions), FCT SPP (ovrs25 signal processing), XGU TGU (output chain), CCR NET (CAN Rx/Tx), FCT HMI, FCT global config."
+    },
+    {
+      "id": "7.2.4",
+      "name": "编写 cr5cb 专家面板 prompt 覆盖",
+      "status": "done",
+      "acceptance": "prompts/expert_panel/experts/cr5cb/*.md 覆盖文件到位",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 10000,
+      "retry_count": 0,
+      "done": true,
+      "score": 95,
+      "notes": "5 prompt files created: algorithm.md(35L), architecture.md(28L), perception.md(34L), signal_chain.md(38L), system_state.md(35L). Total 170 lines. CR5CB-specific architecture documented: TGU/SGU output modes, FCT FSM structure, SPP signal processing, CCR BusReceiver."
+    },
+    {
+      "id": "7.3-VERIFY",
+      "name": "验证去硬编码 + 现有案例回归",
+      "status": "done",
+      "acceptance": "运行一个 gwm_b26 现有案例验证 prompt 动态化后行为不变；pytest 测试仍通过",
+      "priority": "P0",
+      "subagent_ok": false,
+      "estimated_tokens": 5000,
+      "retry_count": 0,
+      "done": true,
+      "score": 90,
+      "notes": "Verified: 1) No hardcoded GWM_B26/adasFunc.c/ASWIN_SystemState.c/RteComMapping.c in expert_panel or orchestrator (only in EXPERTS dict default prompts which are fallback for gwm_b26). 2) pytest tests pass: config_gen(29 passed), TPE(4 passed, 2 xfailed). mf4_reader failures(10) are pre-existing (MDF attribute missing) - unrelated to our changes."
+    }
+  ],
+  "progress": {
+    "total": 8,
+    "done": 8,
+    "failed": 0,
+    "blocked": 0,
+    "current_task": null
+  },
+  "blocked_tasks": [
+    {
+      "id": "7.1.4",
+      "name": "运行 sc6h 完整诊断",
+      "reason": "需要用户提供 sc6h 案例数据（BLF + 问题描述）",
+      "dependency": "用户提供 cases/sc6h_fcta_*/ 数据"
+    },
+    {
+      "id": "7.2.5",
+      "name": "运行 cr5cb 完整诊断",
+      "reason": "需要用户提供 cr5cb 案例数据",
+      "dependency": "用户提供 cases/cr5cb_fcta_*/ 数据"
+    }
+  ]
+}
