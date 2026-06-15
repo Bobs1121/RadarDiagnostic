@@ -1,10 +1,10 @@
 # radarAnalyze — Master Handoff Document
 
-| 最后更新: 2026-06-15 (Phase 7 完成 — 专家面板 prompt 去硬编码 + 多项目 prompt 覆盖)
+| 最后更新: 2026-06-15 (总体设计评估 + Phase 14/15 开发方案制定)
 | 当前分支: `refactor/v2`
-| 当前状态: Phase 1-4 + 5A-5E + 6A-6D + Harness Phase 1-3 + ADR-018~020 + P1-1~P1-3 + **Phase 7 完成** — 专家面板 prompt 完全去硬编码 + sc6h/cr5cb prompt 覆盖 + config key_source_files 填充
+| 当前状态: Phase 1-7 已完成 — 专家面板 prompt 去硬编码 + 多项目隔离 + Harness 6 GT + 知识沉淀闭环 + SIGNAL 100%
 | PRD 版本: v2.1.1 (多项目支持 + 基础优先策略 + variant/package/material 设计补充)
-| 综合评分: 8.5/10 — SIGNAL 100%，Harness 6 案例评估上线(5/6 PASS, avg 0.76)，知识沉淀闭环，多项目完全隔离，测试套件 42 passed
+| 综合评分: 8.5/10 — Phase 14/15 完成后目标 9.2/10
 
 ---
 
@@ -15,6 +15,7 @@
 | **PRD** | `docs/PRD_refactor_v2.md` | 产品需求文档 — 改造目标、用户场景、功能需求 |
 | **实施规划** | `docs/IMPLEMENTATION_PLAN_v2.md` | 实施步骤 — Phase/任务/验收标准 |
 | **本文档** | `docs/technical/codegraph-handoff-master.md` | 跨会话 handoff — 当前状态 + 架构 + 决策记录 |
+| **Phase 14 计划** | `docs/technical/development-plan-phase14-2026-06-15.md` | Phase 14/15 开发方案 — 分析能力核心强化 + 知识注入/记忆优化 |
 | **后续计划** | `docs/technical/development-plan-phase7-2026-06-14.md` | Phase 7-13 后续开发计划（全面详细） |
 | **专题设计** | `docs/technical/variant-package-material-design-2026-06-13.md` | variant / 软件包 / 材料接入 / 审计产物设计 |
 | ai/ 模块 | `ai/AGENTS.md` | AI 分析模块说明 |
@@ -50,6 +51,8 @@
 | **P1-3: Prompt多项目适配** | ✅ 完成 | loader.project_key + experts/<key>/覆写目录 + ExpertPanel 透传 |
 | **Phase 7: 多项目 prompt 去硬编码** | ✅ 完成 | expert_panel_langgraph.py + orchestrator.py 去硬编码 + sc6h 5个 prompt 覆盖 + cr5cb 5个 prompt 覆盖 + config.yaml cr5cb key_source_files 填充（18个文件） |
 | **P1-2: 记忆系统简化** | ⏸️ 延期 | 6→3 层重构风险过高，等 P0 稳定后评估 |
+| **Phase 14: 分析能力核心强化** | 📋 规划中 | TPE 扩展、条件提取双层、抑制分析强化、工程健壮性修复 — 详见 development-plan-phase14-2026-06-15.md |
+| **Phase 15: 知识注入与记忆优化** | 📋 规划中 | 知识预热、variable_chains 缓存、记忆原子写入、衰退机制 — 详见 development-plan-phase14-2026-06-15.md |
 
 ### 改造路线 (基础优先)
 
@@ -72,6 +75,60 @@
 ||[P] 多项目数据隔离 (6D) → source_docs + L6 code_knowledge 按项目隔离 + 代码引用修复（✅ 完成）
 ||  ↓
 ||[P] 优化项 (5E) → ContextBudget + 记忆简化
+```
+
+---
+
+## 2026-06-15 总体设计评估 + Phase 14/15 规划
+
+> 评估时间: 2026-06-15
+> 评估范围: 管线链路设计、知识注入机制、记忆系统、分析能力四维深度审查
+> 输出: `docs/technical/development-plan-phase14-2026-06-15.md`
+
+### 四维评估结果
+
+| 维度 | 评分 | 核心结论 |
+|------|------|---------|
+| **链路设计** | 7/10 | 8 步管线结构正确，TPE/抑制分析/条件提取等关键环节能力不足 |
+| **知识注入** | 7/10 | 6 层知识体系完整，注入效率偏低（ensure_overview_docs 阻塞、variable_chains 无缓存） |
+| **记忆机制** | 7/10 | 分层 + 自动整合设计优秀，竞态/JSON 解析/衰减机制有缺陷 |
+| **分析能力** | 6/10 | 帧级证据扎实，TPE 仅 2 种模式，条件提取纯 LLM 无兜底，抑制分析未使用窗口 |
+
+### 识别的 6 个核心差距
+
+| # | 问题 | 优先级 | Phase 14/15 解决 |
+|---|------|--------|----------------|
+| 1 | TPE 仅 HoldRelease + Accumulate，缺少 ThresholdCross/StateTransition/TemporalDependency | **P0** | Phase 14 §1.1 |
+| 2 | 条件提取纯 LLM，无正则/AST 兜底；mtime 缓存有 AI 漂移 | **P0** | Phase 14 §1.2 |
+| 3 | 抑制/输出信号分析 windows 参数未使用，无时间相关性 | **P0** | Phase 14 §1.3 |
+| 4 | ensure_overview_docs 每次诊断阻塞、variable_chains 无缓存 | **P1** | Phase 15 §2.1 |
+| 5 | 记忆写入竞态、JSON 解析脆弱、无衰退机制 | **P1** | Phase 15 §2.2 |
+| 6 | 静默失败过多（except: pass、store 未校验） | **P0** | Phase 14 §1.4 |
+
+### Phase 14 规划概要
+
+**目标**: 补全 TPE（2→6 种模式）、条件提取双层机制、抑制信号时间相关性、消除静默失败
+**工时**: ~5 天（可并行）
+**预期评分提升**: 综合 8.5 → 9.0/10
+
+### Phase 15 规划概要
+
+**目标**: 知识预热 + variable_chains 缓存、记忆原子写入 + 快照读取 + 衰退机制
+**工时**: ~2 天（可并行）
+**预期评分提升**: 综合 9.0 → 9.2/10
+
+### 与已有 Phase 的关系
+
+```
+Phase 7 (多项目 prompt 去硬编码)     ← ✅ 已完成
+    ↓
+Phase 14 (分析能力核心强化)          ← ★ 本轮重点，~5 天
+    ↓
+Phase 15 (知识注入 + 记忆优化)        ← 效率提升，~2 天
+    ↓
+Phase 8 (Identity 深度集成)           ← 后续
+Phase 9 (Materials 材料接入)          ← 后续
+Phase 10 (Harness 扩展)              ← 后续
 ```
 
 ---
@@ -105,10 +162,10 @@
 |---|------|------|------|
 | 1 | **项目是否走偏** | ✅ | 实现与 PRD v2.1.1 一致，核心路线按序推进 |
 | 2 | **是否符合 PRD 设计** | ✅ 88% | 5C.5（LLM全量标注）BLOCKED，5E.2（记忆简化）延期 |
-| 3 | **鲁棒性** | ✅ 7.5/10 | 降级策略完整，8步管线出错面小，测试覆盖完善 |
+| 3 | **鲁棒性** | ⚠️ 7/10 | 降级策略完整，但静默失败过多（except: pass），TPE/抑制分析能力不足 |
 | 4 | **多项目适配性** | ✅ 8.5/10 | 全链路隔离完成，prompt 多项目化完成 |
-| 5 | **记忆机制** | ⚠️ 7/10 | 6层实现完整但重叠，简化延期 |
-| 6 | **知识沉淀** | ✅ 7/10 | 诊断→L6闭环完成，CodeGraph 语义层框架就绪 |
+| 5 | **记忆机制** | ⚠️ 6.5/10 | 6层实现完整但重叠，无竞态保护、无衰退机制 |
+| 6 | **知识沉淀** | ✅ 7/10 | 诊断→L6闭环完成，CodeGraph 语义层框架就绪，注入效率待优化 |
 
 ---
 
@@ -909,19 +966,34 @@ P1 继续：
 - `python cli.py` — 正常输出 usage，无 AttributeError
 - `python tests/test_infrastructure_verification.py` — 58 passed, 1 failed（Test 1 `identity section exists` 是已知预期失败，config.yaml 中 identity 节可选）
 
-### 当前待办（按优先级）
+### 当前待办（按优先级 — 2026-06-15 更新）
+
+**P0: Phase 14 分析能力核心强化**（详见 development-plan-phase14-2026-06-15.md）
 
 | # | 问题 | 优先级 | 计划 Phase |
 |---|------|--------|-----------|
-| 1 | Harness ground truth 仅 1 个案例 | P0-1 | Harness Phase 3 |
-| 2 | L2 因果匹配靠概念/关键词重叠，语义匹配不够准 | P0-2 | Harness Phase 3 |
-| 2.1 | 依赖不透明（langgraph/LLM 相关依赖缺失时报错不友好） | P0-3 | Engineering |
-| 3 | config.yaml 无 `identity` 顶层节（测试预期与现状不符） | P1-4 | Engineering |
-| 4 | ContextBudget 固定 60K | P1-1 | 5E.1 |
-| 5 | 记忆 6 层消费不均衡 | P1-2 | 5E.2 |
-| 6 | 专家面板 prompt 写死架构描述 | P1-3 | 5E.3 |
-| 7 | CodeGraph 语义层为空 | P2-1 | 5C.5（BLOCKED） |
-| 8 | Harness 缺少多案例统计报告 | P2-2 | Harness Phase 3 |
+| 1 | TPE 仅 2 种模式，缺少 ThresholdCross/StateTransition/TemporalDependency | P0 | Phase 14 §1.1 |
+| 2 | 条件提取纯 LLM 无兜底，mtime 缓存漂移 | P0 | Phase 14 §1.2 |
+| 3 | 抑制/输出信号分析 windows 参数未使用 | P0 | Phase 14 §1.3 |
+| 4 | 静默失败过多（except: pass、store 未校验） | P0 | Phase 14 §1.4 |
+| 5 | Harness ground truth 仅 6 个案例（5/6 gwm_b26） | P0-1 | Harness Phase 3 |
+
+**P1: Phase 15 知识注入与记忆优化**
+
+| # | 问题 | 优先级 | 计划 Phase |
+|---|------|--------|-----------|
+| 6 | ensure_overview_docs 每次诊断阻塞 | P1 | Phase 15 §2.1 |
+| 7 | variable_chains 无缓存 | P1 | Phase 15 §2.1 |
+| 8 | 记忆写入竞态、JSON 解析脆弱、无衰退机制 | P1 | Phase 15 §2.2 |
+
+**P1: 后续架构完善**
+
+| # | 问题 | 优先级 | 计划 Phase |
+|---|------|--------|-----------|
+| 9 | sc6h/cr5cb 无真实诊断案例 | P0 | Phase 7（需用户数据） |
+| 10 | Identity 模型未贯穿管线 | P1 | Phase 8 |
+| 11 | Materials 材料接入未实现 | P1 | Phase 9 |
+| 12 | 5C 语义层 LLM 全量标注 BLOCKED | P1 | Phase 11 |
 
 ### Deferred (暂不处理)
 
