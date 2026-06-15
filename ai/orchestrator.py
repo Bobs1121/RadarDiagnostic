@@ -233,6 +233,8 @@ class Orchestrator:
                 func_name, max_chars=2000,
             )
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
         if not constants_section:
             constants_section = (
@@ -447,6 +449,8 @@ TPE 证据段与 CodeGraph 结构数据交叉验证。
 """
                 cg.close()
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass  # silent fallback — CodeGraph is optional enhancement
 
         # Build data summary
@@ -457,8 +461,8 @@ TPE 证据段与 CodeGraph 结构数据交叉验证。
         key_facts = evidence.pop("KEY_FACTS", "")
         timeline = evidence.pop("timeline", [])
         transitions = evidence.pop("state_transitions", [])
-        evidence.pop("tpe_block", None)
-        evidence.pop("tpe_report", None)
+        tpe_block = evidence.pop("tpe_block", "") or ""
+        tpe_report_data = evidence.pop("tpe_report", None)
 
         evidence_text = json.dumps(evidence, ensure_ascii=False, default=str, indent=1)
         if len(evidence_text) > 20000:
@@ -475,9 +479,8 @@ TPE 证据段与 CodeGraph 结构数据交叉验证。
         else:
             transitions_text = "(无状态跳变)"
 
-        # Build TPE section
+        # Build TPE section — use the saved tpe_block from pop above
         tpe_section = ""
-        tpe_block = evidence.get("tpe_block") or ""
         if tpe_block:
             tpe_section = f"""
 ## ★★★ 代码模式 × 数据时序 因果对齐 (TPE,最高优先级) ★★★
@@ -577,6 +580,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 if _tr:
                     _case_duration = (_tr[1] - _tr[0]).total_seconds() if hasattr(_tr[1], 'total_seconds') else float(_tr[1] - _tr[0])
             except Exception:
+                import logging
+                logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
                 pass
         _cg_nodes = 0
         try:
@@ -587,6 +592,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 _cg_nodes = _conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
                 _conn.close()
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
         _budget_total = compute_budget(
             codegraph_nodes=_cg_nodes,
@@ -717,6 +724,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         try:
             self._update_memories(session_id, case_dir, func_name, func_info, diagnosis, problem)
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
 
         # L6 code knowledge precipitation from diagnosis
@@ -730,11 +739,14 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             )
             status("deliver", "L6 knowledge precipitation done")
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
         self.memory.complete_session(session_id, f"Report saved to {report_path}")
         status("deliver", f"Diagnosis complete: {report_path}")
 
-        store.close()
+        if store:
+            store.close()
 
         # ══ Save DiagnosisBundle (structured output) ════════════════
         try:
@@ -770,6 +782,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             step_logger.save(obs_log_path)
             status("deliver", f"Step log saved: {obs_log_path}")
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
 
         return report_path
@@ -1015,6 +1029,17 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             lines.append(f"  统计: min={v_min}, max={v_max}, mean={v_mean:.4f}, "
                          f"非零帧={nonzero}/{len(values)} ({nz_pct:.1f}%)")
 
+            # Window-based analysis for output signals
+            if windows and len(windows) > 0:
+                win_eval = self._evaluate_output_in_windows(timeline, windows)
+                act_ratio = win_eval["activation_ratio"]
+                win_total = win_eval["window_total"]
+                win_label = "窗口内持续输出" if act_ratio > 0.8 else "窗口内间歇输出" if act_ratio > 0.3 else "窗口内无输出"
+                lines.append(
+                    f"  📊 **窗口分析**: {win_label} — "
+                    f"{act_ratio*100:.0f}% 窗口帧有输出 ({win_eval['window_active']}/{win_total})"
+                )
+
             if active_periods:
                 lines.append(f"  **激活段 ({len(active_periods)}个)**:")
                 for ap in active_periods[:10]:
@@ -1160,6 +1185,11 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 met = met_pct > 1.0
                 marker = "⚠️ **抑制条件满足**" if met else "✅ 抑制条件不满足"
 
+                # Window-based time correlation analysis
+                window_eval = None
+                if windows and len(windows) > 0:
+                    window_eval = self._evaluate_in_windows(timeline, windows, threshold)
+
                 v_min, v_max = min(values), max(values)
                 v_mean = sum(values) / len(values)
                 nonzero = sum(1 for v in values if v != 0)
@@ -1185,6 +1215,15 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                     f"    帧数: {len(timeline)}, 变化: {len(changes)}次"
                     f"{polarity_warning}"
                 )
+                if window_eval:
+                    sup_ratio = window_eval["suppression_ratio"]
+                    win_count = window_eval["window_count"]
+                    win_total = window_eval["window_total"]
+                    win_label = "全程抑制" if sup_ratio > 0.8 else "间歇抑制" if sup_ratio > 0.3 else "窗口内未抑制"
+                    sub_results.append(
+                        f"    📊 **窗口分析**: {win_label} — "
+                        f"{sup_ratio*100:.0f}% 窗口帧触发抑制 ({win_count}/{win_total})"
+                    )
                 if changes:
                     for c in changes[:8]:
                         sub_results.append(f"      t={c['t']}s: {c['from']} → {c['to']}")
@@ -1244,6 +1283,115 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         nonzero = sum(1 for v in values if v != 0)
         pct = nonzero / n * 100
         return {"met_pct": pct, "description": f"阈值'{threshold_str}'(未解析,默认非零): {pct:.1f}%帧非零 ({nonzero}/{n})"}
+
+    def _evaluate_in_windows(self, timeline: list[tuple[float, any]], windows, threshold: str) -> dict:
+        """Evaluate suppression condition within test windows.
+
+        Args:
+            timeline: List of (timestamp, value) tuples.
+            windows: List of TestWindow or dict with start_t / end_t.
+            threshold: Threshold string (same format as _evaluate_threshold).
+
+        Returns:
+            {"suppression_ratio": float, "window_count": int, "window_total": int}
+        """
+        if not timeline or not windows:
+            return {"suppression_ratio": 0.0, "window_count": 0, "window_total": 0}
+
+        # Build window time ranges
+        window_ranges: list[tuple[float, float]] = []
+        for w in windows:
+            if hasattr(w, 'start_t'):
+                window_ranges.append((w.start_t, w.end_t))
+            elif isinstance(w, dict):
+                start = w.get("start_t", w.get("t_start", 0))
+                end = w.get("end_t", w.get("t_end", 0))
+                window_ranges.append((start, end))
+
+        if not window_ranges:
+            return {"suppression_ratio": 0.0, "window_count": 0, "window_total": 0}
+
+        # Count window frames that match suppression condition
+        window_total = 0
+        window_met = 0
+        for t, v in timeline:
+            if not isinstance(v, (int, float)):
+                continue
+            for ws, we in window_ranges:
+                if ws <= t <= we:
+                    window_total += 1
+                    # Use threshold evaluation
+                    met = self._single_value_matches_threshold(v, threshold)
+                    if met:
+                        window_met += 1
+                    break
+
+        ratio = (window_met / window_total) if window_total > 0 else 0.0
+        return {
+            "suppression_ratio": ratio,
+            "window_count": window_met,
+            "window_total": window_total,
+        }
+
+    @staticmethod
+    def _single_value_matches_threshold(value: float, threshold: str) -> bool:
+        """Check if a single value matches the suppression threshold."""
+        import re
+        thr = threshold.strip().upper().replace(" ", "")
+
+        if thr in ("TRUE", "!=0", "==TRUE", "==1"):
+            return value != 0
+        if thr in ("FALSE", "==0", "==FALSE", "!=TRUE"):
+            return value == 0
+
+        m = re.match(r'^(>=?|<=?|==|!=)([-\d.]+)$', thr)
+        if m:
+            op, val_s = m.group(1), float(m.group(2))
+            ops = {
+                ">": lambda v: v > val_s, ">=": lambda v: v >= val_s,
+                "<": lambda v: v < val_s, "<=": lambda v: v <= val_s,
+                "==": lambda v: v == val_s, "!=": lambda v: v != val_s,
+            }
+            fn = ops.get(op)
+            if fn:
+                return fn(value)
+
+        return value != 0
+
+    @staticmethod
+    def _evaluate_output_in_windows(timeline: list[tuple[float, any]], windows) -> dict:
+        """Evaluate output signal activation within test windows."""
+        if not timeline or not windows:
+            return {"activation_ratio": 0.0, "window_active": 0, "window_total": 0}
+
+        window_ranges: list[tuple[float, float]] = []
+        for w in windows:
+            if hasattr(w, 'start_t'):
+                window_ranges.append((w.start_t, w.end_t))
+            elif isinstance(w, dict):
+                window_ranges.append((w.get("start_t", 0), w.get("end_t", 0)))
+
+        if not window_ranges:
+            return {"activation_ratio": 0.0, "window_active": 0, "window_total": 0}
+
+        window_total = 0
+        window_active = 0
+        for t, v in timeline:
+            if not isinstance(v, (int, float)):
+                continue
+            for ws, we in window_ranges:
+                if ws <= t <= we:
+                    window_total += 1
+                    if v != 0:
+                        window_active += 1
+                    break
+
+        ratio = (window_active / window_total) if window_total > 0 else 0.0
+        return {
+            "activation_ratio": ratio,
+            "window_active": window_active,
+            "window_total": window_total,
+        }
 
     @staticmethod
     def _invert_threshold(threshold_str: str) -> str:
@@ -1618,6 +1766,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 content = md.read_text(encoding="utf-8")
                 source_summaries += f"\n### {fn}\n{content[:2000]}\n"
             except Exception:
+                import logging
+                logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
                 pass
 
         # CodeGraph: inject structured code context
@@ -1634,6 +1784,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                         codegraph_md += f"\n{md_text}\n"
                 cg.close()
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass  # silent fallback
 
         prompt = f"""分析以下问题，制定诊断计划。
@@ -1842,6 +1994,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             if pattern:
                 self.memory.add_pattern(pattern)
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
 
         existing = self.memory.read_function_knowledge(func_name)
@@ -2003,6 +2157,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             self.memory.write_code_knowledge(func_name, existing)
 
         except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Operation failed (silent failure caught)')
             pass
 
     def _save_diagnosis_bundle(

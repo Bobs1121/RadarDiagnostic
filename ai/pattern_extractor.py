@@ -52,12 +52,16 @@ __all__ = [
 # ── Catalogue of supported pattern types ─────────────────────────────────
 
 PATTERN_TYPES = {
-    "HoldRelease":  "if (cond) { flag=false; time=0 } — 保持失效",
-    "HoldEntry":    "if (cond) { flag=true; ... }   — 保持进入",
-    "Accumulate":   "time += dt 配合 time = 0        — 时间累积器",
-    "Hysteresis":   "enter_thresh != exit_thresh    — 阈值迟滞",
-    "Debounce":     "cnt++ / if (cnt >= N)          — 防抖计数",
-    "EdgeTrigger":  "prev==A && cur==B              — 边沿触发",
+    "HoldRelease":       "if (cond) { flag=false; time=0 } — 保持失效",
+    "HoldEntry":         "if (cond) { flag=true; ... }   — 保持进入",
+    "Accumulate":        "time += dt 配合 time = 0        — 时间累积器",
+    "Hysteresis":        "enter_thresh != exit_thresh    — 阈值迟滞",
+    "Debounce":          "cnt++ / if (cnt >= N)          — 防抖计数",
+    "EdgeTrigger":       "prev==A && cur==B              — 边沿触发",
+    "ThresholdCross":    "var >= X || var <= X           — 阈值穿越（上升/下降沿）",
+    "StateTransition":   "switch(ctx->state) / if(state==A) — 状态机转换",
+    "TemporalDependency":"A → B 时序依赖（A 先于 B，延迟 < X）",
+    "FlagSetNeverCleared":"flag = 1 后无 flag = 0        — 标志位设置后未清除",
 }
 
 
@@ -135,6 +139,11 @@ class PatternExtractor:
         r'^\s*(\w+(?:\.\w+)?)\s*\+=\s*[\w.\->]+\s*;\s*$',
     )
 
+    # Threshold crossing: var >= THRESH or var <= THRESH
+    _THRESHOLD_RE = re.compile(
+        r'(\w+(?:\.\w+)?)\s*(>=|<=|>|<)\s*(\d+\.?\d*)\s*([fF])?',
+    )
+
     # ``!x``, ``!x.y``, ``!g_X.y.z`` all need to yield the leaf identifier.
     _IDENT_RE = re.compile(r'[A-Za-z_][\w.]*')
 
@@ -178,6 +187,10 @@ class PatternExtractor:
         patterns: list[CodePattern] = []
         patterns.extend(self._scan_hold_release(rel_path, lines))
         patterns.extend(self._scan_accumulate(rel_path, lines))
+        patterns.extend(self._scan_threshold_cross(rel_path, lines))
+        patterns.extend(self._scan_state_transitions(rel_path, lines))
+        patterns.extend(self._scan_flag_set_never_cleared(rel_path, lines))
+        patterns.extend(self._scan_temporal_dependencies(rel_path, lines))
         return patterns
 
     # ── Detector: HoldRelease ────────────────────────────────────────────
@@ -277,6 +290,354 @@ class PatternExtractor:
                 snippet=snippet,
                 notes="时间累积器；被重置的条件一旦频繁触发，累积永远达不到阈值。",
             ))
+        return patterns
+
+    # ── Detector: ThresholdCross ─────────────────────────────────────────
+
+    def _scan_threshold_cross(self, rel_path: str, lines: list[str]) -> list[CodePattern]:
+        """Locate threshold-crossing patterns: var >= X, var <= X, var > X, var < X.
+
+        We look for comparisons inside `if` conditions that compare a variable
+        against a numeric constant threshold. These are ADAS-relevant patterns
+        like speed-domain switches, TTC gating, and distance thresholds.
+        """
+        patterns: list[CodePattern] = []
+        n = len(lines)
+        emitted: set[int] = set()
+
+        for i in range(n):
+            raw = lines[i]
+            stripped = raw.strip()
+            if stripped.startswith("//") or stripped.startswith("/*"):
+                continue
+
+            # Only look inside `if` conditions
+            if_match = self._IF_RE.match(raw)
+            if not if_match:
+                continue
+
+            cond_text, cond_end_idx = self._collect_condition(lines, i)
+
+            # Find all threshold comparisons in the condition
+            threshold_matches = list(self._THRESHOLD_RE.finditer(cond_text))
+            if not threshold_matches:
+                continue
+
+            body_start, body_end = self._find_brace_body(lines, cond_end_idx)
+            if body_start is None or body_end is None:
+                # No brace body — still record the pattern from condition alone
+                body_end = cond_end_idx
+
+            # Deduplicate: group by variable name + line
+            seen_vars: set[str] = set()
+            for tm in threshold_matches:
+                var = tm.group(1)
+                op = tm.group(2)
+                threshold = tm.group(3)
+                leaf = var.split(".")[-1]
+
+                if leaf in seen_vars:
+                    continue
+                seen_vars.add(leaf)
+
+                # Determine direction from operator
+                if op in (">=", ">"):
+                    direction = "rising"
+                else:
+                    direction = "falling"
+
+                adas_func = self._adas_func_for_identifier(leaf)
+                if not adas_func:
+                    adas_func = self._guess_adas_function(cond_text, [var])
+
+                enclosing = self._find_enclosing_function(lines, i)
+                snippet = "\n".join(lines[i:min(i + 5, n)])[:600]
+
+                if (i + 1) not in emitted:
+                    patterns.append(CodePattern(
+                        pattern_type="ThresholdCross",
+                        file=rel_path,
+                        line_start=i + 1,
+                        line_end=(body_end or i) + 1,
+                        function=enclosing,
+                        trigger_condition=cond_text.strip(),
+                        trigger_variables=[var],
+                        consequence_variables=[],
+                        adas_function=adas_func,
+                        snippet=snippet,
+                        notes=(
+                            f"阈值穿越检测: {var} {op} {threshold} "
+                            f"({direction} edge). "
+                            "速度域切换、TTC 门限等场景的关键判断点。"
+                        ),
+                    ))
+                    emitted.add(i + 1)
+
+        return patterns
+
+    # ── Detector: StateTransition ────────────────────────────────────────
+
+    _STATE_VAR_RE = re.compile(
+        r'\b([A-Za-z_]\w*(?:State|state|STATE)\w*)\s*==\s*(\w+)',
+    )
+    _STATE_ASSIGN_RE = re.compile(
+        r'\b([A-Za-z_]\w*(?:State|state|STATE)\w*)\s*=\s*(\w+)\s*;',
+    )
+
+    def _scan_state_transitions(self, rel_path: str, lines: list[str]) -> list[CodePattern]:
+        """Detect state machine transitions from if/switch patterns.
+
+        Looks for:
+        - `if (state == STATE_A) { ... state = STATE_B; }`
+        - `switch (state) { case STATE_A: ... state = STATE_B; }`
+
+        This is a regex-level approximation. Full AST analysis is handled
+        by state_machine_extractor.py which can be called separately.
+        """
+        patterns: list[CodePattern] = []
+        n = len(lines)
+        emitted: set[int] = set()
+
+        # Collect all state variable assignments with their context
+        state_assignments: list[tuple[int, str, str, str]] = []  # (line, state_var, new_state, enclosing_if)
+        current_state_var = None
+        current_if_line = None
+        current_cond = ""
+
+        for i in range(n):
+            raw = lines[i]
+            stripped = raw.strip()
+
+            # Track if-condition that references a state variable
+            if_match = self._IF_RE.match(raw)
+            if if_match:
+                cond_text, _ = self._collect_condition(lines, i)
+                state_match = self._STATE_VAR_RE.search(cond_text)
+                if state_match:
+                    current_state_var = state_match.group(1)
+                    current_if_line = i
+                    current_cond = cond_text.strip()
+                else:
+                    current_state_var = None
+                    current_if_line = None
+                    current_cond = ""
+
+            # Look for case statements with state-like values
+            case_match = re.match(r'^\s*case\s+(\w+)\s*:', raw)
+            if case_match:
+                case_val = case_match.group(1)
+                if any(kw in case_val.lower() for kw in ('state', 'idle', 'run', 'err', 'init', 'done', 'ok')):
+                    current_state_var = current_state_var or f"case_{case_val}"
+                    current_cond = f"case {case_val}"
+
+            # Find state assignments
+            assign_match = self._STATE_ASSIGN_RE.search(raw)
+            if assign_match:
+                state_var = assign_match.group(1)
+                new_state = assign_match.group(2)
+                if current_state_var and (
+                    state_var == current_state_var or
+                    state_var.lower() == current_state_var.lower()
+                ):
+                    state_assignments.append((
+                        i, state_var, new_state, current_cond or f"case {case_val}" if case_match else ""
+                    ))
+
+        # Build patterns from collected assignments
+        for line_idx, state_var, new_state, cond in state_assignments:
+            if (line_idx + 1) in emitted:
+                continue
+
+            enclosing = self._find_enclosing_function(lines, line_idx)
+            snippet = "\n".join(lines[max(0, line_idx-2):min(line_idx+3, n)])[:400]
+
+            # Guess ADAS function from state variable name
+            adas_func = self._adas_func_for_identifier(state_var)
+
+            # Find the body range for this transition
+            body_start = line_idx
+            body_end = line_idx
+            if current_if_line is not None:
+                _, bs = self._find_brace_body(lines, current_if_line)
+                if bs is not None:
+                    body_start = current_if_line
+                    body_end = bs
+
+            patterns.append(CodePattern(
+                pattern_type="StateTransition",
+                file=rel_path,
+                line_start=body_start + 1,
+                line_end=body_end + 1,
+                function=enclosing,
+                trigger_condition=f"{cond} → {state_var} = {new_state}",
+                trigger_variables=[state_var],
+                consequence_variables=[new_state],
+                adas_function=adas_func,
+                snippet=snippet,
+                notes=(
+                    f"状态机转换: {state_var} = {new_state}. "
+                    f"守护条件: {cond or 'N/A'}. "
+                    "运行时如果出现代码未定义的状态转换即为非法路径。"
+                ),
+            ))
+            emitted.add(line_idx + 1)
+
+        return patterns
+
+    # ── Detector: FlagSetNeverCleared ────────────────────────────────────
+
+    def _scan_flag_set_never_cleared(self, rel_path: str, lines: list[str]) -> list[CodePattern]:
+        """Detect flags that are set to true/1 but never cleared to false/0.
+
+        A flag that is set but never cleared within the same file's scope
+        may indicate a stuck state where a condition latches and never
+        resets, potentially causing permanent suppression or warning.
+        """
+        patterns: list[CodePattern] = []
+        n = len(lines)
+
+        # Collect all flag-like variables that are set to true/1
+        flag_set_locations: dict[str, list[int]] = {}
+        flag_clear_locations: dict[str, list[int]] = {}
+
+        for i in range(n):
+            raw = lines[i].strip()
+            if raw.startswith("//") or raw.startswith("/*"):
+                continue
+
+            # Flag set to true/1
+            set_match = self._ASSIGN_TRUE_RE.match(raw)
+            if set_match:
+                var = set_match.group(1)
+                leaf = var.split(".")[-1].split("->")[-1]
+                if self._looks_like_flag(var):
+                    flag_set_locations.setdefault(leaf, []).append(i)
+
+            # Flag cleared to false/0
+            clear_match = self._ASSIGN_ZERO_RE.match(raw)
+            if clear_match:
+                var = clear_match.group(1)
+                leaf = var.split(".")[-1].split("->")[-1]
+                if self._looks_like_flag(var):
+                    flag_clear_locations.setdefault(leaf, []).append(i)
+
+        # Find flags that are set but never cleared (or cleared very infrequently)
+        for flag_name, set_lines in flag_set_locations.items():
+            clear_lines = flag_clear_locations.get(flag_name, [])
+
+            if not clear_lines:
+                # Never cleared at all — definitely a candidate
+                for set_line in set_lines[:3]:  # Limit to 3 patterns per flag
+                    enclosing = self._find_enclosing_function(lines, set_line)
+                    snippet = "\n".join(lines[max(0, set_line-1):min(set_line+3, n)])[:400]
+                    adas_func = self._adas_func_for_identifier(flag_name)
+
+                    patterns.append(CodePattern(
+                        pattern_type="FlagSetNeverCleared",
+                        file=rel_path,
+                        line_start=set_line + 1,
+                        line_end=set_line + 1,
+                        function=enclosing,
+                        trigger_condition=f"{flag_name} = true/1 (no corresponding clear found)",
+                        trigger_variables=[flag_name],
+                        consequence_variables=[],
+                        adas_function=adas_func,
+                        snippet=snippet,
+                        notes=(
+                            f"标志位 {flag_name} 被设置为 true/1 但在此文件中未找到对应的清零操作. "
+                            "可能导致状态卡死或抑制持续有效。"
+                        ),
+                    ))
+
+        return patterns
+
+    # ── Detector: TemporalDependency ─────────────────────────────────────
+
+    _TIMER_RE = re.compile(
+        r'(?:timer|Timer|TIMER|count|Count|COUNT|timeout|Timeout|TIMEOUT|duration|Duration)\s*[_.->]*\s*(\w+)',
+    )
+    _PREV_FRAME_RE = re.compile(
+        r'(?:prev|previous|last|Prior|PREV|PREVIOUS|buffer|Buffer|history|History)\s*[_.->]*\s*(\w+)',
+    )
+
+    def _scan_temporal_dependencies(self, rel_path: str, lines: list[str]) -> list[CodePattern]:
+        """Detect temporal dependencies where signal A must precede signal B.
+
+        Looks for:
+        - Timer/counter-based dependencies (A triggers timer, B evaluated after)
+        - Multi-frame dependencies (B depends on A's previous frame value)
+        """
+        patterns: list[CodePattern] = []
+        n = len(lines)
+        emitted: set[int] = set()
+
+        for i in range(n):
+            raw = lines[i]
+            stripped = raw.strip()
+            if stripped.startswith("//") or stripped.startswith("/*"):
+                continue
+
+            # Pass 1: timer-based dependencies
+            timer_match = self._TIMER_RE.search(raw)
+            # Pass 2: previous-frame dependencies
+            prev_match = self._PREV_FRAME_RE.search(raw)
+
+            if not timer_match and not prev_match:
+                continue
+
+            cond_text, cond_end = self._collect_condition(lines, i)
+            if not cond_text:
+                cond_text = raw
+
+            _, body_end = self._find_brace_body(lines, i)
+            if body_end is None:
+                body_end = min(i + 5, n - 1)
+
+            body_text = "\n".join(lines[i:body_end + 1])
+            vars_in_body = self._EXTRACT_VAR_RE.findall(body_text)
+
+            trigger_var = ""
+            dep_desc = ""
+            if timer_match:
+                trigger_var = timer_match.group(1)
+                dep_desc = f"Timer-based: '{trigger_var}'"
+            elif prev_match:
+                trigger_var = prev_match.group(1)
+                dep_desc = f"Previous-frame: '{trigger_var}' 的前一帧值"
+
+            vars_in_cond = self._EXTRACT_VAR_RE.findall(cond_text)
+            cond_vars = set(v.split(".")[-1].split("->")[-1] for v in vars_in_cond)
+            body_vars = set(v.split(".")[-1].split("->")[-1] for v in vars_in_body)
+            dependent_vars = body_vars - cond_vars
+
+            for dep_var in dependent_vars:
+                if dep_var in emitted or dep_var == trigger_var:
+                    continue
+                if dep_var.lower() in self._NON_SIGNAL_KEYWORDS:
+                    continue
+
+                enclosing = self._find_enclosing_function(lines, i)
+                snippet = "\n".join(lines[max(0, i-1):min(i+5, n)])[:400]
+                adas_func = self._adas_func_for_identifier(dep_var)
+
+                patterns.append(CodePattern(
+                    pattern_type="TemporalDependency",
+                    file=rel_path,
+                    line_start=i + 1,
+                    line_end=body_end + 1,
+                    function=enclosing,
+                    trigger_condition=f"{dep_desc}: {cond_text.strip()[:120]}",
+                    trigger_variables=list(cond_vars) or [trigger_var],
+                    consequence_variables=[dep_var],
+                    adas_function=adas_func,
+                    snippet=snippet,
+                    notes=(
+                        f"时序依赖: {dep_var} 的操作受 '{dep_desc}' 控制. "
+                        "前置条件不满足时，依赖的变量可能不会被处理."
+                    ),
+                ))
+                emitted.add(dep_var)
+
         return patterns
 
     # ── Helpers ──────────────────────────────────────────────────────────

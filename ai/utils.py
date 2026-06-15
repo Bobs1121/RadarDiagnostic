@@ -66,18 +66,23 @@ def parse_json_from_llm(
     content: str,
     fallback: Optional[dict] = None,
     context: str = "",
+    max_retries: int = 2,
 ) -> dict:
     """Robustly extract a JSON object from an LLM response.
 
     Tries, in order:
-      1. ``json.loads`` on the cleaned content (strips ``<think>`` blocks and
+      1. ``json.loads`` on the cleaned content (strips ``</think>`` blocks and
          leading/trailing code fences).
-      2. Match a fenced ``\`\`\`json {...} \`\`\`\`` block.
+      2. Match a fenced ``\\`\\`\\`json {...} \\`\\`\\`\\`` block.
       3. Slice from first ``{`` to last ``}`` and parse.
       4. Same slice, but remove trailing commas before ``}``/``]``.
+      5. Retry with additional repair strategies (up to ``max_retries`` times):
+         - Remove unquoted keys
+         - Fix single-quoted strings
+         - Remove trailing content after closing brace
 
     On total failure, logs a diagnostic line to stderr (only if every strategy
-    fails) and returns ``fallback`` (or ``{}``).
+    fails) and returns ``fallback`` (or ``{}`).
 
     The ``context`` argument is a short label (e.g. ``"moderator_challenge"``)
     that gets included in the diagnostic log so operators can tell which call
@@ -89,11 +94,13 @@ def parse_json_from_llm(
     cleaned = _strip_wrappers(content)
     last_err: Optional[Exception] = None
 
+    # Strategy 1: direct parse
     try:
         return json.loads(cleaned)
     except (ValueError, json.JSONDecodeError) as e:
         last_err = e
 
+    # Strategy 2: fenced JSON block
     fence_match = _FENCE_JSON_RE.search(cleaned)
     if fence_match:
         try:
@@ -101,6 +108,7 @@ def parse_json_from_llm(
         except (ValueError, json.JSONDecodeError) as e:
             last_err = e
 
+    # Strategy 3: brace slice
     if "{" in cleaned and "}" in cleaned:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
@@ -110,6 +118,7 @@ def parse_json_from_llm(
         except (ValueError, json.JSONDecodeError) as e:
             last_err = e
 
+        # Strategy 4: remove trailing commas
         repaired = _TRAILING_COMMA_RE.sub(r"\1", snippet)
         if repaired != snippet:
             try:
@@ -117,9 +126,40 @@ def parse_json_from_llm(
             except (ValueError, json.JSONDecodeError) as e:
                 last_err = e
 
+    # Strategy 5+: retry with progressive repair
+    for attempt in range(max_retries):
+        repaired = _advanced_repair(snippet if "snippet" in dir() else cleaned)
+        if not repaired:
+            break
+        try:
+            return json.loads(repaired)
+        except (ValueError, json.JSONDecodeError) as e:
+            last_err = e
+
     if last_err is not None:
         _log_parse_failure(content, context, last_err)
     return fallback or {}
+
+
+def _advanced_repair(text: str) -> Optional[str]:
+    """Apply advanced JSON repair strategies."""
+    import re
+    if not text:
+        return None
+
+    # Fix single quotes to double quotes (common LLM output)
+    repaired = text.replace("'", '"')
+
+    # Remove control characters
+    repaired = re.sub(r'[\x00-\x1f]', ' ', repaired)
+
+    # Try to find the largest valid JSON-like substring
+    if "{" in repaired and "}" in repaired:
+        start = repaired.index("{")
+        end = repaired.rindex("}") + 1
+        repaired = repaired[start:end]
+
+    return repaired if repaired != text else None
 
 
 # ── Source Code Section Extraction ───────────────────────────────────

@@ -323,6 +323,86 @@ class TemporalAnalyzer:
                 out[tl.name] = feat
         return out
 
+    def detect_threshold_crossings(
+        self,
+        timeline: SignalTimeline,
+        threshold: float,
+        direction: str = "either",
+    ) -> list[dict]:
+        """Detect threshold crossing points in a signal timeline.
+
+        Args:
+            timeline: Signal time series.
+            threshold: Numeric threshold value.
+            direction: "rising" (below→above), "falling" (above→below), or "either".
+
+        Returns:
+            List of dicts with crossing point details:
+            [{t, from_val, to_val, direction, dwell_time_sec, ...}, ...]
+        """
+        if timeline.is_empty():
+            return []
+
+        samples = sorted(timeline.samples, key=lambda tv: tv[0])
+        crossings: list[dict] = []
+
+        for i in range(1, len(samples)):
+            t_prev, v_prev = samples[i - 1]
+            t_curr, v_curr = samples[i]
+
+            # Only consider numeric values
+            try:
+                vp = float(v_prev)
+                vc = float(v_curr)
+            except (TypeError, ValueError):
+                continue
+
+            prev_above = vp >= threshold
+            curr_above = vc >= threshold
+
+            if prev_above == curr_above:
+                continue  # No crossing
+
+            if direction == "rising" and curr_above:
+                # Was below, now above
+                crossings.append({
+                    "t": round(t_curr, 3),
+                    "from_val": v_prev,
+                    "to_val": v_curr,
+                    "direction": "rising",
+                    "signal_name": timeline.name,
+                    "threshold": threshold,
+                })
+            elif direction == "falling" and not curr_above:
+                # Was above, now below
+                crossings.append({
+                    "t": round(t_curr, 3),
+                    "from_val": v_prev,
+                    "to_val": v_curr,
+                    "direction": "falling",
+                    "signal_name": timeline.name,
+                    "threshold": threshold,
+                })
+            elif direction == "either":
+                dir_label = "rising" if curr_above else "falling"
+                crossings.append({
+                    "t": round(t_curr, 3),
+                    "from_val": v_prev,
+                    "to_val": v_curr,
+                    "direction": dir_label,
+                    "signal_name": timeline.name,
+                    "threshold": threshold,
+                })
+
+        # Compute dwell time (time since last crossing or start)
+        for idx, cx in enumerate(crossings):
+            if idx == 0:
+                cx["dwell_time_sec"] = round(cx["t"] - samples[0][0], 3)
+            else:
+                cx["dwell_time_sec"] = round(cx["t"] - crossings[idx - 1]["t"], 3)
+
+        return crossings
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 

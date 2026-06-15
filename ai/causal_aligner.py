@@ -225,19 +225,33 @@ class CausalAligner:
     _NEQ_RE = re.compile(
         r'([A-Za-z_][\w.]*)\s*!=\s*([A-Za-z_0-9.]+)'
     )
+    _GROUP_NOT_RE = re.compile(r'!\s*\((.+)\)', re.DOTALL)
 
     def _parse_condition_terms(self, cond: str) -> list[tuple[str, object]]:
         """
         Translate a C boolean expression into ``[(variable, trigger_value)]``.
 
+        Supports:
+            - AND (`&&`): all terms must match → intersection
+            - OR (`||`): any term matches → union  (handled by _parse_or_groups)
+            - NOT (`!`): negation of a variable or group
+            - Grouped NOT: `!(A && B)` → `!A || !B` (De Morgan)
+
         Examples:
             ``!A && !B``              -> [("A", 0), ("B", 0)]
             ``A == 0 && B == FALSE``  -> [("A", 0), ("B", 0)]
             ``flag``                  -> [("flag", "truthy")]
+            ``A || B``                -> handled via _parse_or_groups
         """
         cond = cond.replace("\n", " ").strip()
         if not cond:
             return []
+
+        # Handle grouped NOT: !(expr) → apply De Morgan's law
+        group_match = self._GROUP_NOT_RE.match(cond)
+        if group_match:
+            inner = group_match.group(1).strip()
+            return self._apply_de_morgan(inner, negate_all=True)
 
         clauses = re.split(r'\s*&&\s*', cond)
         out: list[tuple[str, object]] = []
@@ -246,6 +260,15 @@ class CausalAligner:
         for clause in clauses:
             clause = clause.strip("() ")
             if not clause:
+                continue
+
+            # Handle OR within AND clause: A || B → treat as OR group
+            if '||' in clause:
+                or_terms = self._parse_or_clause(clause)
+                for var, val in or_terms:
+                    if var not in seen:
+                        out.append((var, val))
+                        seen.add(var)
                 continue
 
             m = self._NOT_RE.match(clause)
@@ -280,6 +303,94 @@ class CausalAligner:
                 if var not in seen:
                     out.append((var, "truthy"))
                     seen.add(var)
+
+        return out
+
+    def _apply_de_morgan(self, inner: str, negate_all: bool) -> list[tuple[str, object]]:
+        """Apply De Morgan's law to negate an AND/OR expression.
+
+        !(A && B) -> !A || !B  (OR group)
+        !(A || B) -> !A && !B  (AND group)
+        """
+        # For simplicity, split on && or || and negate each term
+        if '||' in inner:
+            # !(A || B) -> !A && !B (AND)
+            clauses = re.split(r'\s*\|\|\s*', inner)
+            out: list[tuple[str, object]] = []
+            for clause in clauses:
+                clause = clause.strip("() ")
+                negated = self._negate_clause(clause)
+                out.extend(negated)
+            return out
+        else:
+            # !(A && B) -> !A || !B (OR) — return as OR terms
+            clauses = re.split(r'\s*&&\s*', inner)
+            out: list[tuple[str, object]] = []
+            for clause in clauses:
+                clause = clause.strip("() ")
+                negated = self._negate_clause(clause)
+                out.extend(negated)
+            return out
+
+    def _negate_clause(self, clause: str) -> list[tuple[str, object]]:
+        """Negate a single clause and return [(var, negated_value)]."""
+        clause = clause.strip("() ")
+
+        # If already has NOT, double-negate removes it
+        if clause.startswith('!'):
+            inner = clause[1:].strip()
+            # Double negation: !!A -> A (truthy)
+            var_match = re.match(r'([A-Za-z_][\w.]*)', inner)
+            if var_match:
+                return [(var_match.group(1), "truthy")]
+
+        # Simple variable: !A
+        var_match = re.match(r'([A-Za-z_][\w.]*)', clause)
+        if var_match:
+            return [(var_match.group(1), 0)]
+
+        # Equality: A == V -> A != V
+        m = self._EQ_RE.match(clause)
+        if m:
+            var = m.group(1)
+            value = self._normalise_literal(m.group(2))
+            return [(var, ("!=", value))]
+
+        # Inequality: A != V -> A == V
+        m = self._NEQ_RE.match(clause)
+        if m:
+            var = m.group(1)
+            value = self._normalise_literal(m.group(2))
+            return [(var, value)]
+
+        return [(clause.strip(), 0)]
+
+    def _parse_or_clause(self, clause: str) -> list[tuple[str, object]]:
+        """Parse OR clause into individual terms.
+
+        For alignment purposes, OR terms are returned as a flat list
+        where _align_pattern will use union logic instead of intersection.
+        """
+        or_parts = re.split(r'\s*\|\|\s*', clause)
+        out: list[tuple[str, object]] = []
+        for part in or_parts:
+            part = part.strip("() ")
+            if not part:
+                continue
+
+            m = self._NOT_RE.match(part)
+            if m:
+                out.append((m.group(1), 0))
+                continue
+
+            m = self._EQ_RE.match(part)
+            if m:
+                out.append((m.group(1), self._normalise_literal(m.group(2))))
+                continue
+
+            var_match = re.match(r'([A-Za-z_][\w.]*)', part)
+            if var_match:
+                out.append((var_match.group(1), "truthy"))
 
         return out
 
@@ -404,6 +515,45 @@ class CausalAligner:
             else:
                 j += 1
         return out
+
+    @staticmethod
+    def _union_intervals(a: list[Interval], b: list[Interval]) -> list[Interval]:
+        """Merge two sorted interval lists into their union (OR logic).
+
+        Used for OR conditions: A || B fires when EITHER A OR B is active.
+        """
+        merged: list[Interval] = []
+        i = j = 0
+
+        while i < len(a) and j < len(b):
+            if a[i].t_start <= b[j].t_start:
+                current = a[i]
+                i += 1
+            else:
+                current = b[j]
+                j += 1
+
+            if merged and current.t_start <= merged[-1].t_end:
+                # Overlapping — extend existing interval
+                merged[-1] = Interval(
+                    merged[-1].t_start,
+                    max(merged[-1].t_end, current.t_end),
+                )
+            else:
+                merged.append(current)
+
+        # Append remaining
+        for rest in (a[i:], b[j:]):
+            for item in rest:
+                if merged and item.t_start <= merged[-1].t_end:
+                    merged[-1] = Interval(
+                        merged[-1].t_start,
+                        max(merged[-1].t_end, item.t_end),
+                    )
+                else:
+                    merged.append(item)
+
+        return merged
 
     # ── Context gathering ────────────────────────────────────────────────
 

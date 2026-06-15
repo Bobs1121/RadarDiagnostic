@@ -150,6 +150,14 @@ class ConditionExtractor:
     def extract(self, func_name: str, force: bool = False) -> dict:
         """
         Returns structured conditions for the given function.
+
+        Dual-layer extraction:
+          1. RuleConditionExtractor (deterministic, no LLM) — fast baseline
+          2. ConditionExtractor AI  (LLM-based) — rich semantics
+
+        Results are merged with deterministic layer as the base,
+        LLM layer filling gaps and adding context.
+
         Uses cached version if available and source hasn't changed.
         After extraction, auto-fills Unknown CAN signal names via signal_mapping.
         """
@@ -161,11 +169,88 @@ class ConditionExtractor:
             if cached and not self._source_changed(cached, cache_path):
                 return cached
 
-        conditions = self._extract_with_ai(func_name)
-        if conditions and "error" not in conditions:
+        # Layer 1: Deterministic extraction (fast, no LLM)
+        rule_conditions = self._extract_with_rules(func_name)
+
+        # Layer 2: LLM extraction (richer semantics)
+        ai_conditions = self._extract_with_ai(func_name)
+
+        # Merge: deterministic as base, LLM fills gaps
+        if ai_conditions and "error" not in ai_conditions:
+            conditions = self._merge_conditions(rule_conditions, ai_conditions)
+        else:
+            # Fallback: use deterministic results only
+            conditions = rule_conditions
+
+        if conditions:
             conditions = self._backfill_can_signals(conditions)
             self._save_cache(cache_path, conditions)
         return conditions
+
+    def _extract_with_rules(self, func_name: str) -> dict:
+        """Layer 1: Deterministic condition extraction using RuleConditionExtractor."""
+        from .rule_condition_extractor import RuleConditionExtractor
+
+        extractor = RuleConditionExtractor(self.source_root, func_name)
+
+        # Collect source files to scan
+        source_files = []
+        for domain, files in self._domain_sources.items():
+            for f in files:
+                source_files.append(self.source_root / f)
+
+        result = extractor.extract(source_files)
+        return extractor.to_json(result)
+
+    @staticmethod
+    def _merge_conditions(rule_result: dict, ai_result: dict) -> dict:
+        """Merge deterministic (rule) conditions with LLM conditions.
+
+        Strategy:
+        - Use rule_result as the base (guaranteed structure)
+        - Use AI result to fill in gaps and enrich descriptions
+        - For external_suppression: combine both, deduplicate by variable name
+        - For thresholds: use AI values if rule layer missed them
+        - Preserve rule confidence scores
+        """
+        merged = dict(rule_result)
+        merged["extractors"] = ["RuleConditionExtractor", "ConditionExtractor"]
+
+        # Merge external_suppression: combine both lists, deduplicate by variable
+        rule_supp = {s.get("variable", ""): s for s in rule_result.get("external_suppression", [])}
+        ai_supp_list = ai_result.get("external_suppression", [])
+
+        for ai_item in ai_supp_list:
+            var = ai_item.get("variable", "")
+            if var and var in rule_supp:
+                # Enrich existing rule entry with AI details
+                existing = rule_supp[var]
+                for key in ("condition", "suppression_trigger", "normal_value", "effect", "can_signal", "source"):
+                    if ai_item.get(key) and not existing.get(key):
+                        existing[key] = ai_item[key]
+            else:
+                merged.setdefault("external_suppression", []).append(ai_item)
+
+        # Merge thresholds: add AI thresholds not covered by rules
+        rule_thresh_vars = {t.get("variable", "") for t in merged.get("thresholds", [])}
+        for ai_thresh in ai_result.get("thresholds", []):
+            var = ai_thresh.get("variable", "")
+            if var not in rule_thresh_vars:
+                merged.setdefault("thresholds", []).append(ai_thresh)
+
+        # Use AI's system_state if it's richer
+        if ai_result.get("system_state"):
+            merged["system_state"] = ai_result["system_state"]
+
+        # Use AI's ego_speed_ranges if richer
+        if ai_result.get("ego_speed_ranges"):
+            merged["ego_speed_ranges"] = ai_result["ego_speed_ranges"]
+
+        # Use AI's other_conditions
+        if ai_result.get("other_conditions"):
+            merged["other_conditions"] = ai_result["other_conditions"]
+
+        return merged
 
     def _backfill_can_signals(self, conditions: dict) -> dict:
         """Resolve Unknown CAN signal names in external_suppression via signal_mapping."""

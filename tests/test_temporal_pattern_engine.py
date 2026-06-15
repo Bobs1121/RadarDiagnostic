@@ -403,7 +403,110 @@ def test_causal_aligner_handles_accumulate_reset() -> None:
     print(format_evidence_block(evidence))
     ev = evidence[0]
     assert ev.verdict in ("triggered", "insufficient_data", "unknown", "not_triggered")
-    print("\n✅ PASS: Accumulate 模式的对齐不会崩溃 (verdict={})".format(ev.verdict))
+    print(f"\n✅ PASS: Accumulate 模式的对齐不会崩溃 (verdict={ev.verdict})")
+
+
+# ─── Phase 14: TPE 扩展模式测试 ────────────────────────────────────────────
+
+def test_threshold_cross_detection() -> None:
+    """TEST 7: ThresholdCross — 速度域阈值穿越检测"""
+    banner("TEST 7 · ThresholdCross 模式检测")
+
+    c_code = [
+        "// Speed domain switch",
+        "void checkSpeedDomain(void) {",
+        "    if (car_spd >= 80.0) {",
+        "        set_domain(DOMAIN_HIGH);",
+        "    }",
+        "    if (ttc_value <= 1.5) {",
+        "        trigger_warning();",
+        "    }",
+        "}",
+    ]
+    extractor = PatternExtractor("")
+    patterns = extractor._scan_threshold_cross("test.c", c_code)
+    # Verify it detects the threshold patterns
+    assert len(patterns) >= 1, f"期望至少1个ThresholdCross，实际 {len(patterns)}"
+    assert any(p.pattern_type == "ThresholdCross" for p in patterns)
+    print(f"   检测到 {len(patterns)} 个 ThresholdCross 模式")
+    for p in patterns:
+        print(f"   - {p.pattern_type}: {p.notes[:60]}")
+
+    print("\n✅ PASS: ThresholdCross 检测完成")
+
+
+def test_state_transition_detection() -> None:
+    """TEST 8: StateTransition — 状态机转换检测"""
+    banner("TEST 8 · StateTransition 模式检测")
+
+    c_code = [
+        "void fctaStateMachine(void) {",
+        "    if (fctaState == FCTA_IDLE) {",
+        "        fctaState = FCTA_ACTIVE;",
+        "    }",
+        "    if (fctaState == FCTA_ACTIVE) {",
+        "        fctaState = FCTA_WARNING;",
+        "    }",
+        "}",
+    ]
+    extractor = PatternExtractor("")
+    patterns = extractor._scan_state_transitions("test.c", c_code)
+    assert len(patterns) >= 1, f"期望至少1个StateTransition，实际 {len(patterns)}"
+    assert any(p.pattern_type == "StateTransition" for p in patterns)
+    print(f"   检测到 {len(patterns)} 个 StateTransition 模式")
+    for p in patterns:
+        print(f"   - {p.pattern_type}: {p.notes[:60]}")
+
+    print("\n✅ PASS: StateTransition 检测完成")
+
+
+def test_flag_set_never_cleared() -> None:
+    """TEST 9: FlagSetNeverCleared — 标志位设置后未清除"""
+    banner("TEST 9 · FlagSetNeverCleared 模式检测")
+
+    c_code = [
+        "void detectObstacle(void) {",
+        "    if (radar_detected == 1) {",
+        "        obstacle_flag = 1;",
+        "        start_warning();",
+        "    }",
+        "    if (distance < 5.0) {",
+        "        proximity_alert = 1;",
+        "        sound_horn();",
+        "    }",
+        "}",
+    ]
+    extractor = PatternExtractor("")
+    patterns = extractor._scan_flag_set_never_cleared("test.c", c_code)
+    print(f"   检测到 {len(patterns)} 个 FlagSetNeverCleared 模式")
+    for p in patterns:
+        print(f"   - {p.pattern_type}: {p.notes[:60]}")
+
+    print("\n✅ PASS: FlagSetNeverCleared 检测完成")
+
+
+def test_temporal_dependency_detection() -> None:
+    """TEST 10: TemporalDependency — 时序依赖检测"""
+    banner("TEST 10 · TemporalDependency 模式检测")
+
+    c_code = [
+        "void radarPipeline(void) {",
+        "    detect_objects();",
+        "    if (detection_valid == 1) {",
+        "        calc_ttc();",
+        "    }",
+        "    if (ttc_ready == 1 && ttc_value < 2.0) {",
+        "        output_warning(1);",
+        "    }",
+        "}",
+    ]
+    extractor = PatternExtractor("")
+    patterns = extractor._scan_temporal_dependencies("test.c", c_code)
+    print(f"   检测到 {len(patterns)} 个 TemporalDependency 模式")
+    for p in patterns:
+        print(f"   - {p.pattern_type}: {p.notes[:60]}")
+
+    print("\n✅ PASS: TemporalDependency 检测完成")
 
 
 def main() -> int:
@@ -414,6 +517,11 @@ def main() -> int:
         test_causal_aligner_silent_when_signals_always_high,
         test_causal_aligner_handles_accumulate_reset,
         test_tpe_facade_end_to_end_on_fcatb001,
+        # Phase 14 — new pattern tests
+        test_threshold_cross_detection,
+        test_state_transition_detection,
+        test_flag_set_never_cleared,
+        test_temporal_dependency_detection,
     ]
     failed = 0
     for test in tests:
