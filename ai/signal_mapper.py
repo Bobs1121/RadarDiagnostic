@@ -11,6 +11,7 @@ when the source file changes (hash check).
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import re
@@ -613,6 +614,7 @@ def trace_variable_chains(
     output_dir: Path,
     rte_file: str = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c",
     extra_files: list[str] | None = None,
+    force: bool = False,
 ) -> dict:
     """Trace struct copy chains to build global variable → RTE prefix aliases.
 
@@ -622,15 +624,65 @@ def trace_variable_chains(
     Phase 4 – Deduplicate: conflict resolution, ambiguous entries rejected
 
     Results cached to source_docs/variable_chains.json.
+    Per-file SHA256 metadata cached to source_docs/variable_chains.meta.json
+    so subsequent calls with unchanged source files skip the full scan.
+
+    Phase 15 (2.1.2): Incremental SHA256 cache — pass ``force=True`` to bypass.
     struct_aliases remains {str: str} for backward compatibility.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     cache_path = output_dir / "variable_chains.json"
+    cache_meta_path = output_dir / "variable_chains.meta.json"
 
     rte_path = source_root / rte_file
-    rte_prefixes = _extract_rte_write_prefixes(rte_path) if rte_path.exists() else set()
 
     scan_files = _discover_chain_files(source_root, extra_files)
+
+    # ── Incremental cache check (Phase 15 / 2.1.2) ────────────────────
+    # If every scanned file's SHA256 matches the recorded hash AND the
+    # set of scanned files is unchanged, reuse the cached result.
+    # We do this BEFORE any heavy work (rte_prefixes, raw_copies) so
+    # that a cache hit truly costs ~file-HMAC operations only.
+    if not force and cache_path.exists() and cache_meta_path.exists():
+        try:
+            cached_meta = json.loads(cache_meta_path.read_text(encoding="utf-8"))
+            cached_hashes: dict[str, str] = cached_meta.get("file_hashes", {})
+            current_hashes: dict[str, str] = {}
+            all_match = True
+            for rel in scan_files:
+                fp = source_root / rel
+                if not fp.exists():
+                    # File absent in source tree (e.g. _CHAIN_FILES hardcoded
+                    # path that doesn't exist in this checkout). Don't fail
+                    # the cache check just because of an irrelevant missing
+                    # entry — skip it. meta writes also skip non-existent
+                    # files, so they never appear in cached_hashes.
+                    continue
+                h = hashlib.sha256(fp.read_bytes()).hexdigest()[:16]
+                current_hashes[rel] = h
+                if cached_hashes.get(rel) != h:
+                    all_match = False
+                    break
+            # Existing file that was in cache has now disappeared → invalidate
+            existing_files = {rel for rel in scan_files
+                              if (source_root / rel).exists()}
+            if all_match and existing_files != set(cached_hashes.keys()):
+                all_match = False
+            # RTE file itself unchanged
+            rte_now = (
+                hashlib.sha256(rte_path.read_bytes()).hexdigest()[:16]
+                if rte_path.exists() else ""
+            )
+            if cached_meta.get("rte_hash") != rte_now:
+                all_match = False
+            if all_match:
+                return json.loads(cache_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, KeyError):
+            # Corrupted cache → fall through to full scan
+            pass
+
+    rte_prefixes = _extract_rte_write_prefixes(rte_path) if rte_path.exists() else set()
+
     raw_copies: list[dict] = []
     for rel in scan_files:
         fp = source_root / rel
@@ -657,6 +709,34 @@ def trace_variable_chains(
         json.dumps(result, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    # ── Write per-file SHA256 metadata for next call's cache check ────
+    # Best-effort: a failure here doesn't affect diagnostic correctness;
+    # it just means the next call will re-scan.
+    try:
+        file_hashes: dict[str, str] = {}
+        for rel in scan_files:
+            fp = source_root / rel
+            if fp.exists():
+                file_hashes[rel] = hashlib.sha256(fp.read_bytes()).hexdigest()[:16]
+        meta = {
+            "file_hashes": file_hashes,
+            "updated_at": datetime.datetime.now().isoformat(),
+            "rte_file": rte_file,
+            "rte_hash": (
+                hashlib.sha256(rte_path.read_bytes()).hexdigest()[:16]
+                if rte_path.exists() else ""
+            ),
+            "alias_count": len(result.get("struct_aliases", {})),
+            "version": 1,
+        }
+        cache_meta_path.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # meta is best-effort
+
     return result
 
 

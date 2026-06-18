@@ -79,6 +79,44 @@ class Orchestrator:
 
         self._last_tpe_result = None
 
+        # ── Phase 15 (2.1.3): pre-load signal maps ────────────────────
+        # ReadSignal mapping, WriteSignal mapping, and variable_chains
+        # are deterministic and only change when source files change.
+        # Loading once in __init__ lets _run_tpe / _check_suppression_signals
+        # / _analyze_output_signals reuse the same instances instead of
+        # re-reading source files three times per diagnosis.
+        self.signal_mapping: dict = {}
+        self.variable_chains: dict = {}
+        self.output_signal_mapping: dict = {}
+        self._init_signal_maps()
+
+    def _init_signal_maps(self) -> None:
+        """Phase 15 (2.1.3): Load signal_mapping + variable_chains + output_mapping once.
+
+        Best-effort: a failure here is logged but does not prevent
+        Orchestrator initialization. Sub-methods fall back to per-call
+        loading if any of the pre-loaded maps are empty.
+        """
+        try:
+            from .signal_mapper import (
+                extract_signal_mapping,
+                trace_variable_chains,
+                extract_output_signal_mapping,
+            )
+            source_root = Path(self.config["paths"]["source_code"])
+            docs_dir = self.source_docs_dir
+            self.signal_mapping = extract_signal_mapping(source_root, docs_dir)
+            self.variable_chains = trace_variable_chains(source_root, docs_dir)
+            self.output_signal_mapping = extract_output_signal_mapping(
+                source_root, docs_dir,
+            )
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning(
+                "Phase 15 / 2.1.3: signal map pre-load failed (%s); "
+                "sub-methods will load on demand", exc,
+            )
+
     @property
     def codegraph_db_path(self) -> Path:
         """Path to the per-project CodeGraph database."""
@@ -824,27 +862,38 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         docs_dir = self.source_docs_dir
         knowledge_dir = self.memory.memory_dir / "code_knowledge"
 
-        try:
-            sig_mapping = extract_signal_mapping(source_root, docs_dir)
-        except Exception as exc:
-            status("tpe", f"Signal mapping failed: {exc}")
-            sig_mapping = {}
+        # Phase 15 (2.1.3): reuse pre-loaded maps; fall back to per-call load
+        # if pre-load failed or returned empty.
+        sig_mapping = self.signal_mapping
+        if not sig_mapping:
+            try:
+                sig_mapping = extract_signal_mapping(source_root, docs_dir)
+            except Exception as exc:
+                status("tpe", f"Signal mapping failed: {exc}")
+                sig_mapping = {}
 
-        try:
-            chains = load_variable_chains(docs_dir)
-            if not chains.get("struct_aliases"):
-                chains = trace_variable_chains(source_root, docs_dir)
-        except Exception:
-            chains = {}
+        chains = self.variable_chains
+        if not chains.get("struct_aliases"):
+            try:
+                chains = load_variable_chains(docs_dir)
+                if not chains.get("struct_aliases"):
+                    chains = trace_variable_chains(source_root, docs_dir)
+            except Exception:
+                chains = {}
 
         # WriteSignal-side data for resolving output variables that never
         # appear in the ReadSignal mapping (e.g. bLcaLeftWarningFlg).
+        out_mapping = self.output_signal_mapping
+        if not out_mapping:
+            try:
+                out_mapping = extract_output_signal_mapping(source_root, docs_dir)
+            except Exception as exc:
+                status("tpe", f"Output mapping failed: {exc}")
+                out_mapping = {}
         try:
-            out_mapping = extract_output_signal_mapping(source_root, docs_dir)
             build_expr_to_can_index(out_mapping)  # caches into out_mapping
-        except Exception as exc:
-            status("tpe", f"Output mapping failed: {exc}")
-            out_mapping = {}
+        except Exception:
+            pass
         try:
             out_aliases = load_output_chain_aliases(knowledge_dir)
         except Exception:
@@ -933,10 +982,13 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             extract_output_signal_mapping, get_output_signals_for_function,
         )
 
-        out_mapping = extract_output_signal_mapping(
-            Path(self.config["paths"]["source_code"]),
-            self.source_docs_dir,
-        )
+        # Phase 15 (2.1.3): reuse pre-loaded output mapping if available.
+        out_mapping = self.output_signal_mapping
+        if not out_mapping:
+            out_mapping = extract_output_signal_mapping(
+                Path(self.config["paths"]["source_code"]),
+                self.source_docs_dir,
+            )
         target_signals = get_output_signals_for_function(func_name)
         if not target_signals:
             return ""
@@ -1085,16 +1137,21 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             trace_variable_chains, load_variable_chains,
         )
 
-        sig_mapping = extract_signal_mapping(
-            Path(self.config["paths"]["source_code"]),
-            self.source_docs_dir,
-        )
-        chains = load_variable_chains(self.source_docs_dir)
-        if not chains.get("struct_aliases"):
-            chains = trace_variable_chains(
+        # Phase 15 (2.1.3): reuse pre-loaded maps when available.
+        sig_mapping = self.signal_mapping
+        if not sig_mapping:
+            sig_mapping = extract_signal_mapping(
                 Path(self.config["paths"]["source_code"]),
                 self.source_docs_dir,
             )
+        chains = self.variable_chains
+        if not chains.get("struct_aliases"):
+            chains = load_variable_chains(self.source_docs_dir)
+            if not chains.get("struct_aliases"):
+                chains = trace_variable_chains(
+                    Path(self.config["paths"]["source_code"]),
+                    self.source_docs_dir,
+                )
         alias_count = len(chains.get("struct_aliases", {}))
         status("suppression", f"Signal mapping loaded: {sig_mapping.get('mapping_count', 0)} entries, {alias_count} struct aliases")
 

@@ -14,10 +14,10 @@ import re
 import sys
 import io
 import argparse
+import datetime
+import json
 import yaml
 from pathlib import Path
-
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 from dotenv import load_dotenv
 from rich.console import Console
@@ -215,6 +215,17 @@ Examples:
              "adasFunc.c). Fast (1 AI call) and skipped automatically if source is unchanged.",
     )
     parser.add_argument(
+        "--prewarm",
+        action="store_true",
+        help="Phase 15 (2.1.1): pre-warm source_docs + code knowledge + variable_chains "
+             "cache before diagnosis (skips Step-1 LLM if cache is fresh).",
+    )
+    parser.add_argument(
+        "--prewarm-force",
+        action="store_true",
+        help="Force full rebuild during --prewarm (bypass all caches).",
+    )
+    parser.add_argument(
         "--codegraph-stats",
         action="store_true",
         help="Show CodeGraph statistics (debug only).",
@@ -253,6 +264,15 @@ Examples:
         if not args.case_dir:
             return
 
+    # ── Pre-warm (Phase 15 / 2.1.1) ────────────────────────────────────
+    # Pre-warms source_docs + L6 code_knowledge + variable_chains cache.
+    # If --case-dir is also provided, pre-warm runs before diagnosis;
+    # otherwise pre-warm is a standalone command and exits.
+    if args.prewarm:
+        _run_prewarm(config, force=args.prewarm_force)
+        if not args.case_dir:
+            return
+
     # ── CodeGraph stats (debug only) ────────────────────────────────────
     if args.codegraph_stats:
         _show_codegraph_stats(config)
@@ -272,6 +292,7 @@ Examples:
         console.print("  [cyan]python cli.py <case_dir> -p \"problem\" -e \"expected\"[/cyan]  (diagnosis)")
         console.print("  [cyan]python cli.py --dream[/cyan]  (memory consolidation)")
         console.print("  [cyan]python cli.py --learn-constants[/cyan]  (re-learn numeric constants table)")
+        console.print("  [cyan]python cli.py --prewarm[/cyan]  (Phase 15: prewarm source_docs + caches)")
         return
 
     # ── Validate case_dir ───────────────────────────────────────────────
@@ -594,6 +615,170 @@ def _run_learn_constants(config: dict | None = None):
         )
 
 
+# ── Pre-warm (Phase 15 / 2.1.1) ─────────────────────────────────────────
+
+def _run_prewarm(config: dict | None = None, force: bool = False,
+                 pair_budget: int | None = None) -> dict:
+    """Phase 15 (2.1.1): prewarm source_docs + L6 code_knowledge + variable_chains.
+
+    Three operations run in sequence:
+      1. CodeLearner.learn()      — incremental L6 code knowledge (may call LLM)
+      2. ensure_overview_docs()    — refresh MD overviews (hash cache; fast if unchanged)
+      3. trace_variable_chains()   — build variable_chains.json + .meta.json cache
+
+    Run before diagnosis to avoid Step-1 latency. When ``force=True``,
+    every cache is bypassed (full rebuild).
+
+    Returns a dict summary for testing / programmatic use.
+    """
+    from ai.code_learner import CodeLearner
+    from ai.signal_mapper import trace_variable_chains
+    from ai.utils import ALL_FUNCTIONS
+
+    if config is None:
+        config = load_config()
+
+    summary: dict = {"force": force, "operations": {}}
+    started = datetime.datetime.now()
+
+    console.print(Panel(
+        "[bold]Pre-warming source_docs + code knowledge[/bold]\n"
+        f"[dim]Phase 15 (2.1.1) — force={force}  pair_budget={pair_budget}[/dim]",
+        border_style="cyan",
+    ))
+
+    try:
+        learner = CodeLearner(get_router(config), config, PROJECT_ROOT)
+    except Exception as e:
+        console.print(f"[red]CodeLearner init failed: {e}[/red]")
+        summary["error"] = f"init_failed: {e}"
+        return summary
+
+    # ── 1. CodeLearner.learn() ─────────────────────────────────────────
+    console.print("[cyan]1/3 Code knowledge L6 learn...[/cyan]")
+
+    def learn_status(step: str, detail: str) -> None:
+        console.print(f"  [dim cyan][{step}] {detail}[/dim cyan]")
+
+    try:
+        learn_delta = learner.learn(
+            status_cb=learn_status,
+            force_pairs=pair_budget,
+            force_constants=force,
+        )
+        summary["operations"]["learn"] = {
+            "learned_count": learn_delta.get("learned_count", 0),
+            "skipped_count": learn_delta.get("skipped_count", 0),
+            "error_count": learn_delta.get("error_count", 0),
+        }
+        if learn_delta.get("learned_count", 0) > 0:
+            console.print(
+                f"  [green]learned {learn_delta['learned_count']} pairs[/green]"
+            )
+        else:
+            console.print(
+                f"  [dim]learned={learn_delta.get('learned_count', 0)}, "
+                f"skipped={learn_delta.get('skipped_count', 0)}[/dim]"
+            )
+    except Exception as e:
+        console.print(f"  [red]learn failed: {e}[/red]")
+        summary["operations"]["learn"] = {"error": str(e)[:200]}
+
+    # ── 2. ensure_overview_docs() ──────────────────────────────────────
+    console.print("[cyan]2/3 MD overview docs...[/cyan]")
+    try:
+        overview = learner.ensure_overview_docs(
+            funcs=ALL_FUNCTIONS,
+            force=force,
+            status_cb=lambda step, msg: console.print(
+                f"  [dim cyan]{msg}[/dim cyan]"
+            ),
+        )
+        summary["operations"]["overview"] = {
+            "generated": overview.get("generated", []),
+            "skipped": overview.get("skipped", []),
+            "failed": overview.get("failed", []),
+            "reason": overview.get("reason", ""),
+        }
+        if overview.get("generated"):
+            console.print(
+                f"  [green]generated: {', '.join(overview['generated'])}[/green]"
+            )
+        elif overview.get("reason") == "all_up_to_date":
+            console.print("  [dim]all up to date[/dim]")
+        if overview.get("failed"):
+            for failed in overview["failed"]:
+                console.print(
+                    f"  [yellow][WARN] {failed['func']}: {failed['error']}[/yellow]"
+                )
+    except Exception as e:
+        console.print(f"  [red]overview failed: {e}[/red]")
+        summary["operations"]["overview"] = {"error": str(e)[:200]}
+
+    # ── 3. trace_variable_chains() ─────────────────────────────────────
+    console.print("[cyan]3/3 variable_chains cache...[/cyan]")
+    alias_count = 0
+    # Resolve docs_dir up-front (shared with operation 4 below).
+    # Prefer config["paths"]["source_docs"] so tests / non-standard layouts
+    # don't accidentally write into the real PROJECT_ROOT.
+    source_root = Path(config["paths"]["source_code"])
+    configured_docs = (config.get("paths") or {}).get("source_docs")
+    proj_safe = (
+        config.get("identity", {}).get("variant_id")
+        or config.get("default_variant", "default")
+    ).replace("/", "_").replace(" ", "_").lower()
+    docs_dir = Path(configured_docs) if configured_docs else (
+        PROJECT_ROOT / "source_docs" / proj_safe
+    )
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        chains = trace_variable_chains(source_root, docs_dir, force=force)
+        alias_count = len(chains.get("struct_aliases", {}))
+        meta_path = docs_dir / "variable_chains.meta.json"
+        meta_info = (
+            " (forced rebuild)" if force else
+            (" (cache hit)" if meta_path.exists() else " (initial build)")
+        )
+        console.print(f"  [green]{alias_count} struct aliases{meta_info}[/green]")
+        summary["operations"]["variable_chains"] = {
+            "alias_count": alias_count,
+            "meta_path": str(meta_path),
+            "meta_exists": meta_path.exists(),
+        }
+    except Exception as e:
+        console.print(f"  [red]variable_chains failed: {e}[/red]")
+        summary["operations"]["variable_chains"] = {"error": str(e)[:200]}
+
+    # ── 4. Write prewarm_meta.json ─────────────────────────────────────
+    # Use the same per-project source_docs dir as the variable_chains call
+    # above (resolved from config), not the bare PROJECT_ROOT path — that
+    # would write into the wrong variant's folder.
+    elapsed = (datetime.datetime.now() - started).total_seconds()
+    summary["timestamp"] = datetime.datetime.now().isoformat()
+    summary["elapsed_sec"] = elapsed
+    try:
+        # Reuse the resolved docs_dir from operation 3 to avoid drift.
+        meta_dir = docs_dir if "docs_dir" in locals() else (
+            PROJECT_ROOT / "source_docs" / (
+                config.get("identity", {}).get("variant_id", "default")
+                .replace("/", "_").replace(" ", "_").lower()
+            )
+        )
+        meta_path = meta_dir / "prewarm_meta.json"
+        meta_dir.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        console.print(
+            f"  [dim]→ prewarm_meta.json ({elapsed:.1f}s)[/dim]"
+        )
+    except Exception as e:
+        console.print(f"  [yellow]meta write skipped: {e}[/yellow]")
+
+    return summary
+
+
 # ── Query Mode ──────────────────────────────────────────────────────────
 
 def _run_query(case_dir: Path, question: str, config: dict | None = None):
@@ -702,4 +887,22 @@ def _run_diagnosis(case_dir: Path, problem: str, expected: str, config: dict | N
 
 
 if __name__ == "__main__":
+    # Keep pytest/global capture stable on import; only reconfigure streams
+    # when running cli.py as a script.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    else:
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer,
+            encoding="utf-8",
+            errors="replace",
+            line_buffering=True,
+        )
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer,
+            encoding="utf-8",
+            errors="replace",
+            line_buffering=True,
+        )
     main()

@@ -51,6 +51,7 @@ cases/**/*.json
 cases/**/*.jsonl
 source_docs/*.md
 source_docs/*.json
+source_docs/**/*
 memory/*.json
 memory/*.db
 memory/*.jsonl
