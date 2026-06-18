@@ -262,6 +262,68 @@ class MemorySystem:
 
         return {"removed": removed, "kept": len(kept), "dry_run": dry_run}
 
+    def migrate_pattern_ids(self, dry_run: bool = True) -> dict:
+        """Phase 15 / 2.2.4 follow-up: re-hash legacy MD5[:8] IDs to SHA256[:12].
+
+        Legacy patterns have 8-char hex IDs from the MD5-based ``add_pattern``.
+        New entries get 12-char SHA256 IDs. Because the two encodings cannot
+        collide, ``add_pattern`` cannot recognise an existing legacy entry as
+        a duplicate of a re-added identical-content one — leading to slow
+        duplication over time.
+
+        This method walks ``patterns.json``, recomputes SHA256[:12] for every
+        pattern whose ``_id`` is shorter than 12 chars, and rewrites the file
+        with the new IDs.
+
+        Returns a summary dict ``{"migrated": int, "already_new": int,
+        "duplicates_removed": int, "dry_run": bool}``.
+        """
+        patterns = self.read_patterns()
+        migrated = 0
+        already_new = 0
+        seen_new_ids: dict[str, dict] = {}
+        deduped: list[dict] = []
+        duplicates_removed = 0
+        for p in patterns:
+            old_id = p.get("_id", "")
+            if len(old_id) >= 12:
+                already_new += 1
+                # Still fold into the dedup map so legacy entries that
+                # happen to match a new entry's hash get culled.
+                if old_id in seen_new_ids:
+                    duplicates_removed += 1
+                    continue
+                seen_new_ids[old_id] = p
+                deduped.append(p)
+                continue
+
+            # Recompute SHA256[:12] from content (everything except
+            # underscore-prefixed internal fields).
+            content_key = {
+                k: v for k, v in p.items() if not k.startswith("_")
+            }
+            new_id = hashlib.sha256(
+                json.dumps(content_key, sort_keys=True, default=str).encode()
+            ).hexdigest()[:12]
+            p["_id"] = new_id
+            migrated += 1
+            if new_id in seen_new_ids:
+                # Re-add of identical content after migration → drop.
+                duplicates_removed += 1
+                continue
+            seen_new_ids[new_id] = p
+            deduped.append(p)
+
+        if not dry_run and (migrated or duplicates_removed):
+            atomic_write_json(self.memory_dir / "patterns.json", deduped)
+
+        return {
+            "migrated": migrated,
+            "already_new": already_new,
+            "duplicates_removed": duplicates_removed,
+            "dry_run": dry_run,
+        }
+
     # ── L4: Session Memory ──────────────────────────────────────────────
 
     def create_session(self, case_id: str, problem: str, expected: str) -> str:
@@ -773,6 +835,18 @@ class MemorySystem:
             parts.append(f"## 相似历史案例 ({len(similar)} 条)")
             for p in similar[:3]:
                 parts.append(f"- 症状: {p.get('symptom', '?')} -> 根因: {p.get('root_cause', '?')}")
+            # Phase 15 / 2.2 follow-up: bump _hit_count for every pattern
+            # actually surfaced into the diagnosis context. Patterns that
+            # never appear here will get pruned by decay_patterns()
+            # even if they were once useful.
+            for p in similar[:3]:
+                pid = p.get("_id")
+                if pid:
+                    try:
+                        self.record_pattern_hit(pid)
+                    except Exception:
+                        # Hit bookkeeping must NEVER break diagnosis.
+                        pass
 
         # L4 — 历史诊断 Session（完整诊断记录）
         session_history = self.query_sessions(func_name, keywords, max_results=3)

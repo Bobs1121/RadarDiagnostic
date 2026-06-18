@@ -533,6 +533,26 @@ class AutoDream:
         for p in result.get("patterns_to_add", []):
             self.memory.add_pattern(p)
 
+        # Phase 15 / 2.2 follow-up: prune stale, low-hit patterns after
+        # the dream cycle. Guards: dry_run=False to actually prune;
+        # default age/hit thresholds are conservative (90d / 3 hits).
+        # If record_pattern_hit has been firing in build_context_for_diagnosis
+        # (the other half of this hook), actively-cited patterns survive.
+        try:
+            decay_summary = self.memory.decay_patterns(
+                max_age_days=90, min_hit_count=3, dry_run=False,
+            )
+            removed = decay_summary.get("removed", [])
+            if removed:
+                status(
+                    f"Decayed {len(removed)} stale pattern(s) "
+                    f"(age > 90d, hits < 3)"
+                )
+        except Exception as exc:
+            # Decay is a best-effort optimisation; never fail the dream
+            # cycle because of it.
+            status(f"[WARN] decay_patterns failed: {exc}")
+
         # Log conflicts
         conflicts = result.get("conflicts_found", [])
         if conflicts:
