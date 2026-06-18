@@ -24,19 +24,9 @@ from ``D:\\RamboStar\\idea\\radarAnalyze``.
 """
 from __future__ import annotations
 
-import io
 import pytest
 import sys
 from pathlib import Path
-
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-else:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
-                                   errors="replace", line_buffering=True)
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8",
-                                   errors="replace", line_buffering=True)
 
 HERE = Path(__file__).resolve().parent
 PROJECT_ROOT = HERE.parent
@@ -540,4 +530,18 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Reconfigure stdout/stderr for UTF-8 when running as a script.
+    # NOTE: This is intentionally inside the __main__ guard — pytest 9.0.3
+    # on Windows relies on the original stdout/stderr objects for capture;
+    # replacing them at import time breaks ``capture.py:stop_global_capturing``
+    # with ``ValueError: I/O operation on closed file``.
+    import io
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    else:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
+                                       errors="replace", line_buffering=True)
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8",
+                                       errors="replace", line_buffering=True)
     raise SystemExit(main())
