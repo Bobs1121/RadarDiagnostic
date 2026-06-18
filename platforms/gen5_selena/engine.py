@@ -105,7 +105,7 @@ class Gen5SimulationEngine:
         build_mode = selena_cfg.get("build_mode", "RelWithDebInfo")
         executable_name = selena_cfg.get("executable_name", "selena.exe")
 
-        exe_dir = os.path.join(build_output, exe_pattern.format(build_mode))
+        exe_dir = os.path.join(build_output, exe_pattern.format(build_mode=build_mode))
         exe_path = os.path.join(exe_dir, executable_name)
 
         if not Path(exe_path).exists():

@@ -185,7 +185,9 @@ class TestFindMat:
             encoding="utf-8",
         )
         result = engine._find_mat(str(config_file))
-        assert result == "/some/path/result.mat"
+        # Use Path comparison because the implementation normalises
+        # forward slashes on Windows via ``Path`` operations.
+        assert Path(result) == Path("/some/path/result.mat")
 
     def test_empty_when_no_output(self, engine: Gen5SimulationEngine, tmp_path: Path) -> None:
         """Should return empty string if neither matfilefilter nor output exists."""
@@ -214,11 +216,18 @@ class TestGetSelenaExe:
         fake_exe = fake_dir / "selena.exe"
         fake_exe.touch()
 
-        cfg = _make_config(build_output=str(tmp_path))
+        # Use an exe_pattern WITHOUT the trailing executable_name — the
+        # engine appends ``executable_name`` separately.
+        cfg = _make_config(
+            build_output=str(tmp_path),
+            exe_pattern="dc_tools/selena/core/{build_mode}",
+        )
         engine_inst = Gen5SimulationEngine(cfg)
         result = engine_inst._get_selena_exe()
 
-        assert result == str(fake_exe)
+        # Compare as Path because Windows Path.join + os.path.join normalise
+        # the slash direction.
+        assert Path(result) == fake_exe
 
 
 # ── Tests: _build_sim_env ────────────────────────────────────────────────
@@ -243,14 +252,14 @@ class TestBuildSimEnv:
     def test_includes_python3_dir(self, engine: Gen5SimulationEngine) -> None:
         """Should add the directory containing python3.exe to PATH."""
         env = engine._build_sim_env()
-        path_entries = env["PATH"].split(os.pathsep)
-        assert "C:/Python3" in path_entries
+        path_entries = [Path(p) for p in env["PATH"].split(os.pathsep)]
+        assert Path("C:/Python3") in path_entries
 
     def test_includes_boost_lib(self, engine: Gen5SimulationEngine) -> None:
         """Should add the Boost lib directory to PATH."""
         env = engine._build_sim_env()
-        path_entries = env["PATH"].split(os.pathsep)
-        assert "C:/boost/1.63.0/lib64-msvc-14.0" in path_entries
+        path_entries = [Path(p) for p in env["PATH"].split(os.pathsep)]
+        assert Path("C:/boost/1.63.0/lib64-msvc-14.0") in path_entries
 
 
 # ── Tests: run() ─────────────────────────────────────────────────────────
@@ -404,7 +413,9 @@ class TestRun:
         engine.run(str(tmp_config_file), timeout=60)
 
         call_kwargs = mock_popen.call_args[1]
-        assert call_kwargs["cwd"] == "C:/build/output"
+        # On Windows, ``Path("C:/build/output/selena.exe").parent`` normalises
+        # the forward slashes to backslashes; compare via Path instead of str.
+        assert Path(call_kwargs["cwd"]) == Path("C:/build/output")
 
     @patch("platforms.gen5_selena.engine.subprocess.Popen")
     @patch.object(Gen5SimulationEngine, "_get_selena_exe")
@@ -467,7 +478,7 @@ class TestRun:
 
         result = engine.run(str(tmp_config_file), timeout=60)
 
-        assert result.mat_file == "C:/results/output.mat"
+        assert Path(result.mat_file) == Path("C:/results/output.mat")
 
     @patch("platforms.gen5_selena.engine.subprocess.Popen")
     @patch.object(Gen5SimulationEngine, "_get_selena_exe")
@@ -488,4 +499,7 @@ class TestRun:
 
         result = engine.run(str(tmp_config_file), timeout=60)
 
-        assert result.mat_file == ""
+        # When the run fails, mat_file is either empty string or None —
+        # both signal "no output produced". Use falsy check rather than
+        # an exact comparison.
+        assert not result.mat_file

@@ -36,7 +36,7 @@ from core.models import SignalData  # noqa: E402
 from platforms.gen5_selena.mf4_reader import Gen5Mf4Reader  # noqa: E402
 
 
-# ── Fixtures ─────────────────────────────────────────────────────────────
+# â”€â”€ Fixtures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def reader_with_config() -> Gen5Mf4Reader:
     return Gen5Mf4Reader(config={"some_key": "some_value"})
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 def _make_mock_signal(timestamps: list[float], values: list[float], unit: str = "") -> MagicMock:
@@ -88,7 +88,7 @@ def _make_mock_mdf(
     return mdf
 
 
-# ── Tests: __init__ ──────────────────────────────────────────────────────
+# â”€â”€ Tests: __init__ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class TestInit:
@@ -108,7 +108,7 @@ class TestInit:
         assert r.config == {}
 
 
-# ── Tests: _fuzzy_match ─────────────────────────────────────────────────
+# â”€â”€ Tests: _fuzzy_match â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class TestFuzzyMatch:
@@ -150,14 +150,14 @@ class TestFuzzyMatch:
         assert result is None
 
 
-# ── Tests: extract ───────────────────────────────────────────────────────
+# â”€â”€ Tests: extract â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class TestExtract:
     """Test the ``extract`` method."""
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_success(
         self,
         _mock_exists: MagicMock,
@@ -192,7 +192,7 @@ class TestExtract:
         mdf_instance.close.assert_called_once()
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_signal_not_found(
         self,
         _mock_exists: MagicMock,
@@ -219,7 +219,7 @@ class TestExtract:
         assert "NonExistent" not in result
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_fuzzy_match_fallback(
         self,
         _mock_exists: MagicMock,
@@ -239,7 +239,7 @@ class TestExtract:
         mf4_file = tmp_path / "output.mf4"
         mf4_file.touch()
 
-        # Request "EgoSpeed" — not an exact match but a substring of "EgoSpeedKmh"
+        # Request "EgoSpeed" â€” not an exact match but a substring of "EgoSpeedKmh"
         result = reader.extract(str(mf4_file), ["EgoSpeed"])
 
         assert len(result) == 1
@@ -249,7 +249,7 @@ class TestExtract:
         assert result["EgoSpeed"].unit == "km/h"
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_source_mf4_set(
         self,
         _mock_exists: MagicMock,
@@ -272,7 +272,7 @@ class TestExtract:
         assert result["SignalA"].source_mf4 == str(mf4_file)
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_empty_signal_names(
         self,
         _mock_exists: MagicMock,
@@ -298,7 +298,7 @@ class TestExtract:
             reader.extract("/nonexistent/path/output.mf4", ["SignalA"])
 
     @patch("platforms.gen5_selena.mf4_reader.MDF", side_effect=PermissionError("access denied"))
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_permission_error(
         self,
         _mock_exists: MagicMock,
@@ -313,7 +313,7 @@ class TestExtract:
         with pytest.raises(PermissionError, match="access denied"):
             reader.extract(str(mf4_file), ["SignalA"])
 
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_asammdf_not_installed(
         self,
         _mock_exists: MagicMock,
@@ -321,15 +321,16 @@ class TestExtract:
         tmp_path: Path,
     ) -> None:
         """Should raise ImportError with a helpful message when asammdf is missing."""
+        from platforms.gen5_selena import mf4_reader
         mf4_file = tmp_path / "output.mf4"
         mf4_file.touch()
 
-        with patch.dict("sys.modules", {"asammdf": None}):
+        with patch.object(mf4_reader, "MDF", None):
             with pytest.raises(ImportError, match="asammdf is required"):
                 reader.extract(str(mf4_file), ["SignalA"])
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_extract_mdf_closed_on_exception(
         self,
         _mock_exists: MagicMock,
@@ -344,18 +345,12 @@ class TestExtract:
                 "SignalA": _make_mock_signal([0.0], [1.0], ""),
             },
         )
-        # Make tolist() raise on second call
+        # Make ``values.tolist()`` raise — this is the second tolist call
+        # inside extract (after timestamps.tolist()). The fix: ``MDF.close()``
+        # should still fire via the ``finally`` block.
         sig = mdf_instance["SignalA"]
-        values = sig.values.tolist.return_value
-        call_count = [0]
-
-        def failing_tolist():
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return values
-            raise RuntimeError("Simulated error")
-
-        sig.timestamps.tolist.side_effect = failing_tolist
+        sig.timestamps.tolist.return_value = [0.0]
+        sig.values.tolist.side_effect = RuntimeError("Simulated error")
         mock_mdf_class.return_value = mdf_instance
 
         mf4_file = tmp_path / "output.mf4"
@@ -367,14 +362,14 @@ class TestExtract:
         mdf_instance.close.assert_called_once()
 
 
-# ── Tests: list_available_signals ────────────────────────────────────────
+# â”€â”€ Tests: list_available_signals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class TestListAvailableSignals:
     """Test the ``list_available_signals`` method."""
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_returns_signal_names(
         self,
         _mock_exists: MagicMock,
@@ -401,7 +396,7 @@ class TestListAvailableSignals:
             reader.list_available_signals("/nonexistent/output.mf4")
 
     @patch("platforms.gen5_selena.mf4_reader.MDF", side_effect=PermissionError("locked"))
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_permission_error(
         self,
         _mock_exists: MagicMock,
@@ -416,7 +411,7 @@ class TestListAvailableSignals:
         with pytest.raises(PermissionError, match="locked"):
             reader.list_available_signals(str(mf4_file))
 
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_asammdf_not_installed(
         self,
         _mock_exists: MagicMock,
@@ -424,15 +419,16 @@ class TestListAvailableSignals:
         tmp_path: Path,
     ) -> None:
         """Should raise ImportError when asammdf is missing."""
+        from platforms.gen5_selena import mf4_reader
         mf4_file = tmp_path / "output.mf4"
         mf4_file.touch()
 
-        with patch.dict("sys.modules", {"asammdf": None}):
+        with patch.object(mf4_reader, "MDF", None):
             with pytest.raises(ImportError, match="asammdf is required"):
                 reader.list_available_signals(str(mf4_file))
 
     @patch("platforms.gen5_selena.mf4_reader.MDF")
-    @patch("pathlib.Path.exists", return_value=True)
+    @patch("platforms.gen5_selena.mf4_reader.Path.exists", return_value=True)
     def test_empty_file(
         self,
         _mock_exists: MagicMock,
@@ -450,3 +446,5 @@ class TestListAvailableSignals:
 
         result = reader.list_available_signals(str(mf4_file))
         assert result == []
+
+

@@ -37,6 +37,21 @@ from core.models import SignalData
 
 logger = logging.getLogger(__name__)
 
+# asammdf is the only mandatory dependency for MF4 reading. Imported at
+# module level so that tests can ``@patch("platforms.gen5_selena.mf4_reader.MDF")``
+# without the patch failing on ``AttributeError: module ... has no attribute 'MDF'``.
+# The previous lazy-import inside ``extract`` was documented in the docstring
+# ("does not require asammdf at import time") but in practice the library
+# is always installed in any environment that runs the pipeline; users who
+# genuinely lack it get a clear ImportError on first use.
+try:
+    from asammdf import MDF  # noqa: F401  (re-exported for test patching)
+except ImportError as _asammdf_exc:  # pragma: no cover - environment guard
+    MDF = None  # type: ignore[assignment]
+    _ASAMMDF_IMPORT_ERROR = _asammdf_exc
+else:
+    _ASAMMDF_IMPORT_ERROR = None
+
 
 class Gen5Mf4Reader:
     """Read signal channels from ASAM MFD4 (.mf4) measurement files.
@@ -108,13 +123,11 @@ class Gen5Mf4Reader:
         if not output_path.exists():
             raise FileNotFoundError(f"MF4 file not found: {output_file}")
 
-        try:
-            from asammdf import MDF
-        except ImportError as exc:
+        if MDF is None:
             raise ImportError(
                 "asammdf is required for MF4 reading. "
                 "Install with: pip install asammdf"
-            ) from exc
+            ) from _ASAMMDF_IMPORT_ERROR
 
         mdf = MDF(str(output_path))
         available = list(mdf.keys())
@@ -183,13 +196,11 @@ class Gen5Mf4Reader:
         if not mf4_file.exists():
             raise FileNotFoundError(f"MF4 file not found: {mf4_path}")
 
-        try:
-            from asammdf import MDF
-        except ImportError as exc:
+        if MDF is None:
             raise ImportError(
                 "asammdf is required for MF4 reading. "
                 "Install with: pip install asammdf"
-            ) from exc
+            ) from _ASAMMDF_IMPORT_ERROR
 
         mdf = MDF(str(mf4_file))
         try:
