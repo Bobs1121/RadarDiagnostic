@@ -34,8 +34,57 @@ import glob
 import json
 import hashlib
 import datetime
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional, Any
+
+
+# ── Atomic write helpers (Phase 15 / 2.2.1) ──────────────────────────
+#
+# Concurrent diagnosis + auto_dream writers must not corrupt each other.
+# ``atomic_write_text`` / ``atomic_write_json`` write to ``<path>.tmp`` first,
+# then ``os.replace`` (atomic on POSIX, best-effort atomic on Windows) to the
+# final path. A crash mid-write leaves the original file untouched and a
+# stale ``.tmp`` that subsequent reads will simply ignore.
+
+def atomic_write_text(path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Atomically write ``content`` to ``path``.
+
+    Writes via ``path.with_suffix(path.suffix + '.tmp')`` then ``os.replace``.
+    The parent directory is created if missing. Existing files are never
+    truncated to zero before the rename — readers will always see either the
+    old content or the new content, never partial bytes.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding=encoding, newline="") as f:
+            f.write(content)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                # fsync not supported on this platform; skip silently.
+                pass
+        os.replace(tmp, path)
+    except Exception:
+        # Leave any .tmp behind for forensics; do NOT remove the original.
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def atomic_write_json(path: Path, data: Any, encoding: str = "utf-8",
+                      ensure_ascii: bool = False, indent: int = 2) -> None:
+    """Atomically write JSON-serialisable ``data`` to ``path``."""
+    payload = json.dumps(data, ensure_ascii=ensure_ascii, indent=indent,
+                         default=str)
+    atomic_write_text(path, payload, encoding=encoding)
 
 
 class MemorySystem:
@@ -68,7 +117,7 @@ class MemorySystem:
 
     def write_project_memory(self, content: str) -> None:
         """Overwrite project memory (AI manages the content)."""
-        (self.memory_dir / "project.md").write_text(content, encoding="utf-8")
+        atomic_write_text(self.memory_dir / "project.md", content)
 
     def append_project_memory(self, entry: str) -> None:
         """Append a new entry to project memory."""
@@ -76,7 +125,7 @@ class MemorySystem:
         existing = path.read_text(encoding="utf-8") if path.exists() else ""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         new_content = f"{existing}\n\n## [{timestamp}]\n{entry}" if existing else f"# Project Memory\n\n## [{timestamp}]\n{entry}"
-        path.write_text(new_content, encoding="utf-8")
+        atomic_write_text(path, new_content)
 
     # ── L2: Function Knowledge ──────────────────────────────────────────
 
@@ -91,7 +140,7 @@ class MemorySystem:
         """Store knowledge for a function."""
         path = self.memory_dir / "functions" / f"{func_name.upper()}.json"
         knowledge["_updated"] = datetime.datetime.now().isoformat()
-        path.write_text(json.dumps(knowledge, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(path, knowledge)
 
     def get_all_function_names(self) -> list[str]:
         """List all functions that have stored knowledge."""
@@ -112,26 +161,34 @@ class MemorySystem:
         return []
 
     def add_pattern(self, pattern: dict) -> None:
-        """Add a new learned pattern from a diagnosis, deduplicating by content hash."""
+        """Add a new learned pattern from a diagnosis, deduplicating by content hash.
+
+        Phase 15 / 2.2.4: switched from MD5[:8] (32-bit, collision-prone at scale)
+        to SHA256[:12] (48-bit, ~2^-24 collision probability). Existing
+        short-MD5 IDs are still recognised on lookup because the comparison is
+        a plain ``==`` over the ``_id`` string field — both encodings coexist.
+        """
         patterns = self.read_patterns()
 
         content_key = {
             k: v for k, v in pattern.items()
             if not k.startswith("_")
         }
-        content_hash = hashlib.md5(
+        # SHA256[:12] = 12 hex chars = 48-bit hash. Collision probability
+        # at N=10k entries is ~N^2/2^49 ≈ 1.7e-8, which is acceptable.
+        content_hash = hashlib.sha256(
             json.dumps(content_key, sort_keys=True, default=str).encode()
-        ).hexdigest()[:8]
+        ).hexdigest()[:12]
 
         if any(p.get("_id") == content_hash for p in patterns):
             return
 
         pattern["_learned_at"] = datetime.datetime.now().isoformat()
         pattern["_id"] = content_hash
+        # Initial hit_count: zero — incremented by record_pattern_hit()
+        pattern.setdefault("_hit_count", 0)
         patterns.append(pattern)
-        (self.memory_dir / "patterns.json").write_text(
-            json.dumps(patterns, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        atomic_write_json(self.memory_dir / "patterns.json", patterns)
 
     def find_similar_patterns(self, func_name: str, symptom_keywords: list[str]) -> list[dict]:
         """Find patterns that match the given function and symptoms."""
@@ -146,6 +203,64 @@ class MemorySystem:
                 p["_match_score"] = len(overlap) / max(len(p_keywords), 1)
                 matches.append(p)
         return sorted(matches, key=lambda x: x.get("_match_score", 0), reverse=True)
+
+    def record_pattern_hit(self, pattern_id: str) -> None:
+        """Increment ``_hit_count`` for a pattern matched during diagnosis.
+
+        Phase 15 / 2.2.3 — patterns that are actively cited should resist
+        the decay sweep. Calling site: ``build_context_for_diagnosis`` when
+        a pattern from ``find_similar_patterns`` is included in context.
+        """
+        patterns = self.read_patterns()
+        touched = False
+        for p in patterns:
+            if p.get("_id") == pattern_id:
+                p["_hit_count"] = int(p.get("_hit_count", 0)) + 1
+                p["_last_hit_at"] = datetime.datetime.now().isoformat()
+                touched = True
+                break
+        if touched:
+            atomic_write_json(self.memory_dir / "patterns.json", patterns)
+
+    def decay_patterns(self, max_age_days: int = 90, min_hit_count: int = 3,
+                        dry_run: bool = False) -> dict:
+        """Phase 15 / 2.2.3 — prune stale patterns.
+
+        Removes patterns whose ``_learned_at`` is older than ``max_age_days``
+        AND whose ``_hit_count`` is below ``min_hit_count``. This keeps the
+        memory small and biased toward recent, actively-cited patterns.
+
+        Returns a summary dict ``{"removed": [...], "kept": int, "dry_run": bool}``.
+        """
+        patterns = self.read_patterns()
+        now = datetime.datetime.now()
+        kept: list[dict] = []
+        removed: list[dict] = []
+        for p in patterns:
+            learned = p.get("_learned_at")
+            hit_count = int(p.get("_hit_count", 0))
+            age_days: Optional[int] = None
+            if learned:
+                try:
+                    age_days = (now - datetime.datetime.fromisoformat(learned)).days
+                except ValueError:
+                    age_days = None
+            stale = (age_days is not None and age_days > max_age_days
+                     and hit_count < min_hit_count)
+            if stale:
+                removed.append({
+                    "_id": p.get("_id"),
+                    "function": p.get("function"),
+                    "age_days": age_days,
+                    "hit_count": hit_count,
+                })
+            else:
+                kept.append(p)
+
+        if not dry_run and removed:
+            atomic_write_json(self.memory_dir / "patterns.json", kept)
+
+        return {"removed": removed, "kept": len(kept), "dry_run": dry_run}
 
     # ── L4: Session Memory ──────────────────────────────────────────────
 
@@ -312,7 +427,7 @@ class MemorySystem:
 
     def _write_session(self, session_id: str, data: dict) -> None:
         path = self.memory_dir / "sessions" / f"{session_id}.json"
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(path, data)
 
     def _prune_old_sessions(self, max_count: int = 20) -> int:
         """清理过期 session，只保留最近 max_count 条。
@@ -375,9 +490,7 @@ class MemorySystem:
         """
         memory["_updated"] = datetime.datetime.now().isoformat()
         # 保持旧格式兼容
-        (case_dir / "memory.json").write_text(
-            json.dumps(memory, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        atomic_write_json(case_dir / "memory.json", memory)
         # v2: 自动转换为 pattern 条目
         case_name = case_dir.name if case_dir.name else str(case_dir)
         pattern = {
@@ -423,7 +536,7 @@ class MemorySystem:
         d = self.memory_dir / "code_knowledge"
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{func_name.upper()}.json"
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(path, data)
 
     def list_code_knowledge_funcs(self) -> list[str]:
         """列出已有代码知识的功能名。"""

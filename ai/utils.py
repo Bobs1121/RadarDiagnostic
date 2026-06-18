@@ -22,6 +22,11 @@ _FENCE_JSON_RE = re.compile(
     re.DOTALL,
 )
 _TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
+# Last-resort: greedily grab the outermost balanced {...} block.
+# We pair braces manually because regex can't balance, but for typical LLM
+# outputs the LLM emits one JSON object with no nested top-level
+# ambiguities, so the lazy match works.
+_OUTERMOST_OBJECT_RE = re.compile(r"\{(?:[^{}]|\{[^{}]*\})*\}", re.DOTALL)
 
 
 def _strip_wrappers(content: str) -> str:
@@ -108,7 +113,8 @@ def parse_json_from_llm(
         except (ValueError, json.JSONDecodeError) as e:
             last_err = e
 
-    # Strategy 3: brace slice
+    # Strategy 3: brace slice (first-to-last)
+    snippet = None
     if "{" in cleaned and "}" in cleaned:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
@@ -126,11 +132,24 @@ def parse_json_from_llm(
             except (ValueError, json.JSONDecodeError) as e:
                 last_err = e
 
-    # Strategy 5+: retry with progressive repair
+    # Strategy 5: outer-object regex (handles LLM "{"..."}" embedded in
+    # markdown prose or surrounded by stray words).
+    if snippet is None:
+        m = _OUTERMOST_OBJECT_RE.search(cleaned)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except (ValueError, json.JSONDecodeError) as e:
+                last_err = e
+
+    # Strategy 6+: retry with progressive repair (up to max_retries times).
+    base = snippet if snippet is not None else cleaned
+    last_repaired = None
     for attempt in range(max_retries):
-        repaired = _advanced_repair(snippet if "snippet" in dir() else cleaned)
+        repaired = _advanced_repair(base, last_repaired)
         if not repaired:
             break
+        last_repaired = repaired
         try:
             return json.loads(repaired)
         except (ValueError, json.JSONDecodeError) as e:
@@ -141,25 +160,45 @@ def parse_json_from_llm(
     return fallback or {}
 
 
-def _advanced_repair(text: str) -> Optional[str]:
-    """Apply advanced JSON repair strategies."""
+def _advanced_repair(text: str, prev: Optional[str] = None) -> Optional[str]:
+    """Apply advanced JSON repair strategies.
+
+    Phase 15 / 2.2.2: chain successive repair passes when called
+    repeatedly. Each call applies one extra strategy on top of ``prev``
+    (which is the result of the previous call) — this lets the
+    ``max_retries`` loop in :func:`parse_json_from_llm` make *progress*
+    instead of bailing out on the same dead-end snippet.
+    """
     import re
     if not text:
         return None
+    base = prev if prev is not None else text
 
-    # Fix single quotes to double quotes (common LLM output)
-    repaired = text.replace("'", '"')
+    repaired = base
 
-    # Remove control characters
-    repaired = re.sub(r'[\x00-\x1f]', ' ', repaired)
+    # Pass A: collapse single-quoted strings → double-quoted.
+    #         Done first because LLMs often mix both styles mid-field.
+    repaired = repaired.replace("'", '"')
 
-    # Try to find the largest valid JSON-like substring
+    # Pass B: remove control characters that JSON forbids raw.
+    repaired = re.sub(r"[\x00-\x1f]", " ", repaired)
+
+    # Pass C: drop trailing commas before } or ].
+    repaired = _TRAILING_COMMA_RE.sub(r"\1", repaired)
+
+    # Pass D: re-slice to the outermost {...} block to drop stray prose.
     if "{" in repaired and "}" in repaired:
         start = repaired.index("{")
         end = repaired.rindex("}") + 1
         repaired = repaired[start:end]
 
-    return repaired if repaired != text else None
+    # Pass E: if the string still isn't parseable, try converting
+    #         Python booleans/nulls/None (common LLM hallucination).
+    repaired = re.sub(r"\bTrue\b", "true", repaired)
+    repaired = re.sub(r"\bFalse\b", "false", repaired)
+    repaired = re.sub(r"\bNone\b", "null", repaired)
+
+    return repaired if repaired != base else None
 
 
 # ── Source Code Section Extraction ───────────────────────────────────

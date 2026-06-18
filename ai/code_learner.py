@@ -621,10 +621,8 @@ class CodeLearner:
     def _write_overview_hashes(self, data: dict) -> None:
         path = self.overview_dir / ".overview_hashes.json"
         try:
-            path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            from memory.memory_system import atomic_write_json
+            atomic_write_json(path, data, indent=2)
         except OSError:
             pass
 
@@ -758,10 +756,8 @@ class CodeLearner:
             "source_files": sorted(file_contents.keys()),
         }
 
-        out_path.write_text(
-            json.dumps(parsed, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from memory.memory_system import atomic_write_json
+        atomic_write_json(out_path, parsed)
 
         counts = {
             k: len(parsed.get(k, {}))
@@ -1019,10 +1015,8 @@ class CodeLearner:
 
         existing[focus] = focus_section
 
-        path.write_text(
-            json.dumps(existing, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from memory.memory_system import atomic_write_json
+        atomic_write_json(path, existing)
         return {"added": added, "updated": updated}
 
     # ── State I/O ───────────────────────────────────────────────────────
@@ -1042,10 +1036,8 @@ class CodeLearner:
         }
 
     def _write_state(self, state: dict) -> None:
-        self.state_path.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from memory.memory_system import atomic_write_json
+        atomic_write_json(self.state_path, state)
 
 
 # ── 辅助：按 id 合并列表 / 按 key 合并 dict ─────────────────────────────
