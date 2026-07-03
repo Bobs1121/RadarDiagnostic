@@ -3,11 +3,14 @@
 本路线图指导开发者如何一步步安全、平滑地从 V2 的瀑布流架构迁移到 V3 的 Agentic 工具化架构。
 
 ## Phase 1: 物理隔离与 Workspace 基建 (Foundation)
-**目标：** 实现项目上下文的物理隔离，消灭全局的 `memory/` 与 `source_docs/`。
+**目标：** 实现项目的物理隔离与 Core+COEM 继承机制，消灭全局的 `memory/` 与 `source_docs/`。
 
-- [ ] **任务 1.1: 创建 Workspace 基础数据结构**
+- [ ] **任务 1.1: 创建支持继承的 Workspace 基础数据结构**
   - **路径**: `core/workspace.py`
-  - **实现**: 创建 `class Workspace`，内部包含加载本地 `config.yaml`，读取项目专有 DBC (`get_dbc_files()`)，以及挂载对应的记忆库 (`get_memory_dir()`) 的逻辑。
+  - **实现**: 创建 `class Workspace`，支持 **基线(Core) + 客户定制(COEM)** 模式。
+    - 读取 `config.yaml` 时允许声明 `inherits_from: "base_core"`。
+    - **AST源码加载**: 优先加载 `coem/<客户>` 目录下的代码，如果没有，自动 fallback 到 `common` 目录。
+    - **DBC加载**: 支持核心 DBC 叠加上一层专属于该车型的 DBC (`get_dbc_files()`)。
 - [ ] **任务 1.2: 迁移脚手架脚本**
   - **路径**: `scripts/migrate_to_workspaces.py`
   - **实现**: 遍历当前的 `memory/projects/`，为每个已知 Variant 创建 `workspaces/<variant>`，并将对应的资源（代码图谱DB，需求文档，DBC等）移动过去。

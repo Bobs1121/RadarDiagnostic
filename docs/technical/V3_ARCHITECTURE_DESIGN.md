@@ -9,8 +9,9 @@
 ## 1. 总体架构哲学：矩阵式设计 (The Matrix Architecture)
 
 系统将采用**矩阵式架构（Matrix Architecture）**。
-* **X轴（横向）：项目工作区隔离 (Horizontal Project Isolation)**
-  所有的“状态”和“上下文”（需求文档、DBC、源码变体、记忆沉淀）全部归属于隔离的 `.workspace/<project>`。系统核心引擎处于无状态（Stateless）模式，按需挂载工作区。
+* **X轴（横向）：Core + COEM 工作区继承与隔离 (Project Inheritance & Isolation)**
+  针对车载软件开发中普遍存在的 **Platform (公共基线) + COEM (客户定制)** 模式（例如：底层跟踪滤波等为公共代码，而 CAN 矩阵、特殊报警条件位于 `coem/BYD/` 下），系统的 Workspace 将采用**继承制 (Inheritance)** 设计。
+  创建一个 `base_core` 工作区存放通用配置和基础知识图谱；针对具体的客户项目（如 `gen6_byd_sc6h`），其工作区配置只需声明重载（Override）的部分：指定专有的 DBC、补充 `coem/***` 的源码搜索路径。这保证了客户项目的工作区足够“小”且轻量，最大程度复用公共部分。
 * **Y轴（纵向）：模块的独立生命力 (Vertical Modular Value)**
   每个核心子系统被设计为“独立的产品（Standalone Product）”。它们可以脱离主循环单独运行，提供直接的用户价值。
 
