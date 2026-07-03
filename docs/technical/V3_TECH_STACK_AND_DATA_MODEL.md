@@ -1,65 +1,54 @@
-# V3 技术选型与数据模型设计规范 (Tech Stack & Data Models)
+# V3 核心技术选型与调度设计 (AI Triage Tech Stack)
 
-> **文档目标**: 回答并固化 V3 架构中关于需求管理、DBC映射、代码链路、记忆系统以及底层代码结构化（CodeGraph vs LLI Wiki）的技术选型与存储结构。
+> **定位**: 专注于实车数据分诊 (AI Triage)，导通“需求 -> 代码 -> 数据”关联链路，支持 Core+COEM 架构的离线桌面级系统。
+> **原则**: 零后台服务、极简依赖、纯本地极速计算。
 
 ---
 
-## 1. 需求管理 (Requirements Management)
-**痛点**: 需求通常是散乱的 Word/PDF，LLM 难以直接进行逻辑判定。
-**技术选型**: **YAML + 动态 JSON Schema**
-* **存储方式**: 在 `.workspace/<project>/requirements/` 下，按功能域（如 `FCTA.yaml`, `RCTB.yaml`）存储结构化规范。
-* **数据结构**: 提取需求中的硬性标准（Acceptance Criteria），如触发阈值、延时限制。
-  ```yaml
-  function: FCTA
-  activation_conditions:
-    - variable: "Ego_Speed"
-      operator: "<"
-      value: 30
-      unit: "km/h"
-  performance:
-    max_latency_ms: 200
-  ```
-* **运转机制**: Agent 启动诊断前，先加载对应功能的 YAML，将其转化为 JSON Schema，强制作为此次诊断的 Ground Truth 进行比对。
+## 1. 代码仓与项目化管理 (Code Repo & Project Management)
+**场景**: 同一个 Git 仓内包含公共基础代码（Core/Common）和分散在 `coem/***` 目录下的多客户定制代码。
+* **隔离管理选型**: **Workspace (配置沙盒) + 动态 Path 路由**
+  * 在系统内建立 `.workspaces/<variant_name>` 沙盒。
+  * **配置文件** (`config.yaml`) 采用 YAML 继承机制。
+* **代码加载策略**: 
+  * 引擎不硬编码路径。当指定客户为 `BYD-SC6H` 时，`Workspace` 模块会生成一个解析优先级列表：`["cr60_light/coem/BYD", "cr60_light/common"]`。
+  * AST 在生成拓扑图时，按照该优先级抓取 C/C++ 文件。同名函数或同名宏定义，`coem` 目录下的实现将直接覆盖 `common` 目录的默认实现。
 
-## 2. DBC 管理与继承机制 (DBC Management)
-**痛点**: Core 和 COEM 共存，且 DBC 经常更新，重复解析极慢。
-**技术选型**: **原始文件 + SQLite 本地缓存预编译 (Pre-compiled Cache)**
-* **存储结构**:
-  - `base_core/dbc/*.dbc` (基线公共)
-  - `gen6_gwm/dbc/*.dbc` (长城定制)
-* **运转机制**: 系统初始化时，按照 `Core -> COEM` 顺序加载（COEM 可覆盖 Core）。使用 `cantools` 库解析后，将合并后的“最终矩阵”序列化存入 `workspace/.../dbc_cache.db` (SQLite)。
-* **优势**: Agent 需要反推信号时，通过 SQL 极速查询 `SELECT signal_name FROM signals WHERE node='VCU' AND comment LIKE '%steering%'`，远快于每次读文本文件。
+## 2. 需求管理结构化 (Requirements Management)
+**场景**: 客户给定的验收标准（比如 FCTA 车速必须 < 30km/h，迟滞 200ms）需要被 AI 严谨执行。
+* **技术选型**: **YAML + Pydantic (动态 JSON Schema)**
+* **存储**: 放在 `.workspaces/<variant>/requirements/` 下。
+* **机制**: 将文本需求转录为结构化的 YAML。在 Agent 运行时，利用 `Pydantic` 库将 YAML 动态加载为 Python Object，并生成严格的验证规则。诊断结果必须通过 Pydantic 的 `model_validate()`，避免大模型“胡编乱造”结论。
 
-## 3. 代码链路组织：实时推理 vs 预编译拓扑图
-**决策**: **绝对不能实时读取整条链路！必须采用“预计算拓扑图 (Pre-computed Topology)”方案。**
-**原因**: 实时让 LLM 去海量 C 文件里跳转追溯链路，会迅速耗尽 100K 以上的 Context Window，且大概率会因 Token 截断导致逻辑链断裂。
+## 3. 代码结构化选型 (Code Topology & Logic)
+**场景**: 绝不能实时读取全量代码。需要无数据时也能当代码助手。
+* **底层骨架选型**: **AST (tree-sitter) + NetworkX (纯内存图计算)**
+  * **机制**: 在初始化时（预编译），AST 遍历 `coem`+`common` 代码，抽取控制流和变量流，构建为 `NetworkX` 的有向无环图 (DAG)。并将其序列化存盘。
+  * **提问时**: 比如查 `VehSpd` 的去向，直接调 `nx.descendants()` 毫秒级返回下游关联的 5 个函数名。
+* **表层血肉选型**: **LLI Wiki (Markdown 语义总结)**
+  * **机制**: 大模型基于上述生成的 NetworkX 图，为每个子系统（如 RCTB 状态机）离线生成一篇结构化的 Markdown 总结。
+  * **结合**: Agent 先读 Markdown 理解总体业务（大模型对自然语言的理解度远高于 C 语言指针），再查 NetworkX 精确定位。
 
-**技术选型**: **有向无环图 (DAG) + SQLite 关系型存储**
-* **图结构**:
-  - **Nodes**: 函数 (Functions), 变量 (Variables), 状态 (States)
-  - **Edges**: `CALLS` (调用), `READS` (读取), `WRITES` (修改)
-* **存储媒介**: 放弃纯 JSON，使用 SQLite (即现有的 `codegraph.db`)。
-* **运转机制**: 
-  1. 系统在挂载项目时（或“休眠 Dream”时），通过 AST 解析器**一次性跑通全量代码**，生成静态拓扑数据库。
-  2. Agent 在诊断时，只需执行轻量级 SQL/图查询：“返回 `FCTA_Warn` 变量的上游所有写入节点路径”，数据库秒级返回极简的链路名单，Agent 再去按图索骥提取对应的少量源码片段。
+## 4. 记忆系统选型 (Memory System)
+**场景**: 沉淀不同项目的 Bug 规律和排查流程经验。
+* **技术选型**: **SQLite FTS5 (全文本检索) + JSON 混合架构** (放弃沉重的 ChromaDB/向量库)
+* **设计**:
+  1. **Triage History (诊断历史)**: 存入 SQLite。每次诊断结束，把 `[症状, 异常信号, 对应代码行, 结论]` 存为一条记录。
+  2. **检索机制**: 利用 SQLite 原生的 FTS5 (Full-Text Search) 插件实现极速的关键词检索，足够应对单机数十万条的报错特征库，无需引入任何 C++ 编译的向量模型库，做到开箱即用。
 
-## 4. 记忆系统设计 (Memory System)
-**技术选型**: **分层存储 (Layered Memory) + 向量化混合检索 (Hybrid RAG)**
-将记忆拆分为三种介质，实现长期演进：
-1. **短时记忆 (Session Memory)**: 纯 JSON，保存在本次诊断任务文件夹中，记录大模型本次多轮对话的思考流和执行快照。
-2. **长期事实记忆 (Fact Base)**: SQLite，记录确定性的项目常量（Constants）、网络接口定义等。
-3. **经验库 (Experience Vector DB)**: 引入轻量级向量库（如 `ChromaDB` 或 `SQLite-VSS`）。每次成功的诊断结束后，将 Bug 症状和修复方案编码为 Vector 存入。下次遇到类似工况，大模型通过语义相似度瞬间召回。
+## 5. 异构数据解析选型 (Data Extraction)
+**场景**: 离线极速吞吐 GB 级 bag/blf/mf4，提取信号并画图。
+* **技术选型**: **DuckDB + Apache Arrow**
+  * `cantools` / `asammdf` 负责将底层的 BLF/MF4 解码为时序数据。
+  * 抛弃缓慢的 `pandas.DataFrame` 拼接，直接将解析后的数据推入 **DuckDB (嵌入式列式数据库)** 的内存视图。
+  * 当 AI 说“查出车速大于 60 且 FCTA 没有报警的时刻”，背后将直接转换为 DuckDB 的极限 SQL 查询，性能较传统方式提升数十倍，彻底解决 OOM 问题。
 
-## 5. 代码结构化选型：CodeGraph 还是 LLI Wiki？
-**用户疑问**: 代码结构化选择 CodeGraph（基于底层 AST）还是 LLI Wiki（语言大模型生成的知识百科）？
-**决策**: **CodeGraph 作“骨”，LLI Wiki 作“肉”。两者混合（Hybrid Architecture）。**
-
-* **CodeGraph (AST)**: 
-  * **属性**: 确定性、绝对精准、人类不可读。
-  * **作用**: 负责骨架构建。大模型绝不能自己去“猜”依赖关系，必须通过 AST 工具查询 `if` 嵌套里到底有没有某变量。
-* **LLI Wiki (Language Logic Interface)**:
-  * **属性**: 语义化、高度概括、大模型极度友好。
-  * **作用**: 负责意图解释。复杂的跟踪滤波算法或状态机（FSM）转换，如果只看 AST，LLM 可能会迷失在指针中。
-* **协同运转流程**:
-  在离线模式（Auto-Dream）下，系统通过 `CodeGraph` 找出关键控制流代码段，然后丢给 LLM 生成一段人类语言的总结描述，将其存入 `LLI Wiki`（如：*“FCTCtrl.c 中的状态机主要处理这四个阶段...”*）。
-  当线上出现 Bug 时，Agent 首先阅读 `LLI Wiki` 快速获得系统架构的直觉，确定嫌疑方向后，再用 `CodeGraph` 的 SQL 接口发起手术刀级别的精准排查。这兼顾了“效率”与“准确性”。
+## 6. 内容调度与主脑框架 (Agentic Triage Loop)
+**场景**: 调度上述所有结构化内容，导通“需求->代码->数据”的链路。
+* **技术选型**: **LangGraph (状态机路由) + Tool Calling**
+* **结构化调度流程**:
+  1. **State 定义 (状态池)**: 包含 `current_req` (当前需求), `topology_evidence` (代码证据), `data_evidence` (数据证据)。
+  2. **Node 1: 意图与需求对齐**: LLM 查看用户的提问，去 YAML 库加载对应的需求指标，定下破案基调。
+  3. **Node 2: 代码拓扑推演 (代码助手)**: 调用 `CodeGraph Tool` 和 `DBC Tool`，找到实现该需求的 C 语言变量和其绑定的物理 CAN 信号。
+  4. **Node 3: 数据实证 (数据助手)**: 拿着拿到的 CAN 信号名，去 `DuckDB` 执行查询和画图。
+  5. **Node 4: Triage 合成**: 对比 Node 1(需求) 与 Node 3(实际数据)。如果冲突，根因定位在 Node 2(代码逻辑)。输出诊断报告。
