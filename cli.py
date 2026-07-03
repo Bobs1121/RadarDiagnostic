@@ -29,7 +29,7 @@ PROJECT_ROOT = Path(__file__).parent
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-_config_cache: dict[str, dict] = {}  # project_key -> config (fixes cross-project pollution)
+_config_cache: dict[str, dict] = {}  # variant_id -> config (fixes cross-project pollution)
 _router_cache = None
 
 _ENV_PATTERN = re.compile(r"\$\{([^}]+)\}")
@@ -52,16 +52,7 @@ def _resolve_env(value):
     return value
 
 
-def _get_default_project_key() -> str:
-    """Get the default project key from config.yaml without loading full config."""
-    import yaml
-    with open(PROJECT_ROOT / "config.yaml", "r") as f:
-        raw = yaml.safe_load(f)
-    return raw.get("default_project", "gwm_b26")
-
-
 def load_config(
-    project_key: str | None = None,
     variant_id: str | None = None,
     package_profile_id: str | None = None,
 ) -> dict:
@@ -71,11 +62,7 @@ def load_config(
         variant_id:          Canonical variant ID (e.g. "gen6/gwm_b26").
         package_profile_id:  Package profile ID (e.g. "gen6/gwm_b26/default").
 
-    Backward compat:
-        project_key:         Legacy project key (e.g. "gwm_b26").  Still works
-                             but maps to the new variant system internally.
-
-    Precedence: --variant > -P/--project > default_variant > default_project
+    Precedence: --variant > default_variant > default_project
     """
     global _config_cache
 
@@ -91,8 +78,6 @@ def load_config(
 
     if variant_id:
         effective_variant = variant_id
-    elif project_key:
-        effective_variant = resolve_variant_id(cfg, project_key)
     else:
         effective_variant = resolve_variant_id(cfg, None)
 
@@ -138,7 +123,7 @@ def load_config(
             proj["dbc_files"].extend(dbc_set.files)
     except (ValueError, ImportError):
         # Fallback to legacy project system
-        legacy_key = resolve_variant_id(cfg, project_key) if project_key else None
+        legacy_key = resolve_variant_id(cfg, None)
         proj = get_project(cfg, legacy_key)
 
     # Inject into top-level config for backward compat
@@ -198,13 +183,12 @@ Examples:
     id_group.add_argument("--snapshot", default=None,
         help="Snapshot ID to load (replay), 'auto' to create one for this run. "
              "Default: 'auto' for diagnosis mode, None otherwise.")
-    id_group.add_argument("-P", "--project", default=None,
-        help="[LEGACY] Project key from config.yaml (default: uses default_project). "
-             "Prefer --variant instead.")
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--query", "-q", help="Data query (natural language question)")
     mode_group.add_argument("--problem", "-p", help="Problem description (diagnosis mode)")
+    mode_group.add_argument("--plot-signals", help="Comma-separated list of CAN signals to plot (e.g. 'VehSpd_0x137,FCTA_Warn')")
+    mode_group.add_argument("--plot-query", help="Natural language query to automatically select and plot relevant signals")
 
     parser.add_argument("--expected", "-e", help="Expected behavior (diagnosis mode)")
     parser.add_argument("--dream", action="store_true", help="Force memory consolidation")
@@ -234,7 +218,6 @@ Examples:
 
     # ── Load config early (needed by all sub-commands) ──────────────
     config = load_config(
-        project_key=args.project,
         variant_id=args.variant,
         package_profile_id=args.package_profile,
     )
@@ -333,18 +316,21 @@ Examples:
         mode = "diagnose"
 
     if mode is None:
-        console.print("\n[bold]Select mode:[/bold]")
-        console.print("  [cyan]1[/cyan] Data query  (ask a question about the data)")
-        console.print("  [cyan]2[/cyan] Diagnosis   (full problem diagnosis)")
-        choice = console.input("\n[bold cyan]Choice (1/2): [/bold cyan]").strip()
-        if choice == "1":
-            mode = "query"
-            args.query = console.input("[bold cyan]Question: [/bold cyan]")
-        elif choice == "2":
-            mode = "diagnose"
+        if args.plot_signals or args.plot_query:
+            mode = "plot"
         else:
-            console.print("[red]Invalid choice. Use 1 or 2.[/red]")
-            sys.exit(1)
+            console.print("\n[bold]Select mode:[/bold]")
+            console.print("  [cyan]1[/cyan] Data query  (ask a question about the data)")
+            console.print("  [cyan]2[/cyan] Diagnosis   (full problem diagnosis)")
+            choice = console.input("\n[bold cyan]Choice (1/2): [/bold cyan]").strip()
+            if choice == "1":
+                mode = "query"
+                args.query = console.input("[bold cyan]Question: [/bold cyan]")
+            elif choice == "2":
+                mode = "diagnose"
+            else:
+                console.print("[red]Invalid choice. Use 1 or 2.[/red]")
+                sys.exit(1)
 
     # ── Default snapshot to 'auto' for diagnosis mode ─────────────────
     if mode == "diagnose" and args.snapshot is None:
@@ -352,7 +338,20 @@ Examples:
         console.print("[dim]Auto-enabling --snapshot auto for diagnosis mode[/dim]")
 
     # ── Route ───────────────────────────────────────────────────────────
-    if mode == "query":
+    if mode == "plot":
+        # Launch tools.plot_signals inline
+        import subprocess
+        cmd = [sys.executable, str(PROJECT_ROOT / "tools" / "plot_signals.py"), str(case_dir)]
+        if args.plot_signals:
+            cmd.extend(["--signals", args.plot_signals])
+        else:
+            cmd.extend(["--query", args.plot_query])
+        if args.variant:
+            cmd.extend(["--variant", args.variant])
+        
+        console.print(f"[dim]Running Plotter: {' '.join(cmd)}[/dim]")
+        sys.exit(subprocess.call(cmd))
+    elif mode == "query":
         _run_query(case_dir, args.query, config)
     else:
         problem = args.problem

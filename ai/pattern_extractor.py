@@ -125,6 +125,7 @@ class PatternExtractor:
     # trailing brace / end-of-line. We intentionally allow multi-line EXPR via
     # the flags at match time.
     _IF_RE = re.compile(r'^\s*if\s*\((.+?)\)\s*\{?\s*$')
+    _EXTRACT_VAR_RE = re.compile(r'([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*|->[a-zA-Z_]\w*)*)')
 
     _ASSIGN_ZERO_RE = re.compile(
         r'^\s*(\w+(?:\.\w+)?(?:->\w+)?)\s*=\s*(?:\(\s*bool\s*\)\s*)?(?:false|0\.0f|0\.0|0|FALSE)\s*;\s*$',
@@ -149,6 +150,8 @@ class PatternExtractor:
 
     MIN_BODY_SIZE = 2
     MAX_BODY_SCAN = 20
+
+    _NON_SIGNAL_KEYWORDS = {"true", "false", "null", "if", "else", "return", "continue", "break"}
 
     def __init__(
         self,

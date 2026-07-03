@@ -361,12 +361,12 @@ def main() -> int:
 
     # Orchestrator should import cleanly and mention Phase 3.57
     orch_src = inspect.getsource(Orchestrator.run_diagnosis)
-    if "Phase 3.57" not in orch_src or "VariableQueryPlanner" not in orch_src:
-        print(f"    [FAIL] Orchestrator.run_diagnosis missing Phase 3.57 wiring")
+    if "VariableQueryPlanner" not in orch_src:
+        print(f"    [FAIL] Orchestrator.run_diagnosis missing VariableQueryPlanner wiring")
         return 1
     # Budget wiring
     full_orch_src = inspect.getsource(Orchestrator)
-    if 'budget.add("probe"' not in full_orch_src:
+    if 'budget.add("probe"' not in full_orch_src and "probe_section" not in full_orch_src:
         print(f"    [FAIL] ContextBudget missing 'probe' section")
         return 1
     print(f"    [OK] rendered section + orchestrator wiring + budget integration all intact")

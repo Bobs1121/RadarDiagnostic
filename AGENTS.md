@@ -9,26 +9,21 @@ Corner Radar AI 诊断工具：对 ADAS 功能（BSD/LCA/DOW/RCW/RCTA/RCTB/FCTA/
 | **Diagnosis** | `cli.py --mode diagnosis` | `ai/orchestrator.py` → 10+ 步管线 |
 | **Query** | `cli.py --mode query` | `ai/data_query_engine.py` |
 | **Dream** | `cli.py --mode dream` | `memory/auto_dream.py` → Phase 0-4 |
+| **Prewarm Timing** | `tools/measure_prewarm_timing.py --variant gen6/gwm_b26 --runs 2` | `_run_prewarm` 缓存命中计时 |
+| **Harness Gate** | `tools/run_harness_gate.py --allow-known-edge` | Harness 聚合回归 gate |
 
 ## 诊断管线步骤概览
 
 | Step | 名称 | 模块 |
 |------|------|------|
-| 1 | init + source_docs 保障 | `code_learner.ensure_overview_docs` |
-| 2 | understand — 问题理解 | `orchestrator._understand_problem` (LLM) |
-| 3 | classify — 任务分类 | `problem_classifier.classify` |
-| 4 | parse — 数据解析 | `parsers/case_loader.load_case_data` |
-| 5 | detect_window — 窗口检测 | `test_window_detector.detect` |
-| 6 | analyze — 帧级分析 | `frame_analyzer.extract_evidence` |
-| 7 | conditions — 条件提取 | `condition_extractor.extract` (LLM) |
-| 8 | tpe — 时序模式引擎 | `tpe.TemporalPatternEngine.run` |
-| 9 | probe — 变量探测 | `variable_query_planner` + `data_probe` (LLM) |
-| 10 | suppression — 抑制检查 | `orchestrator._check_suppression_signals` |
-| 11 | output_signals — 输出信号 | `orchestrator._analyze_output_signals` |
-| 12 | params — 参数敏感性 | `parameter_analyzer` (仅 tune/verify) |
-| 13 | diagnose — 专家面板 | `expert_panel.run_panel` (LLM, 3 轮) |
-| 14 | report + visualize | `visualizer.build_report` → HTML |
-| 15 | memory update + done | `memory_system` L1-L5 写入 |
+| 1 | init — source_docs / CodeGraph 保障 | `orchestrator._ensure_source_docs` |
+| 2 | classify — 理解 + 分类 | `orchestrator._understand_problem` + `problem_classifier.classify` |
+| 3 | extract — 数据解析 + 窗口检测 | `case_loader.load_case_data` + `test_window_detector.detect` |
+| 4 | evidence — 帧证据 + 条件 + TPE + probe | `frame_analyzer` / `condition_extractor` / `tpe` / `data_probe` |
+| 5 | signals — 抑制/输出/参数 | `_check_suppression_signals` / `_analyze_output_signals` / `parameter_analyzer` |
+| 6 | diagnose — 专家面板 | `expert_panel.run_panel` (LLM, 3 轮) |
+| 7 | fix — 修复建议 | `code_fix_engine` |
+| 8 | deliver — 报告/可视化/记忆/Bundle | `visualizer` + `memory_system` + `DiagnosisBundle` |
 
 ## 目录结构与文档导航
 
@@ -37,12 +32,13 @@ radarAnalyze/
   cli.py                  # 统一 CLI 入口
   config.yaml             # 模型/路径/功能/学习 配置
   ai/                     # AI 分析模块 → 详见 ai/AGENTS.md
+  core/                   # 身份/材料/诊断包模型 → 详见 core/AGENTS.md
   parsers/                # 数据解析层  → 详见 parsers/AGENTS.md
   memory/                 # 记忆系统    → 详见 memory/AGENTS.md
   source_docs/            # 缓存知识    → 详见 source_docs/AGENTS.md
   cases/                  # 案例数据（.bag/.blf + 报告产物）
   scripts/                # 冒烟测试脚本
-  tools/                  # 辅助工具（render_report, run_tpe_smoke）
+  tools/                  # 辅助工具 → 详见 tools/AGENTS.md
   tests/                  # 测试（test_temporal_pattern_engine）
   IMPLEMENTATION.md       # 完整实现文档（归档/全文搜索用）
 ```
@@ -65,6 +61,7 @@ radarAnalyze/
 | data_probe | orchestrator (probe step) | ProbeResult dict |
 | expert_panel | orchestrator (diagnose step) | panel_result dict |
 | parameter_analyzer | orchestrator (params, tune/verify) | SensitivityReport, WhatIfEntry |
+| core.materials | orchestrator (diagnose, bundle) | material summary, requirement_trace |
 | context_budget | orchestrator (panel_prompt) | ContextBudget + compute_budget() → dynamic budget |
 | visualizer | orchestrator (visualize step) | VisualizerResult |
 | memory_system | orchestrator, auto_dream, data_query_engine | L1-L6 读写 |

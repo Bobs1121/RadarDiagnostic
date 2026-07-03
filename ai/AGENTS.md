@@ -8,7 +8,7 @@
 
 | 文件 | 定位 | AI 调用 |
 |------|------|---------|
-| `orchestrator.py` | 诊断管线总编排 (15+ 步) | complex × 1, chat × 2 |
+| `orchestrator.py` | 诊断管线总编排 (8 步)，含 IdentityContext / 材料摘要注入 | complex × 1, chat × 2 |
 | `frame_analyzer.py` | 帧级证据提取 (状态跳变/警告时间线/目标速度) | 无 |
 | `test_window_detector.py` | 纯规则窗口检测 | 无 |
 | `temporal_analyzer.py` | 信号时间线 → 边/段/统计/模式标签 | 无 |
@@ -37,34 +37,27 @@
 
 ```
 class Orchestrator:
-    def __init__(self, config: dict, project_root: Path)          # 69-77
+    def __init__(self, config: dict, project_root: Path)
     def run_diagnosis(self, case_dir, problem, expected,
-                      on_status=None) -> str                      # 79-85
+                      on_status=None) -> str
 ```
 
-成员: `self.config`, `self.project_root`, `self.router` (ModelRouter), `self.memory` (MemorySystem 延迟导入), `self._last_tpe_result`
+成员: `self.config`, `self.project_root`, `self.identity` (`IdentityContext`), `self.router` (ModelRouter), `self.memory`, `self._last_tpe_result`。
+
+`IdentityContext` 由 `_resolve_identity_context(config, project_root)` 生成，集中保存 `variant_id`、`project_key`、`package_profile_id`、`snapshot_id`、`source_docs_dir`、`memory_dir` 等元数据。它不迁移目录，只统一 Orchestrator 内部读取方式；legacy `project_key` 仍兼容。
 
 ### run_diagnosis 管线步骤
 
 | Step | status key | 动作 | 输出 |
 |------|-----------|------|------|
-| 1 | `init` | `_ensure_source_docs` → CodeLearner + signal_mapping | source_docs 文件 |
-| 2 | `understand` | `_understand_problem` (LLM complex) | `func_info` dict |
-| 3 | `classify` | ProblemClassifier.classify | `classification`, 可能覆盖 func_name |
-| 4 | `parse` | case_loader.load_case_data | store, bag_meta, blf_meta, sync |
-| 5 | `detect_window` | TestWindowDetector.detect | `windows` list |
-| 6 | `analyze` | FrameAnalyzer.extract_evidence | `evidence` dict, `frame_analysis` str |
-| 7 | `conditions` | ConditionExtractor.extract (LLM) | `conditions` dict |
-| 8 | `tpe` | TemporalPatternEngine.run | tpe_text, tpe_report |
-| 9 | `probe` | VariableQueryPlanner + DataProbe (LLM) | probe_section str |
-| 10 | `suppression` | `_check_suppression_signals` | suppression_text |
-| 11 | `output_signals` | `_analyze_output_signals` | output_signal_text |
-| 12 | — | `_load_threshold_reference` | threshold_ref (≤4000 chars) |
-| 13 | `params` | parameter_analyzer (仅 tune/verify) | param_section_md |
-| 14 | `diagnose` / `panel_prompt` | ExpertPanel.run_panel (LLM 3 轮) | panel_result dict |
-| 15 | `report` | `_save_report` + `_save_expert_appendix` | report.md, expert_opinions.md |
-| 16 | `visualize` | build_html_report | report.html |
-| 17 | `done` | `_update_memories` + complete_session | memory 写入 |
+| 1 | `init` | `_ensure_source_docs` + CodeGraph/source docs | source_docs / codegraph |
+| 2 | `classify` | `_understand_problem` + ProblemClassifier | `func_info`, `classification` |
+| 3 | `extract` | `case_loader.load_case_data` + TestWindowDetector | store, meta, windows |
+| 4 | `evidence` | FrameAnalyzer + conditions + TPE + probe | evidence, conditions, TPE/probe sections |
+| 5 | `signals` | suppression/output signals + params for tune/verify | signal sections, param report |
+| 6 | `diagnose` | ContextBudget + ExpertPanel | panel_result dict |
+| 7 | `fix` | CodeFixEngine best-effort diff suggestion | fix_report_md |
+| 8 | `deliver` | report + visualize + memory + DiagnosisBundle | report.md, report.html, bundle |
 
 ### 关键数据结构
 
@@ -90,16 +83,19 @@ class Orchestrator:
 - methodology, key_facts: priority=100
 - tpe: priority=95, constants: priority=94, probe: priority=93, suppression: priority=92
 - output, windows: priority=90, transitions: priority=85, conditions: priority=80
-- threshold: priority=75, codegraph: priority=72, semantics: priority=73
+- threshold: priority=75, materials: priority=74, codegraph: priority=72, semantics: priority=73
 - params: priority=70, timeline: priority=60, frame_anal: priority=55, evidence: priority=55, data_summary: priority=40
+
+### 材料摘要注入
+
+`core.materials.render_material_summary(project_root, variant_id, ...)` 生成确定性、限长的材料/结构化需求摘要。空 registry 只返回计数，`prompt_text=""`，不会污染专家 prompt；存在材料或需求时以 `materials` 块加入 ContextBudget，并记录 memory step `materials`。
 
 ### Review 关注点
 
-1. `func_name` 双源融合: _understand_problem + ProblemClassifier，覆盖阈值在 128-131
-2. `tpe_section` 因 evidence.pop 顺序通常为空，TPE 叙述在 KEY_FACTS 中
-3. `_run_tpe`/`_check_suppression_signals`/`_analyze_output_signals` 签名含 windows 但**未使用**
-4. `_update_memories` 静默失败 (except: pass)
-5. `store.close()` 未校验 store 非空
+1. `func_name` 双源融合: _understand_problem + ProblemClassifier，需保持 override 逻辑可解释
+2. `IdentityContext` 是内部薄层，不应顺手迁移 `memory/` 或 `source_docs/` 目录结构
+3. 材料摘要必须限长、确定性、无 LLM 依赖；空 registry 不应进入专家 prompt
+4. `_update_memories` / deliver 后处理是 best-effort，不得中断主诊断
 
 ---
 

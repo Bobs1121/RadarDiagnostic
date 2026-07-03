@@ -200,7 +200,7 @@ class RuleConditionExtractor:
         Uses keyword matching on function names, variable names,
         and comment headers.
         """
-        func_lines: set[int] = []
+        func_lines: set[int] = set()
         n = len(lines)
 
         # Join all content for context

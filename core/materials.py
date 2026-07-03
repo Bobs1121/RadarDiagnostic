@@ -439,3 +439,91 @@ class StructuredRequirementSet:
         if req_path.exists():
             return cls.load(req_path)
         return cls(variant_id=variant_id)
+
+
+def render_material_summary(
+    project_root: Path,
+    variant_id: str,
+    *,
+    max_materials: int = 8,
+    max_requirements: int = 12,
+    max_chars: int = 4000,
+) -> dict[str, Any]:
+    """Render a bounded, deterministic material summary for diagnosis context.
+
+    Empty registries are represented in metadata but return an empty
+    ``prompt_text`` so expert prompts do not get noisy placeholder sections.
+    """
+    registry = MaterialRegistry.for_variant(project_root, variant_id)
+    req_set = StructuredRequirementSet.for_variant(project_root, variant_id)
+
+    materials = sorted(
+        registry.list_by_variant(variant_id),
+        key=lambda m: (m.category != MaterialCategory.AUTHORITATIVE.value, m.title, m.material_id),
+    )
+    authoritative = [m for m in materials if m.category == MaterialCategory.AUTHORITATIVE.value]
+    requirements = sorted(
+        req_set.requirements.values(),
+        key=lambda r: (
+            {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(r.priority, 4),
+            r.scope,
+            r.requirement_id,
+        ),
+    )
+
+    result: dict[str, Any] = {
+        "variant_id": variant_id,
+        "material_count": len(materials),
+        "authoritative_count": len(authoritative),
+        "requirement_count": len(requirements),
+        "critical_requirement_count": len([r for r in requirements if r.priority == "critical"]),
+        "material_ids": [m.material_id for m in materials],
+        "requirement_ids": [r.requirement_id for r in requirements],
+        "prompt_text": "",
+    }
+
+    if not materials and not requirements:
+        return result
+
+    lines = [
+        "## ★★ 权威材料摘要(Material Registry) ★★",
+        f"- Variant: `{variant_id}`",
+        f"- Materials: {len(materials)} total, {len(authoritative)} authoritative",
+        f"- Structured requirements: {len(requirements)} total",
+    ]
+
+    if materials:
+        lines.append("\n### Registered Materials")
+        for mat in materials[:max_materials]:
+            tags = f" tags={','.join(mat.tags)}" if mat.tags else ""
+            hash_preview = mat.hash[:12] if mat.hash else "no-hash"
+            lines.append(
+                f"- `{mat.material_id}` {mat.title or Path(mat.source_path).name} "
+                f"({mat.material_type}, {mat.category}, v{mat.version}, hash={hash_preview}){tags}"
+            )
+        if len(materials) > max_materials:
+            lines.append(f"- ... {len(materials) - max_materials} more material(s)")
+
+    if requirements:
+        lines.append("\n### Structured Requirements")
+        for req in requirements[:max_requirements]:
+            linked = []
+            if req.linked_signals:
+                linked.append("signals=" + ",".join(req.linked_signals[:4]))
+            if req.linked_functions:
+                linked.append("functions=" + ",".join(req.linked_functions[:4]))
+            suffix = f" ({'; '.join(linked)})" if linked else ""
+            statement = req.statement.replace("\n", " ").strip()
+            if len(statement) > 180:
+                statement = statement[:177] + "..."
+            lines.append(
+                f"- `{req.requirement_id}` [{req.priority}] {req.scope}: {statement}{suffix}"
+            )
+        if len(requirements) > max_requirements:
+            lines.append(f"- ... {len(requirements) - max_requirements} more requirement(s)")
+
+    text = "\n".join(lines)
+    if len(text) > max_chars:
+        text = text[: max_chars - 18] + "\n... [truncated]"
+    result["prompt_text"] = text
+    return result

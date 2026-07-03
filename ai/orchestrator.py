@@ -9,6 +9,7 @@ V2: Window detection + condition extraction pipeline.
 import json
 import datetime
 import re as _re
+from dataclasses import dataclass
 from pathlib import Path
 from .model_router import ModelRouter
 from .code_learner import CodeLearner
@@ -62,6 +63,87 @@ ORCHESTRATOR_SYSTEM = """你是角雷达(Corner Radar)问题分析系统的任�
 输出使用中文，技术术语保留英文。"""
 
 
+@dataclass(frozen=True)
+class IdentityContext:
+    """Resolved identity metadata used by the diagnosis pipeline.
+
+    This is intentionally thin: it centralizes current variant/project paths
+    without changing the public CLI or migrating existing directories.
+    """
+
+    variant_id: str = ""
+    project_key: str = ""
+    package_profile_id: str = ""
+    snapshot_id: str = ""
+    display_name: str = ""
+    source_code: str = ""
+    source_docs_dir: Path | None = None
+    memory_dir: Path | None = None
+
+
+def _resolve_identity_context(config: dict, project_root: Path) -> IdentityContext:
+    """Resolve variant/package/project metadata with legacy fallbacks."""
+    from config import (
+        get_package_profile,
+        get_project,
+        get_variant,
+        resolve_memory_dir,
+        resolve_source_docs_dir,
+        resolve_variant_id,
+    )
+
+    ident = config.get("identity") or {}
+    variant_id = ident.get("variant_id") or ""
+    project_key = ident.get("project_key") or ""
+    package_profile_id = ident.get("package_profile_id") or ""
+    snapshot_id = ident.get("snapshot_id") or ""
+    display_name = ""
+    source_code = ""
+
+    try:
+        variant_id = resolve_variant_id(config, variant_id or project_key or None)
+        variant, codebase, _ = get_variant(config, variant_id)
+        project_key = project_key or getattr(variant, "compat_project_key", "") or ""
+        display_name = getattr(variant, "display_name", "") or variant_id
+        source_code = str(getattr(codebase, "root_path", "") or "")
+        if not package_profile_id:
+            package_profile_id = getattr(variant, "default_package_profile", "") or ""
+        if package_profile_id:
+            try:
+                package_profile = get_package_profile(config, package_profile_id)
+                package_profile_id = getattr(
+                    package_profile, "package_profile_id", package_profile_id
+                )
+            except Exception:
+                pass
+    except Exception:
+        project_cfg = config.get("project") or {}
+        if not project_key:
+            project_key = (
+                project_cfg.get("_project_key")
+                or ident.get("project_key")
+                or config.get("default_project", "")
+            )
+        try:
+            project_cfg = get_project(config, project_key)
+        except Exception:
+            pass
+        variant_id = variant_id or project_cfg.get("_variant_id", "")
+        display_name = project_cfg.get("display_name", "") or project_key
+        source_code = project_cfg.get("source_code", "")
+
+    return IdentityContext(
+        variant_id=variant_id,
+        project_key=project_key,
+        package_profile_id=package_profile_id,
+        snapshot_id=snapshot_id,
+        display_name=display_name,
+        source_code=source_code,
+        source_docs_dir=resolve_source_docs_dir(config, project_root, variant_id=variant_id or None),
+        memory_dir=resolve_memory_dir(config, project_root, variant_id=variant_id or None),
+    )
+
+
 class Orchestrator:
     """
     The AI orchestrator that automates the full diagnosis pipeline.
@@ -71,11 +153,14 @@ class Orchestrator:
     def __init__(self, config: dict, project_root: Path):
         self.config = config
         self.project_root = project_root
+        self.identity = _resolve_identity_context(config, project_root)
         self.router = ModelRouter(config)
 
         from memory.memory_system import MemorySystem
-        from config import resolve_memory_dir
-        self.memory = MemorySystem(project_root, memory_dir=resolve_memory_dir(config, project_root))
+        self.memory = MemorySystem(
+            project_root,
+            memory_dir=self.identity.memory_dir or (project_root / "memory"),
+        )
 
         self._last_tpe_result = None
 
@@ -121,13 +206,14 @@ class Orchestrator:
     def codegraph_db_path(self) -> Path:
         """Path to the per-project CodeGraph database."""
         from config import resolve_codegraph_db
-        return resolve_codegraph_db(self.config, self.project_root)
+        return resolve_codegraph_db(
+            self.config, self.project_root, variant_id=self.identity.variant_id or None
+        )
 
     @property
     def source_docs_dir(self) -> Path:
         """Path to the per-project source_docs directory."""
-        from config import resolve_source_docs_dir
-        return resolve_source_docs_dir(self.config, self.project_root)
+        return self.identity.source_docs_dir or (self.project_root / "source_docs")
 
     def run_diagnosis(
         self,
@@ -309,8 +395,25 @@ class Orchestrator:
             conditions_future = executor.submit(_extract_conditions)
             tpe_future = executor.submit(_run_tpe_parallel)
 
-            evidence_results["conditions"] = conditions_future.result()
-            evidence_results["tpe"] = tpe_future.result()
+            try:
+                evidence_results["conditions"] = conditions_future.result()
+            except Exception as e:
+                status("evidence", f"Conditions extraction failed: {e}")
+                logging.getLogger(__name__).error("Conditions extraction failed", exc_info=True)
+                evidence_results["conditions"] = {
+                    "conditions": {"error": f"Failed to extract conditions: {e}"},
+                    "conditions_text": f"Error extracting conditions: {e}"
+                }
+
+            try:
+                evidence_results["tpe"] = tpe_future.result()
+            except Exception as e:
+                status("evidence", f"TPE execution failed: {e}")
+                logging.getLogger(__name__).error("TPE execution failed", exc_info=True)
+                evidence_results["tpe"] = {
+                    "tpe_text": f"Error running Temporal Pattern Engine: {e}",
+                    "tpe_report": {"error": f"Failed to run TPE: {e}"}
+                }
 
         # Log parallel results
         conditions = evidence_results["conditions"]["conditions"]
@@ -494,6 +597,23 @@ TPE 证据段与 CodeGraph 结构数据交叉验证。
         # Build data summary
         memory_context = self.memory.build_context_for_diagnosis(func_name, problem, case_dir)
         data_summary = self._build_data_summary(store, bag_meta, blf_meta, sync)
+        material_section = ""
+        material_summary = {}
+        if self.identity.variant_id:
+            try:
+                from core.materials import render_material_summary
+                material_summary = render_material_summary(
+                    self.project_root,
+                    self.identity.variant_id,
+                    max_chars=4000,
+                )
+                material_section = material_summary.get("prompt_text", "")
+                if material_summary:
+                    self.memory.log_step(session_id, "materials", {
+                        k: v for k, v in material_summary.items() if k != "prompt_text"
+                    })
+            except Exception as exc:
+                status("diagnose", f"Material summary skipped: {exc}")
 
         # Pop evidence components
         key_facts = evidence.pop("KEY_FACTS", "")
@@ -651,6 +771,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         budget.add("transitions",   f"## 状态跳变\n{transitions_text}", priority=85, min_chars=600)
         budget.add("conditions",    f"## ★ 条件检查表(代码提取) ★\n{conditions_text}", priority=80, min_chars=1500)
         budget.add("threshold",     threshold_section, priority=75,  min_chars=1000)
+        budget.add("materials",     material_section,  priority=74,  min_chars=700)
         budget.add("params",        params_section,    priority=70,  min_chars=1000)
         budget.add("codegraph",     codegraph_section, priority=72,  min_chars=800)
         budget.add("semantics",     semantics_section, priority=73,  min_chars=600)
@@ -729,7 +850,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             param_report_md=param_section_md,
             whatif_md=whatif_md,
             fix_report_md=fix_report_md,
-            snapshot_id=self.config.get("identity", {}).get("snapshot_id", ""),
+            snapshot_id=self.identity.snapshot_id,
         )
 
         expert_appendix_path = case_dir / "expert_opinions.md"
@@ -1973,9 +2094,12 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 | 预期结果 | {expected} |
 | 分析方法 | {method_label} |
 """
-        variant_id = self.config.get("identity", {}).get("variant_id", "")
-        if variant_id:
-            header += f"| Variant | `{variant_id}` |\n"
+        if self.identity.variant_id:
+            header += f"| Variant | `{self.identity.variant_id}` |\n"
+        if self.identity.package_profile_id:
+            header += f"| Package | `{self.identity.package_profile_id}` |\n"
+        if self.identity.project_key:
+            header += f"| Project | `{self.identity.project_key}` |\n"
         if snapshot_id:
             header += f"| 快照ID | `{snapshot_id}` |\n"
         if windows:
@@ -2248,8 +2372,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         from core.diagnosis_bundle import DiagnosisBundle, Evidence, CodeLocation
         from core.materials import MaterialRegistry, StructuredRequirementSet
 
-        variant_id = self.config.get("identity", {}).get("variant_id", "")
-        snapshot_id = self.config.get("identity", {}).get("snapshot_id", "")
+        variant_id = self.identity.variant_id
+        snapshot_id = self.identity.snapshot_id
         case_id = case_dir.name
 
         bundle = DiagnosisBundle.for_case(
@@ -2346,6 +2470,15 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         bundle.metadata.update({
             "task_type": task_type,
             "function": func_name,
+            "identity": {
+                "variant_id": self.identity.variant_id,
+                "project_key": self.identity.project_key,
+                "package_profile_id": self.identity.package_profile_id,
+                "snapshot_id": self.identity.snapshot_id,
+                "display_name": self.identity.display_name,
+                "source_docs_dir": str(self.identity.source_docs_dir or ""),
+                "memory_dir": str(self.identity.memory_dir or ""),
+            },
             "windows": [{"start": w.t_start, "end": w.t_end, "trigger": w.trigger_reason}
                         for w in windows] if windows else [],
             "bag_meta": bag_meta,

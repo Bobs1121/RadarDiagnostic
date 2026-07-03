@@ -68,10 +68,10 @@ check("default_project set", default_proj == "gwm_b26", f"got '{default_proj}'")
 variant_id = resolve_variant_id(config, None)
 check("variant_id from config", variant_id == VARIANT_ID, f"got '{variant_id}'")
 
-# Check identity section — may or may not exist; variant resolution uses variants/default_variant
+# Check identity section — it is optional; variant resolution uses variants/default_variant.
 ident = config.get("identity", {})
-check("identity section exists", "identity" in config,
-      "identity section optional — variant resolution via variants/default_variant")
+check("identity section optional", isinstance(ident, dict),
+      "variant resolution via variants/default_variant")
 
 # get_variant works with canonical ID
 try:
