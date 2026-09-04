@@ -64,11 +64,11 @@ HTML 首屏顺序：总结结论 → 报警条件表 → 报警帧数据表 → 
 
 当前本地分支：codex/ros-debug-autonomous
 
-当前 HEAD：138901fab0bfef0fa1ff73ebf87f8798de8b00ae
+首个产品提交：`22ad587`（`feat: add pi-driven CR60 diagnostic platform`）
 
 远程：origin https://github.com/Bobs1121/RadarDiagnostic.git
 
-本次 git ls-remote 只确认了 origin/main，没有确认目标分支已经存在；本轮没有 commit 和 push。
+远端分支：`origin/codex/ros-debug-autonomous`，已成功创建并推送；本次没有覆盖 `main`，也没有强推。
 
 工作区混合了多轮开发遗留的产品代码、文档、测试、case 报告、SQLite/WAL、outputs、实验脚本和用户修改。接手者禁止直接执行：
 
@@ -286,14 +286,14 @@ outputs 删除了 26 个无引用或已被替代的顶层重复目录、11 个�
 
 可清理文件必须同时满足：是临时生成物、不是用户输入/产品代码/正式文档、结论已经迁移到文档、并且有删除清单。本轮已删除 _capabilities_check.json、.playwright-cli/、旧 V2/V3 文档和一批重复 outputs；仍保留的大型历史 evidence 暂不删除，SQLite *.db-shm/*.db-wal、scripts/_*.py 和一次性扫描脚本列为后续独立清理项。
 
-建议提交：
+本轮已完成：
 
-feat(product): complete Pi-driven CR60 diagnostic capability platform
-docs(handoff): record productization audit and next execution plan
+- `22ad587 feat: add pi-driven CR60 diagnostic platform`
+- 已推送至 `origin/codex/ros-debug-autonomous`。
 
-目标分支尚不存在时，用户已授权的后续执行者可以：
+后续若有新的变更，接手者应先复核当前工作区，再按需创建新的提交：
 
-git push -u origin HEAD:codex/ros-debug-autonomous
+git push origin codex/ros-debug-autonomous
 
 不得强推、不得覆盖 main、不得提交凭据或大型数据。
 

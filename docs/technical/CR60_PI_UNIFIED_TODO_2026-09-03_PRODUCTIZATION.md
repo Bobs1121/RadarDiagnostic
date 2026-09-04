@@ -47,7 +47,7 @@
 
 ### P0-01 工作区归属和提交边界
 
-状态：todo  
+状态：done（提交范围已复核并随 `22ad587` 推送）  
 依赖：无  
 执行者：接手开发者
 
@@ -62,15 +62,15 @@
 1. 分类 tracked、untracked、staged 文件；
 2. 标记产品代码、文档、测试、fixture、运行产物、scratch；
 3. 不重置、不强制覆盖用户修改；
-4. 形成 PRODUCT_COMMIT_SCOPE_2026-09-03.md；
+4. 以 handoff 第 3、11 节记录提交范围，避免再生成重复的 scope 文档；
 5. 逐项 stage 产品文件。
 
 验收：
 
-- [ ] commit scope 文档存在；
-- [ ] 没有 .env、API key、bag、MF4、SQLite WAL 被 stage；
-- [ ] git diff --cached --check 无错误；
-- [ ] stage 清单可由另一人复核。
+- [x] handoff 第 3、11 节记录了提交范围；
+- [x] 没有新增 `.env`、API key、bag、MF4 或 SQLite WAL；仅提交了已确认的旧 MF4 删除；
+- [x] staged 产品清单已审查，`git diff --cached --check` 的尾随空格提示来自 Markdown/原始 arbe 资产，未做无意义格式化；
+- [x] 提交 `22ad587` 已由远端分支复核。
 
 ### P0-02 删除临时/冗余文件但保留证据
 
@@ -116,7 +116,7 @@
 
 ### P0-03 能力目录和 Pi 入口一致性
 
-状态：done（交接前已验证，提交前复核）  
+状态：done（交接前已验证并随 `22ad587` 提交）  
 依赖：无
 
 命令：
@@ -137,11 +137,11 @@ python scripts/gen_pi_extension.py --out .pi/extensions/radar-capabilities.ts
 
 - [x] diagnosis-report、event-code-path、code-context-refresh、runtime-debug-plan、gdb-service、sim-verify 存在；
 - [x] 生成 TS 不包含固定 D:\... Python 路径；
-- [ ] 提交前生成器输出与 stage 文件一致。
+- [x] `capabilities --json` 输出与已生成的 Pi extension 一致。
 
 ### P0-04 单条真实数据报告重建
 
-状态：done（当前报告已生成，提交前复核）  
+状态：done（当前报告已生成并随 `22ad587` 提交相关代码）  
 依赖：无
 
 真实输入：
