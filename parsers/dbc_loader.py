@@ -128,3 +128,40 @@ class DbcLoader:
                 "signal_names": [s.name for s in msg.signals],
             })
         return result
+
+    def get_signal_choices(self, can_id: int, signal_name: str) -> Optional[dict]:
+        """Return the DBC value table (VAL_) for a signal, if defined.
+
+        Keys are raw ints and values are plain strings, so the result is
+        JSON-serializable; None is returned when the signal or message is
+        unknown or the DBC declares no choices for it.
+        """
+        msg = self._id_to_msg.get(can_id)
+        if not msg:
+            return None
+        for sig in msg.signals:
+            if sig.name == signal_name:
+                if sig.choices:
+                    plain = {}
+                    for k, v in sig.choices.items():
+                        # NamedSignalValue.__str__ yields the label text
+                        # (e.g. "Invalid"); its .value is the raw code.
+                        try:
+                            plain[int(k)] = str(v)
+                        except (TypeError, ValueError):
+                            plain[str(k)] = str(v)
+                    return plain
+                return None
+        return None
+
+    def find_message_by_signal(self, signal_name: str) -> Optional[tuple[int, str]]:
+        """Locate (can_id, message_name) for a signal across all loaded DBCs.
+
+        First-loaded DBC wins for conflicting IDs (same rule as __init__),
+        so the result is deterministic for a given DBC set.
+        """
+        for can_id, msg in sorted(self._id_to_msg.items()):
+            for sig in msg.signals:
+                if sig.name == signal_name:
+                    return can_id, msg.name
+        return None

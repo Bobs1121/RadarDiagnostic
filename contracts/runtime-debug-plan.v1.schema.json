@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/runtime-debug-plan.v1.schema.json",
+  "title": "CR60 runtime debug plan v1",
+  "description": "Source/data-bound, non-executing replay and GDB readiness plan.",
+  "type": "object",
+  "required": ["schema_version", "status", "execution_status", "event", "replay", "target", "breakpoints", "gdb_commands", "capture_fields", "readiness"],
+  "properties": {
+    "schema_version": {"const": "runtime-debug-plan.v1"},
+    "status": {"enum": ["ready", "partial", "blocked", "failed"]},
+    "execution_status": {"enum": ["ready", "approval_required", "blocked"]},
+    "plan_fingerprint": {"type": "string"},
+    "event": {"type": "object", "additionalProperties": true},
+    "replay": {"type": "object", "additionalProperties": true},
+    "radar": {"type": "object", "additionalProperties": true},
+    "target": {"type": "object", "additionalProperties": true},
+    "source_identity": {"type": "object", "additionalProperties": true},
+    "binary_identity": {"type": "object", "additionalProperties": true},
+    "process_target": {"type": "object", "additionalProperties": true},
+    "breakpoints": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "gdb_commands": {"type": "array", "items": {"type": "string"}},
+    "gdb_command_validation": {"type": "object", "additionalProperties": true},
+    "vscode_handoff": {"type": "object", "additionalProperties": true},
+    "capture_fields": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "readiness": {
+      "type": "object",
+      "required": ["status", "blocking_gates", "warning_gates", "gates"],
+      "properties": {
+        "status": {"enum": ["ready", "partial", "blocked"]},
+        "blocking_gates": {"type": "array", "items": {"type": "string"}},
+        "warning_gates": {"type": "array", "items": {"type": "string"}},
+        "gates": {"type": "array", "items": {"type": "object", "additionalProperties": true}}
+      },
+      "additionalProperties": true
+    },
+    "permissions": {"type": "object", "additionalProperties": true},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

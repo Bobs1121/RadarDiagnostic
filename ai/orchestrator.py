@@ -13,19 +13,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from .model_router import ModelRouter
 from .code_learner import CodeLearner
-from .frame_analyzer import FrameAnalyzer
+from engines.frame_analyzer import FrameAnalyzer
 from .expert_panel_langgraph import ExpertPanel
-from .test_window_detector import TestWindowDetector, format_windows
+from engines.test_window_detector import TestWindowDetector, format_windows
 from .condition_extractor import ConditionExtractor, format_conditions
 from .problem_classifier import ProblemClassifier, ClassificationResult
-from .parameter_analyzer import (
+from engines.parameter_analyzer import (
     analyze_sensitivity, render_sensitivity_markdown,
     render_what_if_markdown, what_if,
 )
 from .visualizer import build_report as build_html_report
 from .utils import parse_json_from_llm, ALL_FUNCTIONS
 from .context_budget import ContextBudget, compute_budget
-from .data_probe import DataProbe
+from engines.data_probe import DataProbe
 from .variable_query_planner import VariableQueryPlanner, render_probe_results_for_prompt
 from .fallback import safe_llm_call, fallback_understand, fallback_expert_panel
 from .observability import StepLogger, TokenTracker, ObservableStatus
@@ -45,6 +45,52 @@ def _signal_overlap_ok(hint: str, candidate: str, min_ratio: float = 0.45) -> bo
     overlap = len(h_tok & c_tok)
     return overlap / max(len(h_tok), len(c_tok)) >= min_ratio
 
+
+_REPORT_BOLD_SECTION_LINE_RE = _re.compile(r"^[ \t]*\*\*(?P<title>.+?)\*\*[ \t]*$")
+_REPORT_SECTION_HEADING_PREFIXES = (
+    "根因",
+    "时序耦合",
+    "条件检查",
+    "关键证据链",
+    "数据链路",
+    "测试窗口",
+    "场景差异分析",
+    "关键链路信号审计",
+    "修复建议",
+    "置信度",
+)
+
+
+def _normalize_report_section_headings(text: str) -> str:
+    """Promote common bold-only panel section labels into Markdown headings."""
+    if not text:
+        return text
+
+    normalized_lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("###"):
+            normalized_lines.append(line)
+            continue
+
+        match = _REPORT_BOLD_SECTION_LINE_RE.match(line)
+        if not match:
+            normalized_lines.append(line)
+            continue
+
+        title = match.group("title").strip()
+        if title.startswith(_REPORT_SECTION_HEADING_PREFIXES):
+            normalized_lines.append(f"### {title}")
+            continue
+
+        normalized_lines.append(line)
+
+    normalized = "\n".join(normalized_lines)
+    if text.endswith("\n"):
+        normalized += "\n"
+    return normalized
+
+
 ORCHESTRATOR_SYSTEM = """你是角雷达(Corner Radar)问题分析系统的任务调度器。
 你的职责是理解用户报告的问题，规划分析步骤，调度子任务，并整合最终诊断报告。
 
@@ -55,6 +101,15 @@ ORCHESTRATOR_SYSTEM = """你是角雷达(Corner Radar)问题分析系统的任�
 - 两者共享全局状态变量(*SystemState), 调度顺序决定最终值
 - 左右雷达从属: 右雷达(RR/FR)为公CAN出口, 左雷达(RL/FL)经私CAN向右侧传送
 - 信号链路: 公CAN→RteComMapping→内部变量→算法核心/平台状态→输出计算→输出
+
+┌──── project_intake variants ───────────────────────────────────┐
+│ 1. gen6 (BYD/GWM CR60Light/S6H):  DBC-based CAN analysis        │
+│    源码: coem/<Customer>/components/AswPerception/func/adasFunc  │
+│ 2. gen5 (pl-xpeng RCC1010):       DDDY RPC-based embedded code   │
+│    源码: reco_fw/component/{sit,sit,fct,per}/...                │
+│    架构: Flux组件模型 + DDDY RPC + PDM持久化                      │
+│    信号: MF4(雷达原始输出+PublicCAN) + DBC(CAN信号)               │
+└────────────────────────────────────────────────────────────────┘
 
 任务复杂度判断规则:
 - simple(交给Gemma4): 单信号查询、数据格式化、简单摘要、变量值查找
@@ -160,6 +215,7 @@ class Orchestrator:
         self.memory = MemorySystem(
             project_root,
             memory_dir=self.identity.memory_dir or (project_root / "memory"),
+            config=config,
         )
 
         self._last_tpe_result = None
@@ -173,7 +229,24 @@ class Orchestrator:
         self.signal_mapping: dict = {}
         self.variable_chains: dict = {}
         self.output_signal_mapping: dict = {}
+        self._case_dbc = None  # DBC loader from the current case (Step-5 signal audit)
         self._init_signal_maps()
+
+    def _resolve_signal_mapping_source(self) -> str:
+        """定位信号映射源文件（RteComMapping.c）的相对路径。
+
+        六代不同项目（GWM_B26 / BYD_SC6H 的 ``ASW_ComMapping``）的
+        RteComMapping 位于不同目录。优先从 ``paths.key_source_files``
+        （CLI 按 variant 注入的正确值）中挑选含 ``RteComMapping`` 的文件，
+        避免回退到只对 GWM_B26 有效的默认路径导致映射重建为空。
+        """
+        ksf = (self.config.get("paths") or {}).get("key_source_files") or []
+        for rel in ksf:
+            leaf = str(rel).replace("\\", "/")
+            if "/RteComMapping" in leaf or leaf.startswith("RteComMapping"):
+                return str(rel)
+        # Fallback to the engine default (works for GWM-style layouts).
+        return r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
 
     def _init_signal_maps(self) -> None:
         """Phase 15 (2.1.3): Load signal_mapping + variable_chains + output_mapping once.
@@ -183,17 +256,20 @@ class Orchestrator:
         loading if any of the pre-loaded maps are empty.
         """
         try:
-            from .signal_mapper import (
+            from engines.signal_mapper import (
                 extract_signal_mapping,
                 trace_variable_chains,
                 extract_output_signal_mapping,
             )
             source_root = Path(self.config["paths"]["source_code"])
             docs_dir = self.source_docs_dir
-            self.signal_mapping = extract_signal_mapping(source_root, docs_dir)
+            rte_file = self._resolve_signal_mapping_source()
+            self.signal_mapping = extract_signal_mapping(
+                source_root, docs_dir, rte_file=rte_file,
+            )
             self.variable_chains = trace_variable_chains(source_root, docs_dir)
             self.output_signal_mapping = extract_output_signal_mapping(
-                source_root, docs_dir,
+                source_root, docs_dir, rte_file=rte_file,
             )
         except Exception as exc:  # noqa: BLE001
             import logging
@@ -201,6 +277,17 @@ class Orchestrator:
                 "Phase 15 / 2.1.3: signal map pre-load failed (%s); "
                 "sub-methods will load on demand", exc,
             )
+
+    @property
+    def platform_id(self) -> str:
+        """Resolve platform_id from the current variant's codebase."""
+        try:
+            from config import get_variant
+            variant_id = self.identity.variant_id or ""
+            variant, _codebase, _platform = get_variant(self.config, variant_id)
+            return _codebase.platform_id or "gen6_c_radar"
+        except Exception:
+            return "gen6_c_radar"  # default fallback
 
     @property
     def codegraph_db_path(self) -> Path:
@@ -214,6 +301,41 @@ class Orchestrator:
     def source_docs_dir(self) -> Path:
         """Path to the per-project source_docs directory."""
         return self.identity.source_docs_dir or (self.project_root / "source_docs")
+
+    # ── Adapter loading (lazy, once per orchestrator) ──────────────────
+
+    _code_learner_adapter = None
+    _condition_extractor_adapter = None
+
+    def _get_code_learner_adapter(self):
+        """Return the platform CodeLearner adapter (lazy, cached)."""
+        if self._code_learner_adapter is not None:
+            return self._code_learner_adapter
+        try:
+            from ai.platform_adapters.factory import get_code_learner_adapter
+            pid = self.platform_id
+            source_root = Path(self.config["paths"]["source_code"])
+            self._code_learner_adapter = get_code_learner_adapter(
+                pid, source_root, self.config, self.project_root,
+            )
+        except Exception:
+            self._code_learner_adapter = None
+        return self._code_learner_adapter
+
+    def _get_condition_extractor_adapter(self):
+        """Return the platform ConditionExtractor adapter (lazy, cached)."""
+        if self._condition_extractor_adapter is not None:
+            return self._condition_extractor_adapter
+        try:
+            from ai.platform_adapters.factory import get_condition_extractor_adapter
+            pid = self.platform_id
+            source_root = Path(self.config["paths"]["source_code"])
+            self._condition_extractor_adapter = get_condition_extractor_adapter(
+                pid, source_root, self.config, self.project_root,
+            )
+        except Exception:
+            self._condition_extractor_adapter = None
+        return self._condition_extractor_adapter
 
     def run_diagnosis(
         self,
@@ -374,10 +496,31 @@ class Orchestrator:
         def _extract_conditions():
             status("evidence", f"Extracting {func_name} conditions from code...")
             cond_extractor = ConditionExtractor(self.router, self.project_root, self.config)
-            conditions = cond_extractor.extract(func_name)
-            conditions_text = format_conditions(conditions)
+            freshness = self.config.get("identity", {}).get("freshness", {})
+            force_refresh = bool(
+                freshness.get("code_changed")
+                or freshness.get("constants_changed")
+                or freshness.get("identity_changed")
+            )
+            conditions = cond_extractor.extract(func_name, force=force_refresh)
+            # Use adapter-format_conditions when available, else fallback to default
+            adapter = self._get_condition_extractor_adapter()
+            if adapter and hasattr(adapter, "format_conditions"):
+                conditions_text = adapter.format_conditions(conditions)
+            else:
+                conditions_text = format_conditions(conditions)
             if "error" not in conditions:
                 status("evidence", f"Conditions extracted (cached to source_docs/{func_name}_conditions.json)")
+                try:
+                    from core.knowledge_guard import publish_knowledge_categories
+
+                    publish_knowledge_categories(
+                        self.config,
+                        [f"conditions:{func_name.upper()}"],
+                        producer="diagnosis.conditions",
+                    )
+                except Exception as exc:
+                    status("evidence", f"Conditions freshness not published: {exc}")
             else:
                 status("evidence", f"Condition extraction: {conditions.get('error', '?')}")
             return {"conditions": conditions, "conditions_text": conditions_text}
@@ -475,6 +618,58 @@ class Orchestrator:
             except Exception as e:
                 status("evidence", f"Variable probe skipped: {e}")
 
+        # --- Deterministic investigation: join code conditions with data ---
+        # EngineeringInvestigator produces bounded ConditionCheck[] evidence
+        # WITHOUT an LLM — feeds the panel as advisory, traceable facts.
+        investigation_section = ""
+        investigation_checks = 0
+        try:
+            if store is not None:
+                from .investigation_engine import EngineeringInvestigator
+
+                inventory = store.get_signal_inventory() or []
+                signal_lookup: dict[str, dict] = {}
+                for item in inventory:
+                    msg = item.get("message_name", "")
+                    can_hex = item.get("can_id_hex", "")
+                    can_id = item.get("can_id", "")
+                    for sig in item.get("signals", []) or []:
+                        signal_lookup[str(sig)] = {
+                            "can_id": can_id,
+                            "can_id_hex": can_hex,
+                            "message_name": msg,
+                        }
+                plan = {
+                    "functions": [func_name],
+                    "code_symbols": list(func_info.get("key_variables", []) or []),
+                    "can_signals": list(classification.focus_signals or []),
+                    "query_type": "diagnosis",
+                    "need_code_analysis": True,
+                }
+                investigation = EngineeringInvestigator(
+                    self.config, self.project_root,
+                ).investigate(store, problem or "", plan, signal_lookup)
+                investigation_checks = len(investigation.condition_checks)
+                investigation_section = investigation.to_prompt_text(
+                    max_chars=int((self.config.get("ai", {}) or {}).get(
+                        "investigation_max_chars", 10000,
+                    )),
+                )
+                if investigation_checks:
+                    status(
+                        "evidence",
+                        f"Deterministic investigation: {investigation_checks} condition checks",
+                    )
+                    self.memory.log_step(session_id, "investigation", {
+                        "condition_checks": investigation_checks,
+                        "deterministic_conclusion": getattr(
+                            investigation, "deterministic_conclusion_available", False,
+                        ),
+                    })
+        except Exception as e:
+            status("evidence", f"Deterministic investigation skipped: {e}")
+            investigation_section = ""
+
         # ═══════════════════════════════════════════════════════════════════
         # Step 5: SIGNALS — suppression + output signals (deterministic)
         # ═══════════════════════════════════════════════════════════════════
@@ -505,6 +700,16 @@ class Orchestrator:
             if output_signal_text:
                 self.memory.log_step(session_id, "output_signal_analysis", {
                     "result_preview": output_signal_text[:500],
+                })
+
+        # Key-chain signal audit (enum validity + UI-mode echo contract)
+        signal_audit_text = ""
+        if store.get_can_ids():
+            status("signals", "Auditing key-chain signals (enum/contract)...")
+            signal_audit_text = self._run_signal_audit(store, status)
+            if signal_audit_text:
+                self.memory.log_step(session_id, "signal_audit", {
+                    "result_preview": signal_audit_text[:500],
                 })
 
         # Threshold reference
@@ -556,10 +761,23 @@ class Orchestrator:
         # Load CodeGraph context
         codegraph_section = ""
         semantics_section = ""
+        # Deterministic index products (codegraph/conditions) are rebuildable,
+        # so fail-open when there is no freshness baseline yet; only block when
+        # the baseline exists and says the code has drifted (stale index).
+        try:
+            from core.knowledge_guard import runtime_knowledge_decision
+            _freshness = (self.config.get("identity") or {}).get("freshness") or {}
+            _cg_decision = runtime_knowledge_decision(self.config, "codegraph")
+            if _freshness.get("previous_state_available"):
+                cg_allowed = bool(_cg_decision.allowed)
+            else:
+                cg_allowed = True
+        except Exception:
+            cg_allowed = True
         try:
             from .codegraph import CodeGraph, CodeGraphRenderer
             cg_path = self.codegraph_db_path
-            if cg_path.exists():
+            if cg_path.exists() and cg_allowed:
                 cg = CodeGraph(cg_path)
                 renderer = CodeGraphRenderer(cg)
                 cg_md = renderer.render_for_expert_panel(
@@ -765,8 +983,11 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         budget.add("tpe",           tpe_section,       priority=95,  min_chars=2000)
         budget.add("constants",     constants_section, priority=94,  min_chars=800)
         budget.add("probe",         probe_section,     priority=93,  min_chars=1500)
+        budget.add("investigation", investigation_section, priority=92, min_chars=1000)
         budget.add("suppression",   suppression_section, priority=92, min_chars=1000)
         budget.add("output",        output_section,    priority=90,  min_chars=1500)
+        if signal_audit_text:
+            budget.add("signal_audit",  f"## ★ 关键链路信号审计(确定性枚举/契约校验) ★\n{signal_audit_text}", priority=92, min_chars=800)
         budget.add("windows",       f"## ★ 测试窗口(必读) ★\n{windows_text}", priority=90, min_chars=400)
         budget.add("transitions",   f"## 状态跳变\n{transitions_text}", priority=85, min_chars=600)
         budget.add("conditions",    f"## ★ 条件检查表(代码提取) ★\n{conditions_text}", priority=80, min_chars=1500)
@@ -920,7 +1141,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 panel_result=panel_result,
                 conditions=conditions,
                 evidence=evidence,
-                probe_results=probe_results,
+                probe_results=probe_results_list,
                 windows=windows,
                 bag_meta=bag_meta,
                 blf_meta=blf_meta,
@@ -969,8 +1190,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         """
         self._last_tpe_result = None
         try:
-            from .tpe import TemporalPatternEngine
-            from .signal_mapper import (
+            from engines.tpe import TemporalPatternEngine
+            from engines.signal_mapper import (
                 extract_signal_mapping, trace_variable_chains,
                 load_variable_chains, extract_output_signal_mapping,
                 build_expr_to_can_index, load_output_chain_aliases,
@@ -1099,7 +1320,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         (brake/warning/state/TTC — varies by function) and reports
         active periods, value statistics and transition events for each.
         """
-        from .signal_mapper import (
+        from engines.signal_mapper import (
             extract_output_signal_mapping, get_output_signals_for_function,
         )
 
@@ -1109,15 +1330,28 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             out_mapping = extract_output_signal_mapping(
                 Path(self.config["paths"]["source_code"]),
                 self.source_docs_dir,
+                rte_file=self._resolve_signal_mapping_source(),
             )
-        target_signals = get_output_signals_for_function(func_name)
+        # Variant-truth output signals: prefer signals actually written by
+        # this variant's RteComMapping_Tx*.c and present in the DBC/BLF over
+        # the legacy GWM-era hardcoded table.
+        inventory = store.get_signal_inventory() or []
+        dbc_signals: set[str] = set()
+        for item in inventory:
+            dbc_signals.update(item.get("signals", []))
+        tx_signals = out_mapping.get("signal_to_expr", {})
+        target_signals = get_output_signals_for_function(
+            func_name,
+            tx_signals=tx_signals,
+            dbc_signals=dbc_signals,
+            internal_to_can=self.signal_mapping.get("internal_to_can"),
+        )
         if not target_signals:
             return ""
 
         status("output_signals", f"Target output signals: {', '.join(target_signals)}")
         sig_to_expr = out_mapping.get("signal_to_expr", {})
 
-        inventory = store.get_signal_inventory() or []
         available: dict[str, dict] = {}
         for item in inventory:
             for sig in item.get("signals", []):
@@ -1235,6 +1469,31 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             return ""
         return "\n\n".join(results)
 
+    # ── Key-chain signal audit (enum validity + contract) ─────────────
+
+    def _run_signal_audit(self, store, status) -> str:
+        """Run the deterministic key-chain signal audit (M10 engine).
+
+        Checks the switch send/receive chain signals against the contract
+        table: presence, value distribution, DBC enum validity and
+        cross-signal contracts (e.g. old UI does not echo the FCTA/FCTB
+        status). Returns markdown for the panel context; empty when the
+        case carries no CAN data or no DBC loader is available.
+        """
+        if not store.get_can_ids() or self._case_dbc is None:
+            return ""
+        try:
+            from engines.signal_audit import SignalAuditEngine
+            engine = SignalAuditEngine()
+            result = engine.audit(store, self._case_dbc)
+            parts = [result["markdown"]]
+            if result["contract_note"]:
+                parts.append(result["contract_note"])
+            return "\n\n".join(parts)
+        except Exception as exc:  # noqa: BLE001 - audit must never break diagnosis
+            status("signals", f"Signal audit skipped: {exc}")
+            return ""
+
     # ── Suppression signal checker ─────────────────────────────────────
 
     def _check_suppression_signals(
@@ -1253,7 +1512,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
           uses signal_chain categories to find related signals
         """
         from difflib import get_close_matches
-        from .signal_mapper import (
+        from engines.signal_mapper import (
             extract_signal_mapping, resolve_internal_to_can, _extract_core_keyword,
             trace_variable_chains, load_variable_chains,
         )
@@ -1655,7 +1914,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
              a simple signal-like name (no dots/parens), try difflib with
              high cutoff + semantic overlap validation
         """
-        from .signal_mapper import resolve_internal_to_can
+        from engines.signal_mapper import resolve_internal_to_can
 
         for hint in [can_hint, var_name]:
             if hint and hint in all_signals:
@@ -1818,7 +2077,9 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
     def _ensure_source_docs(self, status):
         docs_dir = self.source_docs_dir
-        learner = CodeLearner(self.router, self.config, self.project_root)
+        adapter = self._get_code_learner_adapter()
+        learner = CodeLearner(self.router, self.config, self.project_root,
+                              platform_adapter=adapter or None)
         result = learner.ensure_overview_docs(
             funcs=ALL_FUNCTIONS,
             status_cb=lambda step, msg: status("source_docs", msg),
@@ -1827,11 +2088,27 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             status("source_docs", f"Generated: {', '.join(result['generated'])}")
         for failed in result.get("failed") or []:
             status("source_docs", f"[WARN] {failed['func']} failed: {failed['error']}")
+        if not result.get("failed") and not result.get("error"):
+            try:
+                from core.knowledge_guard import publish_knowledge_categories
+
+                publish_knowledge_categories(
+                    self.config,
+                    [
+                        f"source_docs:{str(function).upper()}"
+                        for function in (
+                            result.get("generated", []) + result.get("skipped", [])
+                        )
+                    ],
+                    producer="diagnosis.source_docs",
+                )
+            except Exception as exc:
+                status("source_docs", f"Freshness not published: {exc}")
 
         sig_map_path = docs_dir / "signal_mapping.json"
         if not sig_map_path.exists():
             status("source_docs", "Building CAN signal ↔ internal variable mapping...")
-            from .signal_mapper import extract_signal_mapping
+            from engines.signal_mapper import extract_signal_mapping
             result = extract_signal_mapping(
                 Path(self.config["paths"]["source_code"]), docs_dir,
             )
@@ -1860,14 +2137,31 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             # Phase 5B: variable filter
             variable_filter = get_variable_filter(self.config)
 
+            # Use adapter-supplied func_keywords when available
+            adapter = self._get_code_learner_adapter()
+            if adapter:
+                _funcs = adapter.get_priority_functions()
+                _adapter_kw: dict = {}
+                for _f in _funcs:
+                    _adapter_kw[_f] = adapter.get_func_keywords(_f)
+            else:
+                _adapter_kw = {}
+
+            # ✨ Gen5: pass platform_id for full scan support
+            pid = self.platform_id
+
+            # Merge adapter keywords into base FUNC_KEYWORDS when adapter available
+            func_keywords = {**FUNC_KEYWORDS, **_adapter_kw}
+
             builder = CodeGraphBuilder(
                 db_path=db_path,
                 source_root=source_root,
                 key_files=key_files,
-                func_keywords=FUNC_KEYWORDS,
+                func_keywords=func_keywords,
                 calib_files=calib_files,
                 source_docs_dir=self.source_docs_dir,
                 variable_filter=variable_filter,
+                platform_id=pid if pid and pid.startswith("gen5") else None,
             )
             result = builder.build()
 
@@ -1880,6 +2174,15 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                        f"{result.duration_sec:.1f}s)")
             else:
                 status("codegraph", f"CodeGraph: build failed ({result.error})")
+            if result.build_type == "skip" or result.success:
+                try:
+                    from core.knowledge_guard import publish_knowledge_categories
+
+                    publish_knowledge_categories(
+                        self.config, ["codegraph"], producer="diagnosis.codegraph",
+                    )
+                except Exception as exc:
+                    status("codegraph", f"Freshness not published: {exc}")
 
         except Exception as e:
             # Completely silent on error — user should never see this
@@ -2005,6 +2308,8 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
     def _parse_case_data(self, case_dir: Path, status):
         from parsers.case_loader import load_case_data
         r = load_case_data(case_dir, self.config, self.project_root, on_status=status)
+        # Keep the DBC loader for the Step-5 signal audit (enum validity checks).
+        self._case_dbc = r.dbc
         return r.store, r.bag_meta, r.blf_meta, r.sync
 
     def _run_frame_analysis_with(self, analyzer, store, func_name: str, func_info: dict, status) -> str:
@@ -2022,12 +2327,19 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
 
 输出: 状态变化模式 + 关键时刻 + 异常点"""
 
-        result = self.router.chat(
-            [{"role": "user", "content": prompt}],
-            complexity="simple",
-            max_tokens=1024,
-        )
-        return result.get("content", json.dumps(warning_analysis, default=str, ensure_ascii=False)[:2000])
+        try:
+            result = self.router.chat(
+                [{"role": "user", "content": prompt}],
+                complexity="simple",
+                max_tokens=1024,
+            )
+            content = result.get("content") if isinstance(result, dict) else None
+            if content:
+                return content
+            status("analyze", "Frame analysis LLM returned empty; falling back to raw warning summary.")
+        except Exception as exc:  # noqa: BLE001 - degrade, never abort diagnosis
+            status("analyze", f"Frame analysis LLM failed ({type(exc).__name__}: {exc}); using deterministic fallback.")
+        return json.dumps(warning_analysis, default=str, ensure_ascii=False)[:2000]
 
     def _build_data_summary(self, store, bag_meta, blf_meta, sync) -> str:
         parts = []
@@ -2067,6 +2379,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                      fix_report_md: str = "",
                      snapshot_id: str = "") -> str:
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        diagnosis = _normalize_report_section_headings(diagnosis)
 
         title_map = {
             "diagnose": "角雷达问题诊断报告",
@@ -2283,59 +2596,40 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             if not precipitated:
                 return
 
-            # Read existing L6 knowledge
-            existing = self.memory.read_code_knowledge(func_name)
-            if not existing:
-                existing = {"_meta": {"function": func_name, "learned_focuses": []}}
-
-            meta = existing.setdefault("_meta", {"function": func_name})
+            # Build the updates dict (with _precipitated provenance markers) and
+            # delegate to the single L6 writer (merge_code_knowledge), which
+            # merges into the raw base so CodeLearner data is never clobbered
+            # when freshness is stale.
             now = datetime.datetime.now().isoformat()
-
+            updates: dict = {}
             for focus in ["alarm_logic", "state_machine", "calculation_chain", "output_chain"]:
-                if focus not in precipitated:
+                new_data = precipitated.get(focus)
+                if not isinstance(new_data, dict) or not new_data:
                     continue
-                new_data = precipitated[focus]
-                if not new_data:
-                    continue
-
-                existing_focus = existing.setdefault(focus, {})
-
+                focus_update: dict = {}
                 for key, new_items in new_data.items():
-                    if not isinstance(new_items, list):
-                        # Handle dict keys (e.g. key_variables in calculation_chain)
-                        if isinstance(new_items, dict):
-                            existing_key = existing_focus.setdefault(key, {})
-                            for var_name, var_info in new_items.items():
-                                if isinstance(var_info, dict):
-                                    var_info["_precipitated"] = True
-                                    var_info["_precipitated_at"] = now
-                                    existing_key[var_name] = var_info
-                        continue
+                    if isinstance(new_items, list):
+                        focus_update[key] = []
+                        for item in new_items:
+                            if not isinstance(item, dict):
+                                continue
+                            item["_precipitated"] = True
+                            item["_precipitated_at"] = now
+                            focus_update[key].append(item)
+                    elif isinstance(new_items, dict):
+                        focus_update[key] = {}
+                        for var_name, var_info in new_items.items():
+                            if isinstance(var_info, dict):
+                                var_info["_precipitated"] = True
+                                var_info["_precipitated_at"] = now
+                                focus_update[key][var_name] = var_info
+                            else:
+                                focus_update[key][var_name] = var_info
+                if focus_update:
+                    updates[focus] = focus_update
 
-                    # List items — merge by id (new overwrites old)
-                    existing_list = existing_focus.setdefault(key, [])
-                    existing_ids = {item.get("id") for item in existing_list if isinstance(item, dict)}
-
-                    for item in new_items:
-                        if not isinstance(item, dict):
-                            continue
-                        item["_precipitated"] = True
-                        item["_precipitated_at"] = now
-                        item_id = item.get("id")
-                        if item_id:
-                            # Replace existing item with same id
-                            existing_list = [
-                                i for i in existing_list
-                                if not isinstance(i, dict) or i.get("id") != item_id
-                            ]
-                        existing_list.append(item)
-
-                if focus not in meta.get("learned_focuses", []):
-                    learned = meta.setdefault("learned_focuses", [])
-                    learned.append(focus)
-
-            meta["last_updated"] = now
-            self.memory.write_code_knowledge(func_name, existing)
+            if updates:
+                self.memory.merge_code_knowledge(func_name, updates)
 
         except Exception:
             import logging

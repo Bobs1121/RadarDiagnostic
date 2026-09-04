@@ -7,8 +7,23 @@ cantools>=39.0.0         # DBC 数据库解析
 rosbags>=0.9.0           # ROS bag 文件解析
 asteval>=1.0.0           # 表达式安全求值
 
+# ── CodeGraph — AST 解析（V4 激活休眠 tree-sitter 层） ───────────────
+# 缺失会导致 ai/codegraph 的 AST 路径不可用（production 走 regex 回退，
+# 但新机器务必安装，避免 import 崩溃）
+tree-sitter>=0.21.0      # AST 解析核心 (ai/codegraph/ast_parser)
+tree-sitter-c>=0.21.4    # C 语言语法树 (codegraph AST)
+
+# ── MF4 — ASAM MDF4 测量文件解析 ─────────────────────────────────────
+asammdf>=8.0.0           # MF4 文件解析 (parsers/mf4_parser)
+
 # ── LLM — 大模型 API 客户端 ──────────────────────────────────────────
 openai>=1.0.0            # OpenAI-compatible API 客户端 (ModelRouter)
+
+# ── V3 — 模块化能力扩展 ──────────────────────────────────────────────
+# M3/M8 需求 Schema 校验（可选，缺失时 loader 降级为纯 dict 校验）
+pydantic>=2.0            # 需求结构化强校验 (ai/requirements)；langgraph 亦间接依赖
+# M5 语义记忆向量库（可选，缺失时 SemanticMemory 降级为纯 Python 余弦回退）
+lancedb>=0.5.0             # LanceDB 语义召回 (memory/semantic_memory) — 已启用
 
 # ── Panel — 专家面板 (LangGraph 状态机) ──────────────────────────────
 # 安装方式: pip install -r requirements.txt --extra-index-url ... 或单独 pip install langgraph

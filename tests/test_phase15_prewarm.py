@@ -78,7 +78,7 @@ def _write_source_tree(source_root: Path) -> Path:
 
 def test_trace_variable_chains_writes_meta_cache(tmp_path: Path) -> None:
     """First call writes both variable_chains.json and variable_chains.meta.json."""
-    from ai.signal_mapper import trace_variable_chains
+    from engines.signal_mapper import trace_variable_chains
 
     source_root = _write_source_tree(tmp_path / "src")
     docs_dir = tmp_path / "source_docs"
@@ -210,7 +210,7 @@ def test_trace_variable_chains_force_bypasses_cache(tmp_path: Path) -> None:
 
 def test_trace_variable_chains_corrupt_meta_falls_through(tmp_path: Path) -> None:
     """Corrupted meta.json is treated as cache miss (fall through to full scan)."""
-    from ai.signal_mapper import trace_variable_chains
+    from engines.signal_mapper import trace_variable_chains
 
     source_root = _write_source_tree(tmp_path / "src")
     docs_dir = tmp_path / "source_docs"

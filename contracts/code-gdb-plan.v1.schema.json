@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/code-gdb-plan.v1.schema.json",
+  "title": "Source-bound code GDB plan v1",
+  "type": "object",
+  "required": ["schema_version", "status", "query", "source_context", "breakpoints", "gdb_commands", "diagnostics"],
+  "properties": {
+    "schema_version": { "const": "code-gdb-plan.v1" },
+    "status": { "enum": ["ready", "blocked", "needs_confirmation"] },
+    "query": { "type": "object" },
+    "source_context": { "type": "object" },
+    "resolution": { "type": "object" },
+    "breakpoints": { "type": "array", "items": { "type": "object" } },
+    "gdb_commands": { "type": "array", "items": { "type": "string" } },
+    "diagnostics": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

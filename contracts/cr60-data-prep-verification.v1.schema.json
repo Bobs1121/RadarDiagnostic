@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/cr60-data-prep-verification.v1.schema.json",
+  "title": "CR60 data preparation verification v1",
+  "description": "Read-only Linux source/destination file verification before upstream data transfer.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "server",
+    "verification_policy",
+    "entries",
+    "cases",
+    "provenance",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "const": "cr60-data-prep-verification.v1" },
+    "status": { "enum": ["planned", "ready", "partial", "needs_confirmation", "blocked", "failed"] },
+    "server": { "type": "object" },
+    "verification_policy": { "type": "object" },
+    "entries": { "type": "array", "items": { "type": "object" } },
+    "command": { "type": "string" },
+    "execute_requested": { "type": "boolean" },
+    "cases": { "type": "array", "items": { "type": "object" } },
+    "provenance": { "type": "object" },
+    "diagnostics": { "type": "array", "items": { "type": "string" } },
+    "command_result": { "type": "object" },
+    "artifact_path": { "type": "string" }
+  },
+  "additionalProperties": true
+}

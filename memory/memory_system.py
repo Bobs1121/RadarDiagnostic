@@ -34,6 +34,7 @@ import glob
 import json
 import hashlib
 import datetime
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -87,16 +88,28 @@ def atomic_write_json(path: Path, data: Any, encoding: str = "utf-8",
     atomic_write_text(path, payload, encoding=encoding)
 
 
+logger = logging.getLogger(__name__)
+
+
 class MemorySystem:
     """Multi-layer persistent memory for the radar analysis system."""
 
-    def __init__(self, project_root: Path | str, memory_dir: Path | str | None = None):
+    def __init__(
+        self,
+        project_root: Path | str,
+        memory_dir: Path | str | None = None,
+        config: Optional[dict] = None,
+    ):
         self.root = Path(project_root)
         self.memory_dir = Path(memory_dir) if memory_dir else (self.root / "memory")
         self.memory_dir.mkdir(parents=True, exist_ok=True)
         (self.memory_dir / "functions").mkdir(exist_ok=True)
         (self.memory_dir / "sessions").mkdir(exist_ok=True)
         (self.memory_dir / "code_knowledge").mkdir(exist_ok=True)
+        self._config = config if isinstance(config, dict) else None
+        self._config_loaded = config is not None
+        self._semantic_memory = None
+        self._semantic_ready = False
 
         # Session-level context cache.
         # Avoids rebuilding the diagnosis context multiple times per run
@@ -105,6 +118,261 @@ class MemorySystem:
         self._ctx_cache: dict[tuple, str] = {}
         self._ctx_cache_hits: int = 0
         self._ctx_cache_misses: int = 0
+
+    def _load_runtime_config(self) -> dict:
+        """Load config.yaml lazily when the caller did not inject a config dict."""
+        if self._config_loaded:
+            return self._config or {}
+
+        self._config_loaded = True
+        config_path = self.root / "config.yaml"
+        if not config_path.exists():
+            self._config = {}
+            return {}
+
+        try:
+            from config import load_config as load_project_config
+
+            loaded = load_project_config(config_path)
+            self._config = loaded if isinstance(loaded, dict) else {}
+        except Exception as exc:
+            logger.warning("failed to load memory config from %s: %s", config_path, exc)
+            self._config = {}
+        return self._config or {}
+
+    def _semantic_index_settings(self) -> dict:
+        """Return semantic-index settings with safe defaults."""
+        cfg = self._load_runtime_config()
+        raw = cfg.get("memory", {}).get("semantic_index", {}) if isinstance(cfg, dict) else {}
+        if not isinstance(raw, dict):
+            raw = {}
+        enabled = raw.get("enabled", True)
+        try:
+            max_hits = int(raw.get("max_hits", 3))
+        except (TypeError, ValueError):
+            max_hits = 3
+        return {
+            "enabled": bool(enabled),
+            "max_hits": max(1, max_hits),
+        }
+
+    def _get_semantic_memory(self):
+        """Lazily create the variant-scoped SemanticMemory index.
+
+        Uses the V3 workspace sandbox path ``.workspaces/<variant>/memory/lancedb``
+        (via ``SemanticMemory.for_variant``) when a variant_id is resolvable,
+        otherwise falls back to the local ``memory_dir/semantic``.
+        """
+        settings = self._semantic_index_settings()
+        if not settings.get("enabled", True):
+            return None
+        if self._semantic_ready:
+            return self._semantic_memory
+        if self._semantic_memory is False:
+            return None
+
+        try:
+            from memory.semantic_memory import SemanticMemory
+
+            variant_id = self._resolve_variant_id()
+            if variant_id:
+                self._semantic_memory = SemanticMemory.for_variant(
+                    self.root, variant_id,
+                )
+            else:
+                self._semantic_memory = SemanticMemory(
+                    store_dir=self.memory_dir / "semantic",
+                )
+            self._semantic_ready = True
+        except Exception as exc:
+            self._semantic_memory = False
+            logger.warning("semantic index unavailable for %s: %s", self.memory_dir, exc)
+            return None
+        return self._semantic_memory
+
+    def _resolve_variant_id(self) -> str:
+        """Best-effort variant_id from injected config, else empty string."""
+        if self._config is None:
+            return ""
+        identity = self._config.get("identity") or {}
+        return str(identity.get("variant_id") or "") or ""
+
+    def _code_learning_stale(self) -> bool:
+        """Whether code-derived learning products should be withheld.
+
+        Returns True when the current code/constants/identity have drifted since
+        the last freshness snapshot. This gates the code-derived learning layers
+        (L3 auto-dream patterns, semantic hits, and L6 — already gated) out of
+        the AI context, while leaving operator/user notes (L1/L2/L4/L5)
+        unaffected. Mirrors the AGENTS.md freshness hard constraint.
+        """
+        cfg = self._load_runtime_config()
+        freshness = (cfg.get("identity") or {}).get("freshness") or {}
+        if not isinstance(freshness, dict):
+            return False
+        return bool(
+            freshness.get("code_changed")
+            or freshness.get("constants_changed")
+            or freshness.get("identity_changed")
+        )
+
+    def _relative_provenance_path(self, path: Path) -> str:
+        """Render a stable provenance path, preferring project-relative paths."""
+        try:
+            return str(path.resolve().relative_to(self.root.resolve()))
+        except Exception:
+            try:
+                return str(path.relative_to(self.root))
+            except Exception:
+                return str(path)
+
+    @staticmethod
+    def _truncate_text(text: Any, limit: int = 120) -> str:
+        text = str(text or "").strip()
+        if len(text) <= limit:
+            return text
+        return text[: max(0, limit - 3)] + "..."
+
+    def _index_case_memory_semantically(self, case_dir: Path, memory: dict) -> None:
+        """Add a compact provenance-linked semantic record for this case."""
+        semantic = self._get_semantic_memory()
+        if semantic is None:
+            return
+
+        case_id = case_dir.name if case_dir.name else str(case_dir)
+        case_memory_path = case_dir / "memory.json"
+        report_path = case_dir / "report.md"
+        report_provenance = (
+            self._relative_provenance_path(report_path) if report_path.exists() else ""
+        )
+        function_name = str(memory.get("function") or memory.get("func_name") or "UNKNOWN")
+        symptom = str(memory.get("problem") or memory.get("symptom") or case_id)
+        conclusion = str(
+            memory.get("root_cause")
+            or memory.get("conclusion")
+            or memory.get("diagnosis_summary")
+            or memory.get("result_summary")
+            or ""
+        )
+        fix_hint = str(memory.get("fix_hint") or memory.get("fix") or "")
+        updated_at = str(memory.get("_updated") or datetime.datetime.now().isoformat())
+        metadata = {
+            "function": function_name,
+            "case_id": case_id,
+            "updated_at": updated_at,
+            "fix_hint": fix_hint,
+            "case_dir": self._relative_provenance_path(case_dir),
+            "case_memory_path": self._relative_provenance_path(case_memory_path),
+            "report_path": report_provenance,
+            "provenance": {
+                "case_dir": self._relative_provenance_path(case_dir),
+                "case_memory_path": self._relative_provenance_path(case_memory_path),
+                "report_path": report_provenance,
+            },
+        }
+        try:
+            semantic.add(
+                symptom=symptom,
+                signal=function_name,
+                code_line=fix_hint,
+                conclusion=conclusion,
+                metadata=metadata,
+            )
+        except Exception as exc:
+            logger.warning("semantic index add failed for %s: %s", case_id, exc)
+
+    def _search_semantic_cases(
+        self,
+        func_name: str,
+        problem: str,
+        *,
+        case_dir: Optional[Path] = None,
+    ) -> list[dict]:
+        """Return compact semantic hits for prior related cases."""
+        semantic = self._get_semantic_memory()
+        if semantic is None:
+            return []
+
+        settings = self._semantic_index_settings()
+        limit = int(settings.get("max_hits", 3))
+        query = "\n".join(
+            part for part in [(func_name or "").upper(), (problem or "").strip()] if part
+        )
+        if not query:
+            return []
+
+        try:
+            raw_hits = semantic.search(query, k=max(limit * 2, limit))
+        except Exception as exc:
+            logger.warning("semantic index search failed for %s: %s", func_name, exc)
+            return []
+
+        current_case_id = case_dir.name if case_dir else ""
+        func_upper = (func_name or "").upper()
+        preferred: list[dict] = []
+        fallback: list[dict] = []
+        for hit in raw_hits:
+            score = float(hit.get("score", 0.0) or 0.0)
+            if score <= 0.0:
+                continue
+            meta = hit.get("metadata", {}) or {}
+            case_id = str(meta.get("case_id") or "")
+            if current_case_id and case_id == current_case_id:
+                continue
+            hit_func = str(meta.get("function") or hit.get("signal") or "").upper()
+            if func_upper and hit_func == func_upper:
+                preferred.append(hit)
+            else:
+                fallback.append(hit)
+        return (preferred + fallback)[:limit]
+
+    def search_semantic_cases(
+        self,
+        func_name: str,
+        problem: str,
+        *,
+        case_dir: Optional[Path] = None,
+        max_results: int = 3,
+    ) -> list[dict]:
+        """Public read-only semantic recall boundary for Pi capabilities.
+
+        The existing private implementation remains the single source of
+        ranking/filtering behavior; this narrow wrapper lets an atomic tool
+        expose it without coupling Pi to private method names.
+        """
+        hits = self._search_semantic_cases(func_name, problem, case_dir=case_dir)
+        return hits[:max(0, int(max_results))]
+
+    def _render_semantic_hits(self, hits: list[dict]) -> str:
+        """Render semantic recall as a clearly non-deterministic hint block."""
+        if not hits:
+            return ""
+
+        lines = [
+            "## 语义相似案例（SemanticMemory 索引，仅供参考，非确定性证据）"
+        ]
+        for hit in hits:
+            meta = hit.get("metadata", {}) or {}
+            case_id = str(meta.get("case_id") or "?")
+            score = float(hit.get("score", 0.0) or 0.0)
+            symptom = self._truncate_text(hit.get("symptom", "?"), limit=80)
+            conclusion = self._truncate_text(hit.get("conclusion", ""), limit=100)
+            fix_hint = self._truncate_text(meta.get("fix_hint", ""), limit=80)
+            report_path = (
+                meta.get("report_path")
+                or meta.get("case_memory_path")
+                or meta.get("case_dir")
+                or ""
+            )
+            line = f"- score={score:.3f} | case={case_id} | 症状: {symptom}"
+            if conclusion:
+                line += f" | 结论: {conclusion}"
+            if fix_hint:
+                line += f" | 修复: {fix_hint}"
+            lines.append(line)
+            if report_path:
+                lines.append(f"  provenance: `{report_path}`")
+        return "\n".join(lines)
 
     # ── L1: Project Memory ──────────────────────────────────────────────
 
@@ -565,6 +833,7 @@ class MemorySystem:
             "_learned_at": datetime.datetime.now().isoformat(),
         }
         self.add_pattern(pattern)
+        self._index_case_memory_semantically(case_dir, memory)
 
     # ── L6: Code Knowledge (auto-dream 学到的代码知识) ─────────────────
 
@@ -574,6 +843,14 @@ class MemorySystem:
         优先从 per-project 目录读取，若不存在则回退到 legacy 全局目录
         ``memory/code_knowledge/``（兼容旧数据迁移前的路径）。
         """
+        config = self._load_runtime_config()
+        from core.knowledge_guard import runtime_knowledge_decision
+
+        if not runtime_knowledge_decision(
+            config, f"code_knowledge:{func_name.upper()}"
+        ).allowed:
+            return {}
+        variant_scoped = bool(config.get("identity", {}).get("variant_id"))
         func_upper = func_name.upper()
         path = self.memory_dir / "code_knowledge" / f"{func_upper}.json"
         if path.exists():
@@ -581,7 +858,9 @@ class MemorySystem:
                 return json.loads(path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 pass
-        # Backward-compat fallback: legacy global code_knowledge
+        if variant_scoped:
+            return {}
+        # Backward-compat fallback for unscoped legacy mode only.
         legacy = self.root / "memory" / "code_knowledge" / f"{func_upper}.json"
         if legacy.exists():
             try:
@@ -594,11 +873,93 @@ class MemorySystem:
         """写入某功能的深度代码知识（L6）。
 
         由 CodeLearner（auto-dream）或诊断管线（_precipitate_knowledge）写入。
+        注意：这是**整文件覆盖**。跨来源合并请用 :meth:`merge_code_knowledge`。
         """
         d = self.memory_dir / "code_knowledge"
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{func_name.upper()}.json"
         atomic_write_json(path, data)
+
+    def merge_code_knowledge(self, func_name: str, updates: dict) -> dict:
+        """增量合并代码知识到 L6 ``{FUNC}.json``（单一写入口 / 统一 schema）。
+
+        读取**底层原始文件**（不受 freshness 门控，避免 stale 时读到空而覆盖
+        CodeLearner 已学数据），按 focus 逐键合并：
+
+        * list 条目按 ``id`` 幂等合并（新覆盖旧）；
+        * dict 条目按键覆盖；
+        * 保留 ``_meta``（learned_focuses / last_updated）。
+
+        返回合并后的完整 dict。调用方（orchestrator ``_precipitate_knowledge``）
+        应改用此方法，而不是 ``read_code_knowledge()`` + ``write_code_knowledge()``。
+        """
+        func_upper = func_name.upper()
+        d = self.memory_dir / "code_knowledge"
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"{func_upper}.json"
+
+        existing: dict = {}
+        if path.exists():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    existing = loaded
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+
+        meta = existing.setdefault(
+            "_meta", {"function": func_upper, "learned_focuses": []}
+        )
+
+        for focus, focus_data in (updates or {}).items():
+            if not isinstance(focus_data, dict) or focus == "_meta":
+                continue
+            existing_focus = existing.setdefault(focus, {})
+
+            for key, new_items in focus_data.items():
+                if isinstance(new_items, list):
+                    existing_list = existing_focus.setdefault(key, [])
+                    existing_ids = {
+                        item.get("id") for item in existing_list
+                        if isinstance(item, dict) and item.get("id")
+                    }
+                    for item in new_items:
+                        if not isinstance(item, dict):
+                            continue
+                        item_id = item.get("id")
+                        if item_id:
+                            existing_list = [
+                                i for i in existing_list
+                                if not isinstance(i, dict) or i.get("id") != item_id
+                            ]
+                        existing_list.append(item)
+                    existing_focus[key] = existing_list
+                elif isinstance(new_items, dict):
+                    existing_key = existing_focus.setdefault(key, {})
+                    for sub_key, sub_val in new_items.items():
+                        existing_key[sub_key] = sub_val
+
+            if focus not in meta.get("learned_focuses", []):
+                meta.setdefault("learned_focuses", []).append(focus)
+
+        atomic_write_json(path, existing)
+        return existing
+
+    def read_code_knowledge_raw(self, func_name: str) -> dict:
+        """读取 L6 ``{FUNC}.json`` 的**底层原始内容**（不受 freshness 门控）。
+
+        仅供跨来源合并 / 审计读取使用；喂给 AI prompt 前必须走
+        :meth:`read_code_knowledge`（freshness 门控）。
+        """
+        func_upper = func_name.upper()
+        path = self.memory_dir / "code_knowledge" / f"{func_upper}.json"
+        if not path.exists():
+            return {}
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            return loaded if isinstance(loaded, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            return {}
 
     def list_code_knowledge_funcs(self) -> list[str]:
         """列出已有代码知识的功能名。"""
@@ -624,13 +985,23 @@ class MemorySystem:
         由 ``CodeLearner._learn_constants_if_needed()`` 写入。所有功能共享。
         若文件不存在或损坏返回空 dict。
         """
+        config = self._load_runtime_config()
+        from core.knowledge_guard import runtime_knowledge_decision
+
+        if not runtime_knowledge_decision(
+            config, "code_knowledge:constants"
+        ).allowed:
+            return {}
+        variant_scoped = bool(config.get("identity", {}).get("variant_id"))
         path = self.memory_dir / "code_knowledge" / "constants.json"
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 pass
-        # Backward-compat fallback
+        if variant_scoped:
+            return {}
+        # Backward-compat fallback for unscoped legacy mode only.
         legacy = self.root / "memory" / "code_knowledge" / "constants.json"
         if legacy.exists():
             try:
@@ -828,25 +1199,32 @@ class MemorySystem:
         if code_ctx:
             parts.append(code_ctx)
 
-        # L3
+        # L3 — auto-dream learned patterns (code-derived learning product)
+        learning_stale = self._code_learning_stale()
         keywords = [w for w in problem.replace("，", " ").replace(",", " ").split() if len(w) > 1]
-        similar = self.find_similar_patterns(func_name, keywords)
-        if similar:
-            parts.append(f"## 相似历史案例 ({len(similar)} 条)")
-            for p in similar[:3]:
-                parts.append(f"- 症状: {p.get('symptom', '?')} -> 根因: {p.get('root_cause', '?')}")
-            # Phase 15 / 2.2 follow-up: bump _hit_count for every pattern
-            # actually surfaced into the diagnosis context. Patterns that
-            # never appear here will get pruned by decay_patterns()
-            # even if they were once useful.
-            for p in similar[:3]:
-                pid = p.get("_id")
-                if pid:
-                    try:
-                        self.record_pattern_hit(pid)
-                    except Exception:
-                        # Hit bookkeeping must NEVER break diagnosis.
-                        pass
+        similar: list[dict] = []
+        if learning_stale:
+            parts.append(
+                "## 相似历史案例\n_（代码已漂移，Auto-Dream 学习产物暂不注入，避免污染当前分析）_"
+            )
+        else:
+            similar = self.find_similar_patterns(func_name, keywords)
+            if similar:
+                parts.append(f"## 相似历史案例 ({len(similar)} 条)")
+                for p in similar[:3]:
+                    parts.append(f"- 症状: {p.get('symptom', '?')} -> 根因: {p.get('root_cause', '?')}")
+                # Phase 15 / 2.2 follow-up: bump _hit_count for every pattern
+                # actually surfaced into the diagnosis context. Patterns that
+                # never appear here will get pruned by decay_patterns()
+                # even if they were once useful.
+                for p in similar[:3]:
+                    pid = p.get("_id")
+                    if pid:
+                        try:
+                            self.record_pattern_hit(pid)
+                        except Exception:
+                            # Hit bookkeeping must NEVER break diagnosis.
+                            pass
 
         # L4 — 历史诊断 Session（完整诊断记录）
         session_history = self.query_sessions(func_name, keywords, max_results=3)
@@ -866,6 +1244,16 @@ class MemorySystem:
                     for ks in details["key_steps"][:5]:
                         l4_lines.append(f"  {ks}")
             parts.append("\n".join(l4_lines))
+
+        if learning_stale:
+            parts.append(
+                "## 语义记忆\n_（代码已漂移，语义记忆暂不注入）_"
+            )
+        else:
+            semantic_hits = self._search_semantic_cases(func_name, problem, case_dir=case_dir)
+            semantic_block = self._render_semantic_hits(semantic_hits)
+            if semantic_block:
+                parts.append(semantic_block)
 
         # L5
         if case_dir:

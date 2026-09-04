@@ -7,10 +7,23 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Merge nested config dictionaries while letting local values win."""
+    merged = dict(base)
+    for key, value in override.items():
+        base_value = merged.get(key)
+        if isinstance(base_value, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(base_value, value)
+        else:
+            merged[key] = value
+    return merged
+
 
 class Workspace:
     """
@@ -25,6 +38,23 @@ class Workspace:
         self.base_workspace: Optional['Workspace'] = None
         
         self._load()
+
+    @classmethod
+    def from_variant(cls, variant: object, workspaces_dir: Path) -> "Workspace":
+        """Derive a runtime Workspace sandbox from a Variant (identity layer).
+
+        The identity model (``core/identity.py``) answers *who / what* (which
+        customer project); the Workspace answers *where / how to cascade*
+        (Core+COEM resource resolution). This factory bridges the two without a
+        hard import of ``core.identity`` — it accepts either a ``Variant``
+        instance (duck-typed via ``.variant_id``) or a plain variant-id string.
+
+        The workspace directory name is the sanitized variant id, e.g.
+        ``"coem/GWM_B26"`` -> ``.workspaces/coem_GWM_B26``.
+        """
+        variant_id = getattr(variant, "variant_id", None) or str(variant)
+        workspace_name = variant_id.replace("/", "_").replace("\\", "_")
+        return cls(workspace_name, Path(workspaces_dir))
 
     def _load(self):
         """Loads the local config and resolves inheritance."""
@@ -50,9 +80,8 @@ class Workspace:
         """Returns the merged configuration (Core + COEM)."""
         merged = {}
         if self.base_workspace:
-            merged.update(self.base_workspace.get_config())
-        # Deep update for dictionaries would be better here in a full implementation
-        merged.update(self.config)
+            merged = self.base_workspace.get_config()
+        merged = _deep_merge(merged, self.config)
         return merged
 
     def get_dbc_files(self) -> list[Path]:
@@ -78,14 +107,24 @@ class Workspace:
     def get_source_paths(self) -> list[Path]:
         """Returns paths to scan for source code, handling COEM overrides."""
         paths = []
-        # COEM specific overrides
+
+        def _append(path: Path) -> None:
+            if path.exists() and path not in paths:
+                paths.append(path)
+
+        # COEM specific overrides. If a workspace has no COEM source override,
+        # fall back to its common/core source tree.
         local_src = self.workspace_dir / "coem"
         if local_src.exists():
-            paths.append(local_src)
+            _append(local_src)
+        else:
+            _append(self.workspace_dir / "common")
+            _append(self.workspace_dir / "code")
             
         # Base common code
         if self.base_workspace:
-            paths.extend(self.base_workspace.get_source_paths())
+            for path in self.base_workspace.get_source_paths():
+                _append(path)
             
         return paths
 
@@ -103,7 +142,11 @@ class Workspace:
             for req_file in req_dir.glob("*.yaml"):
                 with open(req_file, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
-                    if data and "function" in data:
-                        schemas[data["function"]] = data
+                # Key by 'feature' (V3 schema, aligned with M3/M8); fall back to
+                # legacy 'function' for backward compatibility.
+                if isinstance(data, dict):
+                    key = data.get("feature") or data.get("function")
+                    if key:
+                        schemas[key] = data
                         
         return schemas

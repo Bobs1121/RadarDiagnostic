@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/arbe-stop-session.v1.schema.json",
+  "title": "Formal arbe stop session v1",
+  "description": "The auditable result of a guarded stop for an owned formal-start process group.",
+  "type": "object",
+  "required": ["schema_version", "status", "source_session_id", "ownership", "target", "stop"],
+  "properties": {
+    "schema_version": {"const": "arbe-stop-session.v1"},
+    "status": {"enum": ["stopped", "blocked", "failed"]},
+    "source_session_id": {"type": "string"},
+    "ownership": {"enum": ["tool_started", "external", ""]},
+    "target": {"type": "object", "additionalProperties": true},
+    "command": {"type": "array", "items": {"type": "string"}},
+    "stop": {"type": "object", "additionalProperties": true},
+    "stdout": {"type": "string"},
+    "stderr": {"type": "string"},
+    "returncode": {"type": "integer"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

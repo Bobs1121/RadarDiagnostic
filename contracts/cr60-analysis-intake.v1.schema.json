@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/cr60-analysis-intake.v1.schema.json",
+  "title": "CR60 analysis intake v1",
+  "description": "Material-first, provenance-preserving binding between data and the selected CR60 software context.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "intake_status",
+    "handoff_id",
+    "input_policy",
+    "data",
+    "identity",
+    "source_context",
+    "materials",
+    "candidates",
+    "missing",
+    "conflicts",
+    "confirmation_required"
+  ],
+  "properties": {
+    "schema_version": { "const": "cr60-analysis-intake.v1" },
+    "status": {
+      "enum": ["ready", "partial", "blocked"]
+    },
+    "intake_status": {
+      "enum": ["ready", "needs_confirmation", "blocked_missing_input"]
+    },
+    "handoff_id": { "type": "string", "minLength": 1 },
+    "input_policy": {
+      "type": "object",
+      "required": [
+        "materials_first",
+        "path_names_are_not_identity_evidence",
+        "conflicting_authoritative_values_fail_closed",
+        "remote_path_validation_deferred_to_data_prep"
+      ],
+      "properties": {
+        "materials_first": { "type": "boolean" },
+        "path_names_are_not_identity_evidence": { "type": "boolean" },
+        "conflicting_authoritative_values_fail_closed": { "type": "boolean" },
+        "remote_path_validation_deferred_to_data_prep": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "required": ["paths", "count"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "root": { "type": "string" },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "local_validation", "kind", "remote_candidate"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "local_validation": { "type": "string" },
+              "kind": { "type": "string" },
+              "data_file_count": { "type": ["integer", "null"], "minimum": 0 },
+              "remote_candidate": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["case_id", "bag_paths", "source_selector"],
+            "properties": {
+              "case_id": { "type": "string", "minLength": 1 },
+              "tr_id": { "type": "string" },
+              "data_dir": { "type": "string" },
+              "bag_paths": { "type": "array", "minItems": 1 },
+              "functions_hint": { "type": "array", "items": { "type": "string" } },
+              "customer_claim": { "type": "string" },
+              "preferred_radar": {},
+              "source_selector": { "type": "object" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "identity": { "$ref": "#/$defs/fieldGroup" },
+    "source_context": { "$ref": "#/$defs/fieldGroup" },
+    "environment": { "type": "object" },
+    "materials": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "missing": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "confirmation_required": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "required": [
+        "field",
+        "value",
+        "source",
+        "locator",
+        "method",
+        "priority",
+        "authoritative"
+      ],
+      "properties": {
+        "field": { "type": "string" },
+        "value": { "type": "string" },
+        "source": { "type": "string" },
+        "locator": { "type": "string" },
+        "method": { "type": "string" },
+        "priority": { "type": "integer" },
+        "authoritative": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "fieldGroup": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "candidates"],
+        "properties": {
+          "status": { "type": "string" },
+          "value": {},
+          "selected_from": { "$ref": "#/$defs/candidate" },
+          "candidates": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/candidate" }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -936,7 +936,7 @@ Step 14 (diagnose): Expert Panel 注入 codegraph 查询结果 (增强)
 ## 10. 参考资料
 
 - 原始设计文档: `docs/technical/codegraph-design.md`
-- 开发 handoff: `docs/technical/codegraph-handoff.md`
+- 当前开发 handoff: `docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-03_PRODUCTIZATION.md`
 - 项目 AGENTS.md: 根目录 `AGENTS.md`
 - ai/ 模块说明: `ai/AGENTS.md`
 - parsers/ 模块说明: `parsers/AGENTS.md`

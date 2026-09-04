@@ -116,6 +116,12 @@ platforms:
 
     build_system: cmake
 
+  gen5_reco_pl:
+
+    language: cpp
+
+    build_system: flux_daddy
+
 
 
 # ── Codebases ────────────────────────────────────────────────────────
@@ -139,6 +145,40 @@ codebases:
     root_path: "C:\\\\BYD_OVS_CB"
 
     platform_id: gen5_cpp_radar
+
+  pl_xpeng_reco:
+
+    root_path: "D:\\\\pl-xpeng"
+
+    platform_id: gen5_reco_pl
+
+
+
+# ── Source Context Defaults ─────────────────────────────────────────────
+
+source_context:
+
+  source_root: ""               # Optional shared override; empty keeps codebases.*.root_path
+
+  code_branch: ""               # Optional expected git branch for source validation only
+
+  allow_branch_mismatch: false  # Continue on mismatch without checkout/fetch/pull
+
+
+
+runtime:
+
+  auto_dream_on_case_start: false  # Daily diagnosis stays non-blocking unless explicitly enabled
+
+
+
+memory:
+
+  semantic_index:
+
+    enabled: true
+
+    max_hits: 3
 
 
 
@@ -264,33 +304,25 @@ teLite_PriCan.h"
 
     key_source_files:
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.c"
+      - "coem\\BYD_UKE\\components\\AswPerception\\func\\adasFunc.c"
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswPerception\\\\func\\\\adasFunc.h"
+      - "coem\\BYD_UKE\\components\\AswPerception\\func\\adasFunc.h"
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.c"
+      - "coem\\BYD_UKE\\components\\AswPerception\\calib\\dotCalibDefine.h"
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\ASWIN_SystemState.h"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_ComMapping\\RteComMapping.c"
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.c"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_ADAS\\ASWIN_AdasState.c"
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_IN\\\\RteComMapping.h"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_ADAS\\ASWIN_AdasState.h"
 
-      - "coem\\\\BYD_UKE\\\\components\\\\AswIf\\\\ASW_OUT\\\\ASWOUT_OutCalc.c"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_ADAS\\ASWIN_AdasFunc.c"
 
-      - "adas\\\\symmetry\\\\perception\\\\src\\\\objAttribCal.c"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_IN\\ASWIN_BLDDet.c"
 
-      - "adas\\\\symmetry\\\\perception\\\\src\\\\track.c"
+      - "coem\\BYD_UKE\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c"
 
-      - "adas\\\\symmetry\\\\perception\\\\src\\\\postProcess.c"
-
-      - "adas\\\\symmetry\\\\perception\\\\include\\\\perception_public_def.h"
-
-      - "adas\\\\symmetry\\\\perception\\\\include\\\\structDefine.h"
-
-      - "adas\\\\symmetry\\\\perception\\\\include\\\\paraDefine.h"
-
-      - "adas\\\\symmetry\\\\perception\\\\include\\\\globalVarDefine.h"
+      - "coem\\BYD_UKE\\components\\AswIfSchedule\\AswIfSchedule.c"
 
     dbc_sets:
 
@@ -307,23 +339,23 @@ teLite_PriCan.h"
 
 
   gen5/byd:
-
     codebase_id: byd_ovs_cb
-
     display_name: "BYD_OVS_CB (5代角雷达)"
-
     build_entry: "apl/byd/tools/build.bat"
-
     scope:
-
       include:
-
         - "apl/byd/**"
-
     key_source_files: []
-
     dbc_sets: []
-
+  gen5/xpeng:
+    codebase_id: pl_xpeng_reco
+    display_name: "XPeng RCC1010 (5代角雷达 ReCo/Flux)"
+    build_entry: "apl/xpeng/tools/build.bat"
+    scope:
+      include:
+        - "reco_fw/component/**"
+    key_source_files: []
+    dbc_sets: []
 
 
 # ── Package Profiles (build parameter combos) ────────────────────────
@@ -774,4 +806,3 @@ harness:
     enabled: false              # 设为 true 开启 LLM judge 增强
 
     model_profile: "simple"     # simple=本地模型, complex=远端模型
-

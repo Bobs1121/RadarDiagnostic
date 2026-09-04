@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Data Query Engine: answer natural language questions about CAN/BAG data.
+Data Query Engine: answer engineering questions about recorded data and code.
 
 Lightweight alternative to the full diagnosis pipeline. Supports queries like:
   "FCTB触发时AEBIB是否激活"
@@ -12,7 +12,8 @@ Flow:
   2. Build signal inventory + reverse lookup table
   3. AI Step 1: question → identify relevant signals (validated)
   4. Extract signal timelines from store
-  5. AI Step 2: data + question → structured answer
+  5. Deterministically join data observations with cached code conditions
+  6. AI Step 2: evidence + question → structured answer
 """
 from __future__ import annotations
 
@@ -24,17 +25,19 @@ from pathlib import Path
 from .model_router import ModelRouter
 from .utils import parse_json_from_llm, ALL_FUNCTIONS
 
-_QUERY_SYSTEM = """你是角雷达数据分析助手。你帮助用户查询和确认CAN/BAG数据中的信号状态。
+_QUERY_SYSTEM = """你是角雷达工程问题分析助手。你帮助用户联合查询CAN/BAG数据和源码条件。
 
 你的能力:
 - 查询CAN信号的时间线和变化
 - 检查信号之间的关联关系（A触发时B的状态）
 - 统计信号值的分布和变化
 - 查询BAG中的egoCarInfo字段（car_spd, system_state等）
+- 根据结构化证据解释功能触发、抑制、参数和代码链路
 
 回答要求:
 - 直接回答问题，给出具体数值和时间
 - 如果数据中找不到信号，明确说明
+- observed、inferred、unknown 必须分开；unknown 绝不能解释成未触发、默认值或反证
 - 用表格展示关键数值对比
 - 简洁准确，不要啰嗦"""
 
@@ -63,6 +66,9 @@ _PLAN_PROMPT = """用户想查询以下数据问题:
     {{"func_name": "BSD/LCA/DOW/RCW/RCTA/RCTB/FCTA/FCTB", "role": "查看该ADAS功能告警目标的dist/TTC/DDCI"}}
   ],
   "include_warning_events": true,
+  "functions": ["涉及的ADAS功能，如RCTA"],
+  "code_symbols": ["问题中明确提到的函数、变量或参数"],
+  "need_code_analysis": true,
   "query_type": "correlation/timeline/statistics/threshold/object_analysis",
   "summary": "一句话描述查询意图"
 }}
@@ -77,6 +83,7 @@ _PLAN_PROMPT = """用户想查询以下数据问题:
 7. 只选必要的信号
 8. 如果问题涉及目标物/告警/TTC/DDCI，使用 radar_objects 查询对应 ADAS 功能的告警目标
 9. 如果需要告警事件时间线，设置 include_warning_events=true
+10. 问题涉及异常原因、触发逻辑、代码、变量或参数时，设置 need_code_analysis=true
 
 只输出JSON。"""
 
@@ -88,15 +95,25 @@ _ANSWER_PROMPT = """用户问题: "{question}"
 
 {data_text}
 
+以下是 Harness 生成的代码-数据联合证据（JSON）。其中条件检查是证据标注，不是最终诊断结论:
+
+{investigation_text}
+
 ---
 
-请根据以上数据回答用户的问题。要求:
-1. 直接回答问题（是/否/具体数值）
-2. 给出关键时间段的数据佐证
+请根据以上证据回答用户的问题。要求:
+1. 先给直接结论；证据不足时必须写“当前无法确定”，不能猜测
+2. 分开列出实际观测数据、对应代码路径/条件和推断
 3. 如果是关联查询(A触发时B的状态)，列出每个触发时段B的值
-4. 用简洁的表格或列表展示关键数据
-5. 如果数据不足以回答，说明缺少什么
-6. 总结不超过500字"""
+4. 如果用户问异常原因或为什么，给出Top-3可能原因，并分别写支持证据、冲突证据和缺失证据
+5. condition_checks.result=unknown 只表示未观测或无法映射，绝不能当作条件不满足
+6. 诊断推理由你完成，可以结合不完整证据给出“最可能候选”和置信度；
+   deterministic_conclusion_available=false 时只能禁止“已证实/已经证明”等事实措辞，
+   必须把根因标为 AI 推断并说明关键缺失证据，不能因为单项检查 unknown 就停止分析
+7. condition_checks 已按 analysis_windows 过滤时，代码条件判断优先使用窗口内值；不得用全程统计覆盖窗口证据
+8. 不得凭“通常/一般产品逻辑”发明源码中未出现的最小车速、状态枚举或触发条件；
+   这类工程经验只能列为低置信假设，不能写成直接原因
+9. 给出下一步最小验证动作，使用简洁表格或列表，总结不超过800字"""
 
 
 class DataQueryEngine:
@@ -114,7 +131,7 @@ class DataQueryEngine:
         if self._memory is None:
             try:
                 from memory.memory_system import MemorySystem
-                self._memory = MemorySystem(self.project_root)
+                self._memory = MemorySystem(self.project_root, config=self.config)
             except Exception:
                 self._memory = False  # mark as unavailable
         return self._memory if self._memory else None
@@ -129,39 +146,57 @@ class DataQueryEngine:
             if on_status:
                 on_status(step, detail)
 
-        # 1. Parse data
-        status("parse", "Loading data...")
-        store, dbc = self._parse_data(case_dir, status)
+        store = None
+        try:
+            # 1. Parse data
+            status("parse", "Loading data...")
+            store, dbc = self._parse_data(case_dir, status)
 
-        # 2. Build inventory + lookup
-        status("inventory", "Scanning available signals...")
-        signal_lookup, signal_table = self._build_signal_lookup(store)
-        bag_inventory = self._build_bag_inventory(store)
-        knowledge_ctx = self._build_knowledge_context(question)
-        status("inventory", f"Found {len(signal_lookup)} CAN signals")
+            # 2. Build inventory + lookup
+            status("inventory", "Scanning available signals...")
+            signal_lookup, signal_table = self._build_signal_lookup(store)
+            bag_inventory = self._build_bag_inventory(store)
+            knowledge_ctx = self._build_knowledge_context(question)
+            status("inventory", f"Found {len(signal_lookup)} CAN signals")
 
-        # 3. AI: plan query
-        status("plan", "AI understanding your question...")
-        plan = self._plan_query(question, signal_table, bag_inventory, knowledge_ctx)
-        plan_summary = plan.get("summary", question)
-        query_type = plan.get("query_type", "unknown")
+            # 3. AI: plan query
+            status("plan", "AI understanding your question...")
+            plan = self._plan_query(question, signal_table, bag_inventory, knowledge_ctx)
+            plan_summary = plan.get("summary", question)
+            query_type = plan.get("query_type", "unknown")
 
-        # 4. Validate & correct the plan
-        plan = self._validate_plan(plan, signal_lookup)
-        n_signals = len(plan.get("can_signals", []))
-        status("plan", f"Query: {query_type} — {plan_summary} ({n_signals} signals)")
+            # 4. Validate & correct the plan
+            plan = self._validate_plan(plan, signal_lookup)
+            n_signals = len(plan.get("can_signals", []))
+            status("plan", f"Query: {query_type} — {plan_summary} ({n_signals} signals)")
 
-        # 5. Extract data
-        status("extract", "Extracting signal data...")
-        data_text = self._extract_data(store, plan, signal_lookup)
-        status("extract", f"Extracted {len(data_text)} chars of data")
+            # 5. Extract the data selected by the planner.
+            status("extract", "Extracting signal data...")
+            data_text = self._extract_data(store, plan, signal_lookup)
+            status("extract", f"Extracted {len(data_text)} chars of data")
 
-        # 6. AI: answer
-        status("answer", "AI analyzing data and answering...")
-        answer = self._answer_question(question, plan_summary, data_text, knowledge_ctx)
+            # 6. Deterministically join code conditions with actual observations.
+            status("investigate", "Linking data to code conditions...")
+            from .investigation_engine import EngineeringInvestigator
 
-        store.close()
-        return answer
+            investigation = EngineeringInvestigator(
+                self.config, self.project_root,
+            ).investigate(store, question, plan, signal_lookup)
+            investigation_text = investigation.to_prompt_text()
+            status(
+                "investigate",
+                f"Checked {len(investigation.condition_checks)} code conditions",
+            )
+
+            # 7. AI: explain the structured evidence.
+            status("answer", "AI analyzing evidence and answering...")
+            return self._answer_question(
+                question, plan_summary, data_text, knowledge_ctx,
+                investigation_text=investigation_text,
+            )
+        finally:
+            if store is not None:
+                store.close()
 
     # ── Data Parsing ─────────────────────────────────────────────────────
 
@@ -220,11 +255,29 @@ class DataQueryEngine:
     def _build_knowledge_context(self, question: str) -> str:
         """Load signal mapping, radar knowledge, and function docs relevant to the question."""
         from config import resolve_source_docs_dir
+        from core.knowledge_guard import runtime_knowledge_decision
+
         parts: list[str] = []
         docs_dir = resolve_source_docs_dir(self.config, self.project_root)
+        source_decision = runtime_knowledge_decision(self.config, "source_docs")
+        dbc_decision = runtime_knowledge_decision(self.config, "dbc_knowledge")
+
+        blocked = [
+            f"{name}: {', '.join(decision.reasons)}"
+            for name, decision in (
+                ("source_docs", source_decision),
+                ("dbc_knowledge", dbc_decision),
+            )
+            if not decision.allowed
+        ]
+        if blocked:
+            parts.append(
+                "## Knowledge freshness\n"
+                "Stale knowledge was excluded from this query: " + "; ".join(blocked)
+            )
 
         sig_map_path = docs_dir / "signal_mapping.json"
-        if sig_map_path.exists():
+        if source_decision.allowed and sig_map_path.exists():
             try:
                 sig_map = json.loads(sig_map_path.read_text(encoding="utf-8"))
                 i2c = sig_map.get("internal_to_can", {})
@@ -237,7 +290,7 @@ class DataQueryEngine:
                 pass
 
         radar_kb_path = docs_dir / "radar_knowledge.json"
-        if radar_kb_path.exists():
+        if dbc_decision.allowed and radar_kb_path.exists():
             try:
                 rkb = json.loads(radar_kb_path.read_text(encoding="utf-8"))
                 kb_lines = ["## 雷达数据知识库"]
@@ -268,8 +321,23 @@ class DataQueryEngine:
         matched_funcs = [f for f in func_names if f in q_upper]
 
         for fn in matched_funcs:
+            conditions_decision = runtime_knowledge_decision(
+                self.config, f"conditions:{fn}",
+            )
+            function_doc_decision = runtime_knowledge_decision(
+                self.config, f"source_docs:{fn}",
+            )
+            for name, decision in (
+                (f"conditions:{fn}", conditions_decision),
+                (f"source_docs:{fn}", function_doc_decision),
+            ):
+                if not decision.allowed:
+                    parts.append(
+                        f"## Knowledge freshness\n{name} excluded: "
+                        + ", ".join(decision.reasons)
+                    )
             cond_path = docs_dir / f"{fn}_conditions.json"
-            if cond_path.exists():
+            if conditions_decision.allowed and cond_path.exists():
                 try:
                     cond = json.loads(cond_path.read_text(encoding="utf-8"))
                     summary = f"## {fn} 激活条件摘要\n"
@@ -286,7 +354,7 @@ class DataQueryEngine:
                     pass
 
             doc_path = docs_dir / f"{fn}.md"
-            if doc_path.exists():
+            if function_doc_decision.allowed and doc_path.exists():
                 try:
                     content = doc_path.read_text(encoding="utf-8")
                     parts.append(f"## {fn} 功能文档摘要\n{content[:1500]}")
@@ -319,12 +387,26 @@ class DataQueryEngine:
         if knowledge_ctx:
             prompt += f"\n\n## 补充知识（内部变量映射与功能条件）\n{knowledge_ctx[:8000]}"
         result = self.router.complex(prompt, system=_QUERY_SYSTEM)
-        return parse_json_from_llm(result.get("content", ""), fallback={
+        plan = parse_json_from_llm(result.get("content", ""), fallback={
             "can_signals": [],
             "bag_fields": [],
+            "functions": [],
+            "code_symbols": [],
+            "need_code_analysis": False,
             "query_type": "unknown",
             "summary": question,
         })
+        functions = plan.get("functions")
+        if not isinstance(functions, list):
+            functions = []
+        upper_question = question.upper()
+        for name in ALL_FUNCTIONS:
+            if name in upper_question and name not in functions:
+                functions.append(name)
+        plan["functions"] = functions
+        if functions and "need_code_analysis" not in plan:
+            plan["need_code_analysis"] = True
+        return plan
 
     # ── Plan Validation & Correction ─────────────────────────────────────
 
@@ -604,7 +686,8 @@ class DataQueryEngine:
     # ── AI: Answer Question ──────────────────────────────────────────────
 
     def _answer_question(self, question: str, summary: str, data_text: str,
-                         knowledge_ctx: str = "") -> str:
+                         knowledge_ctx: str = "",
+                         investigation_text: str = "") -> str:
         if len(data_text) > 12000:
             data_text = data_text[:12000] + "\n... (数据过长，已截断)"
 
@@ -612,6 +695,7 @@ class DataQueryEngine:
             question=question,
             summary=summary,
             data_text=data_text,
+            investigation_text=investigation_text or "(本次问题未形成代码条件证据)",
         )
         if knowledge_ctx:
             prompt += f"\n\n## 参考知识\n{knowledge_ctx[:4000]}"

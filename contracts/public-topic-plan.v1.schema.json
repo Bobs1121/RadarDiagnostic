@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/public-topic-plan.v1.schema.json",
+  "title": "Public arbe topic plan v1",
+  "type": "object",
+  "required": ["schema_version", "status", "radar_ids", "channels", "without_gdb", "gdb_or_probe_required"],
+  "properties": {
+    "schema_version": { "const": "public-topic-plan.v1" },
+    "status": { "enum": ["ready", "blocked"] },
+    "radar_ids": { "type": "array", "items": { "type": "integer" } },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["channel_id", "topic", "source_kind", "frame_key", "guarantee", "gdb_required"],
+        "properties": {
+          "channel_id": { "type": "string" },
+          "topic": { "type": "string" },
+          "source_kind": { "type": "string" },
+          "frame_key": { "type": "string" },
+          "guarantee": { "type": "string" },
+          "gdb_required": { "type": "boolean" },
+          "notes": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "without_gdb": { "type": "array", "items": { "type": "string" } },
+    "gdb_or_probe_required": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

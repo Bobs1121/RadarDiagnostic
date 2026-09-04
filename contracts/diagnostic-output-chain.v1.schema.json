@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/diagnostic-output-chain.v1.schema.json",
+  "title": "CR60 diagnostic output chain v1",
+  "description": "Evidence-bound read model from an algorithm warning output through source-derived internal and external mappings.",
+  "type": "object",
+  "required": ["schema_version", "status", "steps", "policy"],
+  "properties": {
+    "schema_version": {"const": "diagnostic-output-chain.v1"},
+    "status": {"type": "string"},
+    "source_status": {"type": "string"},
+    "primary_internal_signal": {"type": ["string", "null"]},
+    "primary_external_signal": {"type": ["string", "null"]},
+    "text": {"type": "string"},
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["order", "kind", "status"],
+        "properties": {
+          "order": {"type": "integer"},
+          "kind": {"type": "string"},
+          "status": {"type": "string"},
+          "token": {"type": "string"},
+          "signal": {"type": "string"},
+          "value": {},
+          "expression": {"type": "string"},
+          "source_ref": {"type": "object", "additionalProperties": true},
+          "send_ref": {"type": "object", "additionalProperties": true}
+        },
+        "additionalProperties": true
+      }
+    },
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

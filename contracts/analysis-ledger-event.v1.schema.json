@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/analysis-ledger-event.v1.schema.json",
+  "title": "Analysis Ledger Event v1",
+  "type": "object",
+  "required": ["schema_version", "sequence", "run_id", "recorded_at", "event"],
+  "properties": {
+    "schema_version": {"const": "analysis-ledger-event.v1"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string"},
+    "recorded_at": {"type": "string"},
+    "event": {"type": "string"},
+    "actor": {"type": "string"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/debug-experiment.v1.schema.json",
+  "title": "Debug Experiment v1",
+  "type": "object",
+  "required": [
+    "schema_version", "experiment_id", "run_id", "question", "method", "target",
+    "expected_discrimination", "status", "observations", "disturbance", "conclusion_delta"
+  ],
+  "properties": {
+    "schema_version": {"const": "debug-experiment.v1"},
+    "experiment_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "question": {"type": "string", "minLength": 1},
+    "method": {"enum": ["static_query", "public_runtime", "replay", "gdb", "manual_vscode", "parameter_what_if"]},
+    "target": {"type": "object"},
+    "plan_ref": {"type": ["object", "null"]},
+    "approval": {"type": "object"},
+    "session_ref": {"type": ["object", "null"]},
+    "watch_groups": {"type": "array"},
+    "expected_discrimination": {"type": "array"},
+    "observations": {"type": "array"},
+    "disturbance": {"type": "object"},
+    "conclusion_delta": {"type": "array"},
+    "status": {"enum": ["planned", "approval_required", "running", "completed", "partial", "blocked", "failed"]}
+  },
+  "additionalProperties": true
+}

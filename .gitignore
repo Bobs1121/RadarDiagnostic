@@ -1,5 +1,6 @@
 # Secrets
 .env
+config.local.yaml
 
 # Embedded repos (use git submodule if needed)
 cr60_light_arbe/
@@ -16,6 +17,14 @@ build/
 # Cases data (large binary files)
 cases/**/*.bag
 cases/**/*.blf
+cases/**/*.mf4
+
+# V3 workspace sandbox (per-variant isolated caches / knowledge)
+.workspaces/
+
+# LanceDB semantic index (per-variant, regenerable)
+**/memory/lancedb/
+**/memory/semantic/
 
 # IDE
 .vscode/
@@ -45,6 +54,9 @@ radarAnalyze_introduction.html
 radarAnalyze_introduction.md
 
 # Runtime artifacts (generated during diagnosis)
+outputs/
+.playwright-cli/
+.pytest_cache_codex/
 cases/**/*.md
 cases/**/*.html
 cases/**/*.json
@@ -58,5 +70,16 @@ memory/*.jsonl
 memory/.dream-lock
 memory/**/*.json
 scripts/*.db
+scripts/*.bak
+scripts/_*
 taskboard.json
 observability_log.json
+
+# Local agent plans and generated analysis scratch
+.zcode/
+_fix_cfg.py
+stdout
+pi-orchestration-context.v1
+reports/
+memory/**/*.db-shm
+memory/**/*.db-wal

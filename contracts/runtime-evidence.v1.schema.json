@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/runtime-evidence.v1.schema.json",
+  "title": "CR60 runtime evidence overlay v1",
+  "description": "Feature-neutral overlay for replay, public ROS output, and headless debugger observations.",
+  "type": "object",
+  "required": ["schema_version", "status", "run", "evidence_layers", "observations"],
+  "properties": {
+    "schema_version": { "const": "runtime-case-evidence.v1" },
+    "status": { "enum": ["ready", "partial", "blocked", "failed"] },
+    "producer": {
+      "type": "object",
+      "description": "Producer/adapter identity; must not be interpreted as an ADAS feature mapping.",
+      "properties": {
+        "kind": { "type": "string" },
+        "input_schema": { "type": "string" },
+        "normalizer": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "normalization": {
+      "type": "object",
+      "properties": {
+        "marker_count": { "type": "integer", "minimum": 0 },
+        "commands": { "type": "array", "items": { "type": "string" } },
+        "transcript_sha256": { "type": "string" },
+        "stderr_sha256": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "run": {
+      "type": "object",
+      "required": ["run_id", "data_fingerprint", "source_context_id"],
+      "properties": {
+        "run_id": { "type": "string" },
+        "data_fingerprint": { "type": "string" },
+        "source_context_id": { "type": "string" },
+        "source_snapshot_hash": { "type": "string" },
+        "binary_fingerprint": { "type": "string" },
+        "server": { "type": "string" },
+        "workspace": { "type": "string" },
+        "bag": { "type": "string" },
+        "project_id": { "type": "string" },
+        "variant_id": { "type": "string" },
+        "coem": { "type": "string" },
+        "vehicle": { "type": ["string", "object", "null"] },
+        "radar_id": { "type": ["integer", "null"] },
+        "input_strategy": { "type": "string" },
+        "player_mode": { "type": "string" },
+        "formal_player_parity": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "evidence_layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "authority", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "enum": [
+              "recorded_raw",
+              "replay_algorithm",
+              "runtime_with_frame",
+              "gdb_observation",
+              "can_tx_observation",
+              "source_derived",
+              "objectlist_candidate",
+              "media"
+            ]
+          },
+          "authority": { "type": "string" },
+          "status": { "enum": ["observed", "derived", "partial", "not_available", "conflict"] },
+          "source": { "type": "object" },
+          "artifact": { "type": "string" },
+          "diagnostics": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["observation_id", "layer", "identity", "fields"],
+        "properties": {
+          "observation_id": { "type": "string" },
+          "layer": {
+            "enum": [
+              "recorded_raw",
+              "replay_algorithm",
+              "runtime_with_frame",
+              "gdb_observation",
+              "can_tx_observation",
+              "source_derived",
+              "objectlist_candidate",
+              "media"
+            ]
+          },
+          "identity": {
+            "type": "object",
+            "properties": {
+              "event_id": { "type": ["string", "null"] },
+              "data_fingerprint": { "type": "string" },
+              "radar_id": { "type": ["integer", "null"] },
+              "radar_pos": { "type": ["string", "integer", "null"] },
+              "frame_id": { "type": ["integer", "null"] },
+              "frame_source": { "type": "string" },
+              "object_id": { "type": ["integer", "string", "null"] },
+              "algorithm_index": { "type": ["integer", "null"] },
+              "raw_input_index": { "type": ["integer", "null"] },
+              "objectlist_index": { "type": ["integer", "null"] },
+              "function": { "type": ["string", "null"] },
+              "source_location": { "type": "object" }
+            },
+            "additionalProperties": true
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["token", "status"],
+              "properties": {
+                "token": { "type": "string" },
+                "value": {},
+                "status": {
+                  "enum": [
+                    "observed",
+                    "derived",
+                    "not_available",
+                    "optimized_out",
+                    "not_found",
+                    "conflict"
+                  ]
+                },
+                "phase": { "enum": ["before", "during", "after", "unknown"] },
+                "scope": { "type": "string" },
+                "source": { "type": "object" },
+                "code_ref": { "type": "object" },
+                "raw": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "call_chain": { "type": "array", "items": { "type": "object" } },
+          "geometry": { "type": "object" },
+          "disturbance": { "type": "object" },
+          "diagnostics": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["status", "kind"],
+        "properties": {
+          "status": {"enum": ["blocked", "failed", "partial", "completed"]},
+          "kind": {"type": "string"},
+          "reason": {"type": "string"},
+          "target": {"type": "object"},
+          "source": {"type": "object"},
+          "diagnostics": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    },
+    "warmup": {
+      "type": "object",
+      "properties": {
+        "strategy": { "enum": ["sgu_injection", "point_cloud", "legacy", "unknown"] },
+        "strategy_source": { "type": "string" },
+        "requested_frames": { "type": "integer", "minimum": 0 },
+        "actual_frames": { "type": "integer", "minimum": 0 },
+        "target_frame": { "type": ["integer", "null"] },
+        "reset_or_gap": { "type": "array", "items": { "type": "object" } },
+        "comparison": { "type": "object" },
+        "sensitivity_status": { "enum": ["not_evaluated", "stable", "warmup_sensitive", "inconclusive"] },
+        "derived_state_fingerprint": { "type": "string" },
+        "output_transition_fingerprint": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "comparisons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["left", "right", "status"],
+        "properties": {
+          "left": { "type": "string" },
+          "right": { "type": "string" },
+          "status": { "enum": ["same", "different", "not_comparable", "not_evaluated"] },
+          "differences": { "type": "array", "items": { "type": "object" } },
+          "resolution": { "enum": ["not_auto_resolved", "source_authoritative", "runtime_authoritative", "user_confirmed", "none"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "disturbance": {
+      "type": "object",
+      "properties": {
+        "status": { "enum": ["not_evaluated", "suspected", "confirmed"] },
+        "reason": { "type": "string" },
+        "metrics": { "type": "object", "additionalProperties": true },
+        "source": { "type": "string" },
+        "diagnostics": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "diagnostics": { "type": "array", "items": { "type": "string" } },
+    "artifacts": { "type": "object", "additionalProperties": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

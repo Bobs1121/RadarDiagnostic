@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/memory-recall.v1.schema.json",
+  "title": "CR60 memory recall v1",
+  "type": "object",
+  "required": ["schema_version", "status", "scope", "items", "summary", "policy"],
+  "properties": {
+    "schema_version": {"const": "memory-recall.v1"},
+    "status": {"enum": ["ready", "partial", "not_available", "blocked"]},
+    "scope": {"type": "object"},
+    "items": {"type": "array", "items": {"type": "object", "required": ["layer", "status", "value", "provenance"]}},
+    "summary": {"type": "object"},
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

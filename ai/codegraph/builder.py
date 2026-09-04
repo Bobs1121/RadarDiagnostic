@@ -15,6 +15,7 @@ import logging
 import os
 import sqlite3
 import time
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -72,6 +73,7 @@ class CodeGraphBuilder:
         use_ast: bool = False,
         source_docs_dir: Optional[Path] = None,
         variable_filter: Optional[dict] = None,
+        platform_id: Optional[str] = None,  # ✨ Gen5 full-scan support
     ):
         self.db_path = Path(db_path)
         self.source_root = Path(source_root)
@@ -81,12 +83,115 @@ class CodeGraphBuilder:
         self.use_ast = use_ast and AST_AVAILABLE
         self.source_docs_dir = source_docs_dir
         self.variable_filter = variable_filter  # Phase 5B: variable filter config
+        self.platform_id = platform_id  # ✨: "gen5_reco_pl" triggers full scan
         self.conn: Optional[sqlite3.Connection] = None
         self._ast_results_by_file: dict = {}
 
         if self.use_ast and not AST_AVAILABLE:
             log.warning("CodeGraph: use_ast=True but tree-sitter not installed; falling back to regex")
             self.use_ast = False
+
+        # ✨ Gen5: C++ files work better with regex (AST needs tree-sitter-cpp which has compat issues)
+        if self.platform_id and self.platform_id.startswith("gen5"):
+            self.use_ast = False
+
+    def _should_full_scan(self) -> bool:
+        """Return True if this platform needs recursive file discovery."""
+        return self.platform_id and self.platform_id.startswith("gen5")
+
+    def _discover_source_files(self) -> list[dict]:
+        """Discover source files based on platform_id.
+
+        Gen6: scan key_source_files + calib_files (~15 files)
+        Gen5: scan all .cpp/.hpp under source_root (~661 files)
+        """
+        if self._should_full_scan():
+            return self._full_scan_source_files()
+        files = analyzer.phase1_file_index(
+            self.source_root, self.key_files + self.calib_files
+        )
+        # Variant truth: also index RteComMapping_Tx*.c (and SGU variants)
+        # next to any indexed RteComMapping_Rx*.c so the write-side chain
+        # (WRITES_SIGNAL edges) is part of the graph.
+        return self._discover_tx_companions(files)
+
+    def _discover_tx_companions(self, files: list[dict]) -> list[dict]:
+        """Add same-directory RteComMapping_Tx*.c files to the file index."""
+        indexed = {f["file_path"] for f in files}
+        tx_added: list[dict] = []
+        for info in files:
+            if not info.get("exists"):
+                continue
+            path = Path(info["file_path"])
+            if "RteComMapping_Rx" not in path.name:
+                continue
+            for candidate in sorted(info["full_path"].parent.glob("RteComMapping_Tx*.c")):
+                rel = normalize_path(str(candidate.relative_to(self.source_root)))
+                if rel in indexed or rel in {f["file_path"] for f in tx_added}:
+                    continue
+                tx_added.append({
+                    "file_path": rel,
+                    "full_path": candidate,
+                    "exists": True,
+                    "hash": analyzer.file_hash(candidate),
+                    "line_count": candidate.read_text(
+                        encoding="utf-8", errors="replace"
+                    ).count("\n") + 1,
+                })
+        if tx_added:
+            log.info("CodeGraph: added %d Tx companion file(s)", len(tx_added))
+        return files + tx_added
+
+    def _full_scan_source_files(self) -> list[dict]:
+        """Recursively scan source_root for .cpp/.hpp/.h files in critical dirs.
+
+        Only scans reco_fw/component, arch, configuration (not apl/bindings).
+        Uses path-based hash (fast stat) instead of full file content hash
+        to keep initial build under ~30s. Change detection uses the stored
+        path + line_count in the DB as a lightweight hash.
+        """
+        relevant_dirs = {
+            "reco_fw/component",
+            "reco_fw/arch",
+            "reco_fw/configuration",
+        }
+
+        files = []
+        extensions = {".cpp", ".hpp", ".h"}
+
+        for rel in relevant_dirs:
+            base = self.source_root / rel
+            if not base.exists():
+                continue
+            count = 0
+            for root, dirs, filenames in os.walk(str(base)):
+                for fn in filenames:
+                    ext = Path(fn).suffix.lower()
+                    if ext not in extensions:
+                        continue
+                    full_path = Path(root) / fn
+                    rel_path = str(full_path.relative_to(self.source_root)).replace("\\", "/")
+                    try:
+                        st = full_path.stat()
+                        # Lightweight hash: file path + size modification time + size
+                        h = hashlib.md5(
+                            (rel_path + str(st.st_mtime) + str(st.st_size)).encode()
+                        ).hexdigest()[:16]
+                        files.append({
+                            "full_path": full_path,
+                            "file_path": rel_path,
+                            "hash": h,
+                            "exists": True,
+                            "line_count": max(1, st.st_size // 50),
+                        })
+                        count += 1
+                    except OSError:
+                        continue
+            if count:
+                log.info("CodeGraph: %d files in %s", count, rel)
+
+        log.info("CodeGraph full scan: %d C/C++ files total", len(files))
+        return files
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -99,8 +204,8 @@ class CodeGraphBuilder:
             self._connect()
             self._ensure_schema()
 
-            # Phase 1: File Index — compute hashes
-            file_infos = analyzer.phase1_file_index(self.source_root, self.key_files + self.calib_files)
+            # Phase 1: File Index — compute hashes (platform-aware discovery)
+            file_infos = self._discover_source_files()
             result.files_scanned = len(file_infos)
 
             # Determine changed files
@@ -815,6 +920,7 @@ class CodeGraphBuilder:
         ).fetchall()
 
         updated = 0
+        linked = 0
         for row in rows:
             sig_id = row["id"]
             sig_name = row["name"] or ""
@@ -853,10 +959,31 @@ class CodeGraphBuilder:
                 )
                 updated += 1
 
+                # SIGNAL -> VARIABLE edge: make "signal flows into variable"
+                # navigable in the graph instead of only via the internal_var
+                # column. The variable node is matched by short name; the edge
+                # type follows the mapping direction (read/write).
+                if int_var:
+                    var_id = f"VARIABLE:{int_var}"
+                    exists = self.conn.execute(
+                        "SELECT 1 FROM nodes WHERE id=?", (var_id,)
+                    ).fetchone()
+                    if exists:
+                        edge_type = "WRITES_SIGNAL" if info.get("expression") else "READS_SIGNAL"
+                        edge_id = f"{var_id}->{sig_id}:{edge_type}:0"
+                        self.conn.execute(
+                            """INSERT OR IGNORE INTO edges (id, source, target, type, line)
+                               VALUES (?,?,?,?,0)""",
+                            (edge_id, var_id, sig_id, edge_type),
+                        )
+                        linked += 1
         self.conn.commit()
         if updated:
-            log.info("CodeGraph: enriched %d SIGNAL nodes (total mapping sources: %d)", 
-                     updated, len(can_to_info))
+            log.info(
+                "CodeGraph: enriched %d SIGNAL nodes, %d SIGNAL<->VARIABLE edges "
+                "(total mapping sources: %d)",
+                updated, linked, len(can_to_info),
+            )
 
     # ── Internal: Purge Changed ─────────────────────────────────────────
 

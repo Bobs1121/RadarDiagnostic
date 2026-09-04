@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from .bag_parser import BagParser, TOPIC_RADAR_ID, discover_radar_topics
 from .blf_parser import BlfParser
@@ -17,6 +17,18 @@ from .dbc_loader import DbcLoader
 from .frame_store import FrameStore
 from .time_sync import TimeSync
 from .mf4_parser import Mf4Parser, check_mf4_dependency
+
+# Plugin-aware dispatch: formats registered via ParserRegistry are handled by
+# their ParserPlugin; anything unregistered falls back to the legacy globs.
+try:
+    from parsers.plugins import get_parser_plugin
+    from parsers.plugins.base import ParserContext
+    _HAS_PARSER_PLUGINS = True
+except Exception:  # pragma: no cover - defensive
+    _HAS_PARSER_PLUGINS = False
+
+if TYPE_CHECKING:
+    from core.workspace import Workspace
 
 # Legacy hardcoded topic lists — kept for backward compatibility when
 # auto-discovery is not available or returns no results.
@@ -58,11 +70,13 @@ def load_case_data(
     config: dict,
     project_root: Path,
     on_status=None,
+    workspace: "Workspace | None" = None,
 ) -> CaseLoadResult:
     """
     Parse all BAG/BLF files in *case_dir* and return a CaseLoadResult.
     Deep-parses wfAutosarData/wfObjectMsg into radar_objects/radar_debug
-    and builds warning_events post-hoc.
+    and builds warning_events post-hoc. When provided, *workspace* DBCs are
+    loaded before legacy config paths so workspace-specific overrides win.
     """
     def status(step, detail=""):
         if on_status:
@@ -71,7 +85,7 @@ def load_case_data(
     result = CaseLoadResult()
     result.store = FrameStore()
 
-    dbc_paths = config["paths"].get("dbc_files", [])
+    dbc_paths = _resolve_dbc_paths(config, workspace)
     result.dbc = DbcLoader(dbc_paths, base_dir=project_root) if dbc_paths else None
 
     bag_metas: list[dict] = []
@@ -192,6 +206,17 @@ def load_case_data(
     # BLF (DBC-based CAN signals)
     for bf in case_dir.glob("*.blf"):
         status("parse", f"Parsing {bf.name} (DBC decode)...")
+        plugin = get_parser_plugin(".blf") if _HAS_PARSER_PLUGINS else None
+        if plugin is not None:
+            ctx = ParserContext(
+                config=config, project_root=project_root,
+                workspace=workspace, dbc=result.dbc, on_status=on_status,
+            )
+            pres = plugin().load(bf, result.store, ctx)
+            if pres.metadata:
+                blf_metas.append(pres.metadata)
+            continue
+        # Legacy fallback
         parser = BlfParser(bf, dbc_loader=result.dbc)
         blf_metas.append(parser.get_metadata())
         result.store.bulk_insert_can(parser.iter_frames(decode=True))
@@ -203,6 +228,18 @@ def load_case_data(
     mf4_metas: list[dict] = []
     mf4_available = check_mf4_dependency()
     for mf in case_dir.glob("*.mf4"):
+        plugin = get_parser_plugin(".mf4") if _HAS_PARSER_PLUGINS else None
+        if plugin is not None:
+            ctx = ParserContext(
+                config=config, project_root=project_root,
+                workspace=workspace, dbc=result.dbc, on_status=on_status,
+            )
+            pres = plugin().load(mf, result.store, ctx)
+            if pres.warnings:
+                status("parse", pres.warnings[0])
+            if pres.metadata:
+                mf4_metas.append(pres.metadata)
+            continue
         if not mf4_available:
             status("parse", f"MF4 {mf.name} found but asammdf/mffparser not installed — skipping")
             break
@@ -231,6 +268,30 @@ def load_case_data(
     _build_warning_events(result.store, status)
 
     return result
+
+
+def _resolve_dbc_paths(
+    config: dict,
+    workspace: "Workspace | None" = None,
+) -> list[str | Path]:
+    """Resolve DBC search order while preserving legacy config fallback."""
+    resolved: list[str | Path] = []
+    seen: set[str] = set()
+
+    sources = []
+    if workspace is not None:
+        sources.append(workspace.get_dbc_files())
+    sources.append(config.get("paths", {}).get("dbc_files", []))
+
+    for dbc_paths in sources:
+        for dbc_path in dbc_paths:
+            key = str(dbc_path)
+            if key in seen:
+                continue
+            seen.add(key)
+            resolved.append(dbc_path)
+
+    return resolved
 
 
 def _build_warning_events(store: FrameStore, status_fn) -> None:

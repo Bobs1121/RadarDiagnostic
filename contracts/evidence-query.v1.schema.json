@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/evidence-query.v1.schema.json",
+  "title": "CR60 evidence query v1",
+  "description": "A bounded read-only slice of explicit bundle/viewer/runtime artifacts.",
+  "type": "object",
+  "required": ["schema_version", "status", "query", "events", "matched_event_count"],
+  "properties": {
+    "schema_version": {"const": "evidence-query.v1"},
+    "status": {"enum": ["ready", "not_found", "blocked", "partial"]},
+    "query": {"type": "object"},
+    "case": {"type": "object"},
+    "provenance": {"type": "object"},
+    "matched_event_count": {"type": "integer", "minimum": 0},
+    "events": {"type": "array", "items": {"type": "object"}},
+    "input_refs": {"type": "array", "items": {"type": "object"}},
+    "artifact_refs": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

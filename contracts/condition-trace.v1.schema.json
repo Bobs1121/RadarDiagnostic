@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/condition-trace.v1.schema.json",
+  "title": "CR60 condition trace v1",
+  "type": "object",
+  "required": ["schema_version", "status", "conditions", "summary", "policy"],
+  "properties": {
+    "schema_version": {"const": "condition-trace.v1"},
+    "status": {"enum": ["ready", "partial", "not_available", "blocked"]},
+    "event": {"type": "object"},
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["condition_id", "expression", "evaluation", "bindings", "missing_tokens"],
+        "properties": {
+           "condition_id": {"type": "string"},
+           "function": {"type": "string"},
+           "condition_kind": {"type": "string"},
+           "chain_function": {"type": "string"},
+           "chain_relation": {"type": "string"},
+           "chain_function_order": {"type": "integer", "minimum": 1},
+           "chain_source_order": {"type": "integer", "minimum": 1},
+           "chain_call_site_line": {"type": "integer", "minimum": 1},
+           "expression": {"type": "string"},
+          "source_ref": {"type": "object"},
+          "referenced_tokens": {"type": "array", "items": {"type": "string"}},
+          "bindings": {"type": "array", "items": {"type": "object"}},
+          "missing_tokens": {"type": "array", "items": {"type": "string"}},
+          "normalised_expression": {"type": "string"},
+          "substituted_expression": {"type": "string"},
+          "evaluation": {
+            "type": "object",
+            "required": ["status", "reason"],
+            "properties": {
+              "status": {"enum": ["satisfied", "not_satisfied", "not_evaluable", "unsupported"]},
+              "value": {},
+              "reason": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total", "satisfied", "not_satisfied", "not_evaluable", "unsupported", "evaluated"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "satisfied": {"type": "integer", "minimum": 0},
+        "not_satisfied": {"type": "integer", "minimum": 0},
+        "not_evaluable": {"type": "integer", "minimum": 0},
+        "unsupported": {"type": "integer", "minimum": 0},
+        "evaluated": {"type": "integer", "minimum": 0}
+      }
+    },
+    "gaps": {"type": "array", "items": {"type": "object"}},
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/arbe-build-session.v1.schema.json",
+  "title": "Arbe catkin build session v1",
+  "description": "Auditable plan or result for catkin_make against one explicit workspace.",
+  "type": "object",
+  "required": ["schema_version", "status", "target", "command"],
+  "properties": {
+    "schema_version": {"const": "arbe-build-session.v1"},
+    "status": {"enum": ["planned", "approval_required", "completed", "failed", "timeout", "blocked"]},
+    "target": {"type": "object", "additionalProperties": true},
+    "command": {"type": "string"},
+    "catkin_make_args": {"type": "array", "items": {"type": "string"}},
+    "execute_requested": {"type": "boolean"},
+    "duration_sec": {"type": "number"},
+    "command_result": {"type": "object", "additionalProperties": true},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

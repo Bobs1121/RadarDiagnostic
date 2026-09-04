@@ -140,6 +140,36 @@ class FrameStore:
         # warning_events indices
         c.execute("CREATE INDEX IF NOT EXISTS idx_we_func ON warning_events(func_name)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_we_ts ON warning_events(start_ns)")
+        # V4 P2: 信号目录 + 数据质量审计（向后兼容，新表不影响既有查询）
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS signal_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_name TEXT NOT NULL,
+                source_kind TEXT DEFAULT '',
+                can_id INTEGER,
+                message_name TEXT,
+                valid_ratio REAL DEFAULT 0.0,
+                is_placeholder INTEGER DEFAULT 0,
+                UNIQUE(signal_name, source_kind)
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS data_quality (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_name TEXT NOT NULL,
+                source_kind TEXT DEFAULT '',
+                sample_count INTEGER DEFAULT 0,
+                distinct_count INTEGER DEFAULT 0,
+                minimum REAL,
+                maximum REAL,
+                is_constant INTEGER DEFAULT 0,
+                is_placeholder INTEGER DEFAULT 0,
+                verdict TEXT DEFAULT 'ok',
+                note TEXT DEFAULT ''
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sigcat_name ON signal_catalog(signal_name)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_dq_name ON data_quality(signal_name)")
         self.conn.commit()
 
     def insert_bag_frame(self, frame) -> None:

@@ -208,10 +208,19 @@ def phase2_extract_functions(file_path: Path, rel_path: str) -> list[dict]:
             i += 1
             continue
 
-        m = _FUNC_DEF_RE.match(line)
+        # Support both common C styles:
+        #   int f(void)\n   {
+        # and
+        #   int f(void) { ... }
+        # The historical matcher only accepted the first style even though
+        # its contract/documentation says the opening brace may be on either
+        # line.  Strip the body suffix only for matching the signature; the
+        # original line is still used by _find_function_end().
+        signature_line = line.split("{", 1)[0].rstrip() if "{" in line else line
+        m = _FUNC_DEF_RE.match(signature_line)
         if m and m.group("name") not in _CONTROL_KEYWORDS:
             # Verify next non-empty line contains {
-            found_brace = False
+            found_brace = "{" in line
             for j in range(i + 1, min(i + 3, len(lines))):
                 if "{" in lines[j]:
                     found_brace = True
@@ -235,7 +244,11 @@ def phase2_extract_functions(file_path: Path, rel_path: str) -> list[dict]:
                         "params": params,
                         "is_static": is_static,
                     })
-                    i = end_line + 1
+                    # ``end_line`` is 1-indexed while ``i`` is a zero-indexed
+                    # list position.  Advancing to ``end_line`` skips exactly
+                    # the closing-brace line and keeps the next definition;
+                    # ``end_line + 1`` silently dropped adjacent functions.
+                    i = end_line
                     continue
 
         i += 1

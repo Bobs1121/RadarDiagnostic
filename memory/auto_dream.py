@@ -3,7 +3,8 @@
 AutoDream: Memory consolidation system.
 Inspired by Claude Code's auto-dream architecture.
 
-Triggered on startup, the dream cycle:
+Triggered explicitly (or optionally before case routing when enabled), the
+dream cycle:
 1. Orient  — Survey all memory layers, identify what's new
 2. Gather  — Collect recent sessions, findings, patterns
 3. Consolidate — Merge, deduplicate, resolve conflicts, update project memory
@@ -105,6 +106,7 @@ class AutoDream:
         self,
         on_status=None,
         force: bool = False,
+        reason: Optional[str] = None,
     ) -> Optional[dict]:
         """
         Check gate conditions and run dream if appropriate.
@@ -131,11 +133,23 @@ class AutoDream:
             status("Another dream is in progress, skipping.")
             return None
 
+        if force and reason:
+            status(f"Forcing dream: {reason}")
+
         status("Memory consolidation starting...")
         self._acquire_lock()
 
         try:
             result = self._run_dream_cycle(status)
+            freshness = (self.config or {}).get("identity", {}).get("freshness")
+            if isinstance(freshness, dict):
+                result["_freshness"] = {
+                    "any_changed": freshness.get("any_changed", False),
+                    "changed_keys": list(freshness.get("changed_keys", [])),
+                    "state_path": freshness.get("state_path"),
+                }
+            if reason:
+                result["_force_reason"] = reason
             self._apply_dream_result(result, status)
             self._record_dream(result)
             self._release_lock()
@@ -191,9 +205,63 @@ class AutoDream:
 
     # ── Lock ────────────────────────────────────────────────────────────
 
+    def _read_lock_pid(self) -> Optional[int]:
+        try:
+            raw = self.lock_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return None
+        if not raw:
+            return None
+        try:
+            pid = int(raw)
+        except ValueError:
+            return None
+        return pid if pid > 0 else None
+
+    def _pid_is_running(self, pid: int) -> Optional[bool]:
+        if pid <= 0:
+            return None
+
+        if os.name == "nt":
+            import ctypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            access = 0x00100000 | 0x1000  # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+            handle = kernel32.OpenProcess(access, False, pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                return True
+
+            error = ctypes.get_last_error()
+            if error == 87:  # ERROR_INVALID_PARAMETER
+                return False
+            if error == 5:  # ERROR_ACCESS_DENIED
+                return None
+            return None
+
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return None
+        return True
+
     def _is_locked(self) -> bool:
         if not self.lock_path.exists():
             return False
+
+        pid = self._read_lock_pid()
+        if pid is not None:
+            is_running = self._pid_is_running(pid)
+            if is_running is False:
+                self._release_lock()
+                return False
+            if is_running is True:
+                return True
+
         try:
             mtime = os.path.getmtime(self.lock_path)
             age_hours = (time.time() - mtime) / 3600
@@ -216,15 +284,20 @@ class AutoDream:
     def _refresh_variable_chains(self):
         """Refresh variable_chains.json from source code (struct alias tracing)."""
         try:
-            from ai.signal_mapper import trace_variable_chains
+            from engines.signal_mapper import trace_variable_chains
             source_code = (self.config or {}).get("paths", {}).get("source_code", "")
             if source_code:
-                trace_variable_chains(
+                result = trace_variable_chains(
                     Path(source_code),
                     resolve_source_docs_dir(self.config, self.project_root),
                 )
-        except Exception:
-            pass
+                return {
+                    "ok": True,
+                    "alias_count": len(result.get("struct_aliases", {})),
+                }
+            return {"ok": False, "reason": "source_root_missing"}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)[:200]}
 
     def _run_code_learning(self, status) -> dict:
         """Phase 0 — 委托 CodeLearner 做增量代码学习 + MD 概览同步。
@@ -263,6 +336,7 @@ class AutoDream:
             )
             learn_result["overview"] = {
                 "generated": overview_result.get("generated", []),
+                "skipped": overview_result.get("skipped", []),
                 "skipped_count": len(overview_result.get("skipped", [])),
                 "failed": overview_result.get("failed", []),
             }
@@ -271,6 +345,80 @@ class AutoDream:
             learn_result["overview"] = {"error": str(e)[:200]}
 
         return learn_result
+
+    def _refresh_conditions(self, status) -> dict:
+        """Refresh only condition modules already materialized for this variant."""
+        freshness = self.config.get("identity", {}).get("freshness", {})
+        if not any(freshness.get(key) for key in (
+            "code_changed", "constants_changed", "identity_changed",
+        )):
+            return {"ok": True, "refreshed": [], "skipped": "no_code_drift"}
+        try:
+            from ai.condition_extractor import ConditionExtractor
+
+            docs_dir = resolve_source_docs_dir(self.config, self.project_root)
+            functions = sorted({
+                path.name[:-len("_conditions.json")].upper()
+                for path in docs_dir.glob("*_conditions.json")
+            })
+            if not functions:
+                return {"ok": True, "refreshed": [], "skipped": "no_existing_modules"}
+            extractor = ConditionExtractor(self.router, self.project_root, self.config)
+            refreshed: list[str] = []
+            failed: list[dict] = []
+            for function in functions:
+                try:
+                    result = extractor.extract(function, force=True)
+                    if result and "error" not in result:
+                        refreshed.append(function)
+                    else:
+                        failed.append({"function": function, "error": result.get("error", "empty")})
+                except Exception as exc:
+                    failed.append({"function": function, "error": str(exc)[:200]})
+            status(
+                f"Condition modules refreshed: {len(refreshed)}, failed: {len(failed)}"
+            )
+            return {"ok": not failed, "refreshed": refreshed, "failed": failed}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)[:200]}
+
+    def _refresh_codegraph(self, status) -> dict:
+        """Incrementally refresh the active variant CodeGraph."""
+        freshness = self.config.get("identity", {}).get("freshness", {})
+        if not any(freshness.get(key) for key in (
+            "code_changed", "constants_changed", "identity_changed",
+        )):
+            return {"ok": True, "skipped": "no_code_drift"}
+        try:
+            from ai.code_learner import FUNC_KEYWORDS
+            from ai.codegraph import CodeGraphBuilder
+            from config import get_variable_filter, resolve_codegraph_db
+
+            source_root = Path(self.config["paths"]["source_code"])
+            key_files = self.config.get("paths", {}).get("key_source_files", [])
+            result = CodeGraphBuilder(
+                db_path=resolve_codegraph_db(self.config, self.project_root),
+                source_root=source_root,
+                key_files=key_files,
+                func_keywords=FUNC_KEYWORDS,
+                calib_files=[
+                    path for path in key_files
+                    if any(name in path for name in (
+                        "paraDefine", "structDefine", "globalVarDefine",
+                    ))
+                ],
+                source_docs_dir=resolve_source_docs_dir(self.config, self.project_root),
+                variable_filter=get_variable_filter(self.config),
+            ).build()
+            ok = bool(result.success or result.build_type == "skip")
+            status(f"CodeGraph refresh: {result.build_type}, success={ok}")
+            return {
+                "ok": ok,
+                "build_type": result.build_type,
+                "error": result.error if not ok else "",
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)[:200]}
 
     # ── Dream Cycle ─────────────────────────────────────────────────────
 
@@ -285,10 +433,17 @@ class AutoDream:
           4. Prune       — 应用变更
         """
         status("Phase 0/4: Study — incremental code learning...")
+        # Deterministic index products first: the AI learning pass below reads
+        # signal_mapping.json / output_mapping.json / codegraph, so refresh them
+        # before learning rather than after (first-principle: code is the only
+        # source of truth; LLM summarization runs on top of fresh indices).
+        signal_map_delta = self._refresh_signal_indices(status)
         code_delta = self._run_code_learning(status)
+        conditions_delta = self._refresh_conditions(status)
+        codegraph_delta = self._refresh_codegraph(status)
 
         status("Phase 1/4: Orient — surveying memories...")
-        self._refresh_variable_chains()
+        chain_delta = self._refresh_variable_chains()
         context = self._gather_all_memory_context()
 
         status("Phase 2/4: Gather — collecting recent sessions...")
@@ -311,8 +466,55 @@ class AutoDream:
             }
 
         # 附带代码学习结果（供 _record_dream 与调用方使用）
+        parsed["_signal_indices"] = signal_map_delta
         parsed["_code_learning"] = code_delta
+        parsed["_variable_chains"] = chain_delta
+        parsed["_conditions"] = conditions_delta
+        parsed["_codegraph"] = codegraph_delta
         return parsed
+
+    def _refresh_signal_indices(self, status) -> dict:
+        """Refresh the deterministic signal indices (RX mapping + TX mapping).
+
+        Both products are hash-cached inside signal_mapper, so a no-op when
+        the RteComMapping sources did not change. The write-side (Tx) mapping
+        is resolved with the same rte_file resolution as the read side so
+        variants without the legacy GWM path still produce output_mapping.json.
+        """
+        try:
+            from engines.signal_mapper import (
+                extract_output_signal_mapping,
+                extract_signal_mapping,
+            )
+            source_code = (self.config or {}).get("paths", {}).get("source_code", "")
+            if not source_code:
+                return {"ok": False, "reason": "source_root_missing"}
+            rte_file = self._resolve_rte_file()
+            source_root = Path(source_code)
+            docs_dir = resolve_source_docs_dir(self.config, self.project_root)
+            rx = extract_signal_mapping(source_root, docs_dir, rte_file=rte_file)
+            tx = extract_output_signal_mapping(source_root, docs_dir, rte_file=rte_file)
+            return {
+                "ok": True,
+                "rx_mapping_count": rx.get("mapping_count", 0),
+                "tx_mapping_count": tx.get("mapping_count", 0),
+                "rx_source_hash": rx.get("source_hash", ""),
+                "tx_source_hash": tx.get("source_hash", ""),
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)[:200]}
+
+    def _resolve_rte_file(self) -> str:
+        """Resolve the variant's RteComMapping file (Rx side) for mapping."""
+        try:
+            key_files = (self.config or {}).get("paths", {}).get("key_source_files") or []
+            for rel in key_files:
+                leaf = str(rel).replace("\\", "/")
+                if "/RteComMapping" in leaf or leaf.startswith("RteComMapping"):
+                    return str(rel)
+        except Exception:
+            pass
+        return r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
 
     def _gather_all_memory_context(self) -> str:
         """Gather current state of all memory layers."""
@@ -572,6 +774,7 @@ class AutoDream:
         """Record this dream in the log."""
         log = self._read_dream_log()
         code_delta = result.get("_code_learning", {}) or {}
+        freshness = result.get("_freshness", {}) or {}
         entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "summary": result.get("summary", "completed"),
@@ -583,6 +786,12 @@ class AutoDream:
             entry["code_pairs_learned"] = code_delta.get("learned_count", 0)
             entry["code_pairs_skipped"] = code_delta.get("skipped_count", 0)
             entry["code_warmup_done"] = code_delta.get("warmup_done", False)
+        if freshness:
+            entry["freshness_any_changed"] = bool(freshness.get("any_changed"))
+            if freshness.get("changed_keys"):
+                entry["freshness_changed_keys"] = list(freshness["changed_keys"])
+        if result.get("_force_reason"):
+            entry["force_reason"] = result["_force_reason"]
         log.append(entry)
         if len(log) > 100:
             log = log[-100:]

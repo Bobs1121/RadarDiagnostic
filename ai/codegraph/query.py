@@ -139,7 +139,16 @@ class CodeGraph:
         """Get all functions defined in a file."""
         file_id = f"FILE:{file_path}"
         rows = self.conn.execute(
-            "SELECT * FROM nodes WHERE type='FUNCTION' AND file_id=? ORDER BY start_line",
+            """SELECT n.id, n.type, n.name, n.display_name,
+                      COALESCE(n.file_path, f.name) AS file_path,
+                      n.file_id, n.start_line, n.end_line, n.return_type,
+                      n.params, n.is_static, n.scope, n.data_type, n.direction,
+                      n.rte_read_fn, n.rte_write_fn, n.value, n.unit,
+                      n.category, n.formula, n.state_name, n.keywords, n.side,
+                      n.semantic
+               FROM nodes n
+               LEFT JOIN nodes f ON f.id = n.file_id
+               WHERE n.type='FUNCTION' AND n.file_id=? ORDER BY n.start_line""",
             (file_id,),
         ).fetchall()
         return [self._row_to_node(r) for r in rows]
@@ -148,8 +157,16 @@ class CodeGraph:
         """Get all functions bound to an ADAS module (e.g. 'FCTB', 'BSD')."""
         mod_id = f"MODULE:{module}"
         rows = self.conn.execute(
-            """SELECT n.* FROM nodes n
+            """SELECT n.id, n.type, n.name, n.display_name,
+                      COALESCE(n.file_path, f.name) AS file_path,
+                      n.file_id, n.start_line, n.end_line, n.return_type,
+                      n.params, n.is_static, n.scope, n.data_type, n.direction,
+                      n.rte_read_fn, n.rte_write_fn, n.value, n.unit,
+                      n.category, n.formula, n.state_name, n.keywords, n.side,
+                      n.semantic
+               FROM nodes n
                JOIN edges e ON e.source = n.id
+               LEFT JOIN nodes f ON f.id = n.file_id
                WHERE n.type='FUNCTION' AND e.target=? AND e.type='BELONGS_TO'
                ORDER BY n.start_line""",
             (mod_id,),
@@ -232,10 +249,10 @@ class CodeGraph:
 
     def get_call_chain(self, func_name: str, max_depth: int = 5) -> list[dict]:
         """Get the full call chain (recursive callers) up to max_depth."""
-        # Use recursive CTE
+        # Recursive CTE walking CALLS edges backwards (target -> source).
         query = """
         WITH RECURSIVE chain(func_name, func_id, depth, path) AS (
-            SELECT ?, f"FUNCTION:?", 0, ?
+            SELECT ?, ?, 0, ?
             UNION ALL
             SELECT n.name, e.source, c.depth + 1, c.path || ' -> ' || n.name
             FROM chain c
@@ -246,8 +263,17 @@ class CodeGraph:
         SELECT * FROM chain WHERE depth > 0
         """
         target = f"FUNCTION:{func_name}"
-        rows = self.conn.execute(query, (func_name, func_name, func_name, max_depth)).fetchall()
+        rows = self.conn.execute(query, (func_name, target, func_name, max_depth)).fetchall()
         return [dict(r) for r in rows]
+
+    def find_callers(self, func_name: str, max_depth: int = 3) -> list[dict]:
+        """Find functions that (transitively) call *func_name*.
+
+        Thin wrapper over :meth:`get_call_chain` kept for callers that
+        historically expected a ``find_callers`` name (e.g. the condition
+        extractor). Returns the same call-chain rows.
+        """
+        return self.get_call_chain(func_name, max_depth=max_depth)
 
     def get_variables_read_by(self, func_name: str) -> list[dict]:
         """Get variables read by a function."""
@@ -305,7 +331,8 @@ class CodeGraph:
         """Get signals read/written by a function."""
         source = f"FUNCTION:{func_name}"
         rows = self.conn.execute(
-            """SELECT e.*, n.name as signal_name, n.direction, n.rte_read_fn, n.rte_write_fn
+            """SELECT e.*, n.name as signal_name, n.direction, n.rte_read_fn,
+                      n.rte_write_fn
                FROM edges e
                JOIN nodes n ON n.id = e.target
                WHERE e.source=? AND e.type IN ('READS_SIGNAL', 'WRITES_SIGNAL')

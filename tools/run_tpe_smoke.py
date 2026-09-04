@@ -147,7 +147,7 @@ def main() -> int:
         _status("warn", f"state-transition gathering failed: {exc}")
         transitions = []
 
-    from ai.signal_mapper import (
+    from engines.signal_mapper import (
         extract_signal_mapping, trace_variable_chains, load_variable_chains,
     )
     source_root = Path(config["paths"]["source_code"])
@@ -165,7 +165,7 @@ def main() -> int:
     except Exception:
         chains = {}
 
-    from ai.tpe import TemporalPatternEngine
+    from engines.tpe import TemporalPatternEngine
     engine = TemporalPatternEngine(
         source_root=source_root, cache_dir=docs_dir,
         signal_mapping=sig_mapping, variable_chains=chains,

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/arbe-start-session.v1.schema.json",
+  "title": "Owned formal arbe start session v1",
+  "description": "A provenance and ownership envelope for one approved bash start invocation.",
+  "type": "object",
+  "required": ["schema_version", "status", "session_id", "ownership", "target", "start"],
+  "properties": {
+    "schema_version": {"const": "arbe-start-session.v1"},
+    "status": {"enum": ["started", "partial", "already_running", "blocked", "failed", "stopped"]},
+    "session_id": {"type": "string"},
+    "ownership": {"enum": ["tool_started", "external"]},
+    "target": {"type": "object", "additionalProperties": true},
+    "command": {"type": "array", "items": {"type": "string"}},
+    "start": {
+      "type": "object",
+      "properties": {
+        "status_raw": {"type": "string"},
+        "reason": {"type": "string"},
+        "pid": {"type": ["integer", "null"]},
+        "process_group_id": {"type": ["integer", "null"]},
+        "log": {"type": "string"},
+        "workspace": {"type": "string"},
+        "ros_master_uri": {"type": "string"},
+        "nodes": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "stdout": {"type": "string"},
+    "stderr": {"type": "string"},
+    "returncode": {"type": "integer"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

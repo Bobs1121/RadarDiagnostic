@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/arbe-replay-result.v1.schema.json",
+  "title": "CR60 local arbe replay result v1",
+  "description": "Feature-neutral replay trace projection consumed by alert-timeline; warning names are source/schema supplied.",
+  "type": "object",
+  "required": ["schema_version", "status", "mode", "trace", "warning_mapping_source"],
+  "properties": {
+    "schema_version": {"const": "arbe-replay-result.v1"},
+    "status": {"enum": ["ready", "partial", "blocked", "failed"]},
+    "mode": {"type": "string"},
+    "trace": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "event_count": {"type": "integer", "minimum": 0},
+    "active_warnings": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "kpi": {"type": "object"},
+    "warning_mapping_source": {"type": "string"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

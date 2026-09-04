@@ -220,7 +220,7 @@ def main() -> int:
     # ── [16]–[18] Variable Query Probe stack ──────────────────────────────
     print(f"\n[16] DataProbe (SQL+asteval query executor):")
     from parsers.frame_store import FrameStore
-    from ai.data_probe import DataProbe, _rewrite_bool_ops
+    from engines.data_probe import DataProbe, _rewrite_bool_ops
     # 16a: AST bool-op rewriting (avoids numpy ambiguous-truth error)
     rewrite_cases = [
         ("in_window and abs(dist_y) < 3.0", "in_window & (abs(dist_y) < 3.0)"),

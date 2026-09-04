@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/project-capability-manifest.v1.schema.json",
+  "title": "Project capability manifest v1",
+  "description": "Current project/source declaration used to select compatible parsers and tools.",
+  "type": "object",
+  "required": ["schema_version", "identity", "data_capabilities", "feature_capabilities", "code_capabilities", "replay_capabilities", "runtime_capabilities", "presentation_capabilities", "freshness", "unsupported"],
+  "properties": {
+    "schema_version": {"const": "project-capability-manifest.v1"},
+    "identity": {"type": "object"},
+    "data_capabilities": {"type": "array", "items": {"type": "object"}},
+    "feature_capabilities": {"type": "array", "items": {"type": "object"}},
+    "code_capabilities": {"type": "array", "items": {"type": "object"}},
+    "replay_capabilities": {"type": "array", "items": {"type": "object"}},
+    "runtime_capabilities": {"type": "array", "items": {"type": "object"}},
+    "presentation_capabilities": {"type": "array", "items": {"type": "object"}},
+    "freshness": {"type": "object"},
+    "unsupported": {"type": "array", "items": {"type": "object"}},
+    "conflicts": {"type": "array", "items": {"type": "object"}},
+    "generated_at": {"type": "string"}
+  },
+  "additionalProperties": true
+}

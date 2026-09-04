@@ -47,7 +47,7 @@ except Exception:
     _MARKDOWN_OK = False
 
 from .utils import get_func_fields
-from .signal_mapper import get_output_signals_for_function
+from engines.signal_mapper import get_output_signals_for_function
 
 
 # ── Shared palette for plotly (keeps charts coherent) ───────────────────────

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/alert-timeline.v1.schema.json",
+  "title": "CR60 evidence-layer neutral alert timeline v1",
+  "description": "Comparable alarm timeline that preserves recorded, replay, runtime, GDB and CAN evidence layers without evaluating a feature rule.",
+  "type": "object",
+  "required": ["schema_version", "status", "scope", "sources", "rows", "playback_frame_map", "comparisons", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "alert-timeline.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "scope": {"type": "object", "additionalProperties": true},
+    "sources": {
+      "type": "array",
+      "items": {"type": "object", "required": ["id", "layer", "status", "row_count"], "additionalProperties": true}
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["layer", "frame_status", "transition", "status"],
+        "properties": {
+          "source_id": {"type": "string"},
+          "layer": {"type": "string", "enum": ["recorded_raw", "replay_algorithm", "runtime_with_frame", "objectlist_candidate", "gdb_observation", "can_tx_observation"]},
+          "function": {},
+          "side": {},
+          "radar_id": {},
+          "frame_id": {},
+          "frame_status": {"enum": ["observed", "derived", "not_available"]},
+          "frame_source": {},
+          "time_sec": {},
+          "transition": {"type": "string"},
+          "value": {},
+          "signal": {},
+          "object_id": {},
+          "indices": {"type": "object", "additionalProperties": true},
+          "event_id": {},
+          "evidence_refs": {"type": "array"},
+          "status": {"enum": ["observed", "derived", "partial"]}
+        },
+        "additionalProperties": true
+      }
+    },
+    "context_alarm_rows": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "playback_frame_map": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "comparisons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["left", "right", "status"],
+        "properties": {
+          "left": {"type": "string"},
+          "right": {"type": "string"},
+          "status": {"enum": ["same", "different", "not_comparable", "not_evaluated"]},
+          "differences": {"type": "array"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "disturbance": {"type": "object", "additionalProperties": true},
+    "conflicts": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "input_refs": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

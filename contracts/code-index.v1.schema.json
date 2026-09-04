@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/code-index.v1.schema.json",
+  "title": "CR60 deterministic code index",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source_root",
+    "snapshot_hash",
+    "parser",
+    "files",
+    "functions",
+    "calls",
+    "variables_read",
+    "variables_written",
+    "signals",
+    "conditions",
+    "states",
+    "parameters",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": {"const": "code-index.v1"},
+    "source_root": {"type": "string", "minLength": 1},
+    "snapshot_hash": {"type": "string", "minLength": 1},
+    "parser": {"type": "string", "minLength": 1},
+    "files": {"type": "array", "items": {"type": "object"}},
+    "functions": {"type": "array", "items": {"type": "object"}},
+    "calls": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+    "variables_read": {"type": "array", "items": {"type": "object"}},
+    "variables_written": {"type": "array", "items": {"type": "object"}},
+    "signals": {"type": "array", "items": {"type": "object"}},
+    "conditions": {"type": "array", "items": {"type": "object"}},
+    "states": {"type": "array", "items": {"type": "object"}},
+    "parameters": {"type": "array", "items": {"type": "object"}},
+    "semantics": {"type": "array", "items": {"type": "object"}},
+    "edges": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
+  },
+  "additionalProperties": true
+}

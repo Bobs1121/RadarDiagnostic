@@ -1,0 +1,102 @@
+{
+  "registry_path": "D:\\RamboStar\\idea\\radarAnalyze\\materials\\gen6_byd_sc6h\\registry.json",
+  "last_updated": "2026-07-10T02:59:42.470095+00:00",
+  "materials": {
+    "mat-13812e13058e": {
+      "material_id": "mat-13812e13058e",
+      "variant_id": "gen6/byd_sc6h",
+      "material_type": "dbc",
+      "source_path": "D:\\BYD-SC6H-cr60light\\cr60_light\\coem\\BYD_SC6H\\tools\\RTA_CAR\\DBC\\BYD_UKE\\BoschOversea_StandardCANFD_commplatform_FCR_CAN_Matrix_V4.18.2_20251104.dbc",
+      "hash": "ba71b82d8a38e952c67134348bfadaa6d01cb18ecf9bd0124214b81c8ad77ecc",
+      "version": "1.0",
+      "category": "authoritative",
+      "tags": [
+        "dbc",
+        "auto_registered"
+      ],
+      "title": "BoschOversea_StandardCANFD_commplatform_FCR_CAN_Matrix_V4.18.2_20251104",
+      "created_at": "2026-07-10T02:59:42.457038+00:00",
+      "updated_at": "2026-07-10T02:59:42.457038+00:00"
+    },
+    "mat-fc7ac7439904": {
+      "material_id": "mat-fc7ac7439904",
+      "variant_id": "gen6/byd_sc6h",
+      "material_type": "dbc",
+      "source_path": "D:\\BYD-SC6H-cr60light\\cr60_light\\coem\\BYD_SC6H\\tools\\RTA_CAR\\DBC\\BYD_UKE\\BoschOversea_StandardCANFD_commplatform_RCR_CAN_Matrix_V4.18.2_20251104.dbc",
+      "hash": "8f6341120590a4794e67b218d228cf949d5e298e205a97ebdc73cbf799b64ac8",
+      "version": "1.0",
+      "category": "authoritative",
+      "tags": [
+        "dbc",
+        "auto_registered"
+      ],
+      "title": "BoschOversea_StandardCANFD_commplatform_RCR_CAN_Matrix_V4.18.2_20251104",
+      "created_at": "2026-07-10T02:59:42.459050+00:00",
+      "updated_at": "2026-07-10T02:59:42.459050+00:00"
+    },
+    "mat-e60d51adfab3": {
+      "material_id": "mat-e60d51adfab3",
+      "variant_id": "gen6/byd_sc6h",
+      "material_type": "dbc",
+      "source_path": "D:\\BYD-SC6H-cr60light\\cr60_light\\coem\\BYD_SC6H\\tools\\RTA_CAR\\DBC\\BYD_UKE\\BYD_5R1V_RadarFrontcorner_V2.2.dbc",
+      "hash": "e6d0cc6130b18cc85b87d98fc716570bb09f51d80f316a5a936d58018deceb34",
+      "version": "1.0",
+      "category": "authoritative",
+      "tags": [
+        "dbc",
+        "auto_registered"
+      ],
+      "title": "BYD_5R1V_RadarFrontcorner_V2.2",
+      "created_at": "2026-07-10T02:59:42.461551+00:00",
+      "updated_at": "2026-07-10T02:59:42.461551+00:00"
+    },
+    "mat-b7ca547dea18": {
+      "material_id": "mat-b7ca547dea18",
+      "variant_id": "gen6/byd_sc6h",
+      "material_type": "dbc",
+      "source_path": "D:\\BYD-SC6H-cr60light\\cr60_light\\coem\\BYD_SC6H\\tools\\RTA_CAR\\DBC\\BYD_UKE\\BYD_5R1V_RadarRearcorner_V2.5.dbc",
+      "hash": "ae414fcb788114c833aa058dddc363a483e1712c0313768bfbe89567d5b99b72",
+      "version": "1.0",
+      "category": "authoritative",
+      "tags": [
+        "dbc",
+        "auto_registered"
+      ],
+      "title": "BYD_5R1V_RadarRearcorner_V2.5",
+      "created_at": "2026-07-10T02:59:42.463570+00:00",
+      "updated_at": "2026-07-10T02:59:42.463570+00:00"
+    },
+    "mat-c8a1ee6c9480": {
+      "material_id": "mat-c8a1ee6c9480",
+      "variant_id": "gen6/byd_sc6h",
+      "material_type": "dbc",
+      "source_path": "D:\\BYD-SC6H-cr60light\\cr60_light\\coem\\BYD_SC6H\\tools\\RTA_CAR\\DBC\\BYD_UKE\\BYD_5R1V_RadarRearcorner_V2.5_AllNodes.dbc",
+      "hash": "9bf1debbb78655aa0bcc1396deecacffc6d28a3adbce47e6f2715a2053106da9",
+      "version": "1.0",
+      "category": "authoritative",
+      "tags": [
+        "dbc",
+        "auto_registered"
+      ],
+      "title": "BYD_5R1V_RadarRearcorner_V2.5_AllNodes",
+      "created_at": "2026-07-10T02:59:42.466078+00:00",
+      "updated_at": "2026-07-10T02:59:42.466078+00:00"
+    },
+    "mat-2e64f795670e": {
+      "material_id": "mat-2e64f795670e",
+      "variant_id": "gen6/byd_sc6h",
+      "material_type": "dbc",
+      "source_path": "D:\\BYD-SC6H-cr60light\\cr60_light\\coem\\BYD_SC6H\\tools\\RTA_CAR\\DBC\\BYD_UKE\\BYD_5R1V_RadarRearcorner_V2.5_AllNodes_sigNameChg.dbc",
+      "hash": "3699f2adcb559473bdc4533059ab332b85556c7e1bf949437992096238c69d51",
+      "version": "1.0",
+      "category": "authoritative",
+      "tags": [
+        "dbc",
+        "auto_registered"
+      ],
+      "title": "BYD_5R1V_RadarRearcorner_V2.5_AllNodes_sigNameChg",
+      "created_at": "2026-07-10T02:59:42.468088+00:00",
+      "updated_at": "2026-07-10T02:59:42.468088+00:00"
+    }
+  }
+}

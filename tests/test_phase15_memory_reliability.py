@@ -106,6 +106,40 @@ def test_memory_system_writes_are_atomic(tmp_path: Path) -> None:
     assert (case_dir / "memory.json").exists()
 
 
+def test_write_case_memory_updates_semantic_index_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from memory.memory_system import MemorySystem
+    import memory.semantic_memory as sm
+
+    monkeypatch.setattr(sm, "_HAS_LANCEDB", False)
+    mem = MemorySystem(tmp_path, memory_dir=tmp_path / "memory")
+    case_dir = tmp_path / "cases" / "FCTB001"
+    case_dir.mkdir(parents=True)
+    (case_dir / "report.md").write_text("# FCTB report", encoding="utf-8")
+
+    mem.write_case_memory(
+        case_dir,
+        {
+            "function": "FCTB",
+            "problem": "FCTB 在正常驾驶时误触发",
+            "root_cause": "抑制信号缺失",
+            "fix_hint": "补齐抑制条件",
+        },
+    )
+
+    semantic = sm.SemanticMemory(store_dir=mem.memory_dir / "semantic")
+    assert semantic.backend == "fallback"
+    assert semantic.count() == 1
+    assert (mem.memory_dir / "semantic" / "fallback_vectors.json").exists()
+
+    hit = semantic.search("FCTB 正常驾驶误触发 抑制信号缺失", k=3)[0]
+    assert hit["metadata"]["case_id"] == "FCTB001"
+    assert hit["metadata"]["function"] == "FCTB"
+    assert hit["metadata"]["case_memory_path"].endswith("cases\\FCTB001\\memory.json")
+    assert hit["metadata"]["report_path"].endswith("cases\\FCTB001\\report.md")
+
+
 # ───────────────────────────────────────────────────────────────────────
 # 2.2.2: parse_json_from_llm outermost-object fallback
 # ───────────────────────────────────────────────────────────────────────
@@ -374,6 +408,72 @@ def test_build_context_hit_bump_survives_record_pattern_hit_failure(
     # Must not raise.
     ctx = mem.build_context_for_diagnosis("FCTB", "FCTB 在正常驾驶时误触发")
     assert "相似历史案例" in ctx
+
+
+def test_build_context_includes_semantic_hit_with_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from memory.memory_system import MemorySystem
+    import memory.semantic_memory as sm
+
+    monkeypatch.setattr(sm, "_HAS_LANCEDB", False)
+    mem = MemorySystem(tmp_path, memory_dir=tmp_path / "memory")
+    prior_case = tmp_path / "cases" / "FCTB002"
+    prior_case.mkdir(parents=True)
+    (prior_case / "report.md").write_text("# Prior report", encoding="utf-8")
+    mem.write_case_memory(
+        prior_case,
+        {
+            "function": "FCTB",
+            "problem": "FCTB 在正常驾驶时误触发",
+            "root_cause": "抑制信号缺失",
+            "fix_hint": "补齐抑制条件",
+        },
+    )
+
+    ctx = mem.build_context_for_diagnosis(
+        "FCTB",
+        "FCTB 正常驾驶误触发，需要优先检查抑制条件链路",
+    )
+    assert "语义相似案例" in ctx
+    assert "score=" in ctx
+    assert "case=FCTB002" in ctx
+    assert "抑制信号缺失" in ctx
+    assert "cases\\FCTB002\\report.md" in ctx
+
+
+def test_semantic_failures_do_not_break_write_or_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from memory.memory_system import MemorySystem
+
+    mem = MemorySystem(tmp_path, memory_dir=tmp_path / "memory")
+    case_dir = tmp_path / "cases" / "FCTB003"
+    case_dir.mkdir(parents=True)
+
+    class BrokenSemantic:
+        def add(self, **kwargs):
+            raise RuntimeError("simulated add failure")
+
+        def search(self, *args, **kwargs):
+            raise RuntimeError("simulated search failure")
+
+    monkeypatch.setattr(mem, "_get_semantic_memory", lambda: BrokenSemantic())
+
+    mem.write_case_memory(
+        case_dir,
+        {
+            "function": "FCTB",
+            "problem": "FCTB 在正常驾驶时误触发",
+            "root_cause": "抑制信号缺失",
+            "keywords": ["FCTB", "误触发"],
+        },
+    )
+    assert (case_dir / "memory.json").exists()
+
+    ctx = mem.build_context_for_diagnosis("FCTB", "FCTB 在正常驾驶时误触发")
+    assert "相似历史案例" in ctx
+    assert "语义相似案例" not in ctx
 
 
 # ───────────────────────────────────────────────────────────────────────

@@ -33,11 +33,11 @@ PROJECT_ROOT = HERE.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ai.pattern_extractor import PatternExtractor, summarise_patterns  # noqa: E402
-from ai.temporal_analyzer import (                                     # noqa: E402
+from engines.pattern_extractor import PatternExtractor, summarise_patterns  # noqa: E402
+from engines.temporal_analyzer import (                                     # noqa: E402
     TemporalAnalyzer, SignalTimeline, format_temporal_features,
 )
-from ai.causal_aligner import (                                        # noqa: E402
+from engines.causal_aligner import (                                        # noqa: E402
     CausalAligner, format_evidence_block, state_timeline_from_transitions,
 )
 
@@ -102,7 +102,7 @@ def build_control_always_high_case():
 
 def build_synthetic_pattern():
     """A pattern mirroring adasFunc.c:6378-6383."""
-    from ai.pattern_extractor import CodePattern
+    from engines.pattern_extractor import CodePattern
     return CodePattern(
         pattern_type="HoldRelease",
         file="coem/GWM_B26/components/AswPerception/func/adasFunc.c",
@@ -308,7 +308,7 @@ def _build_mock_store_for_fcatb001():
 @pytest.mark.xfail(reason="PatternExtractor.adas_function 识别为 '?' — TPE 无法判定 HoldRelease 模式")
 def test_tpe_facade_end_to_end_on_fcatb001() -> None:
     banner("TEST 6 · TemporalPatternEngine facade 端到端 (mock FrameStore)")
-    from ai.tpe import TemporalPatternEngine
+    from engines.tpe import TemporalPatternEngine
 
     source_root = Path("D:/cr60_light")
     if not source_root.exists():
@@ -357,7 +357,7 @@ def test_tpe_facade_end_to_end_on_fcatb001() -> None:
 
 def test_causal_aligner_handles_accumulate_reset() -> None:
     banner("TEST 5 · Accumulate 触发器：累积器被反复清零")
-    from ai.pattern_extractor import CodePattern
+    from engines.pattern_extractor import CodePattern
     pattern = CodePattern(
         pattern_type="Accumulate",
         file="coem/GWM_B26/components/AswPerception/func/adasFunc.c",

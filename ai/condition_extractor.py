@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from .model_router import ModelRouter
 from .utils import parse_json_from_llm, extract_relevant_sections, build_keyword_variants
@@ -138,7 +138,7 @@ _EXTRACT_PROMPT = """你是嵌入式 ADAS 代码分析专家。请从以下源�
 class ConditionExtractor:
     """Extract and cache structured activation conditions from source code."""
 
-    def __init__(self, router: ModelRouter, project_root: Path, config: dict):
+    def __init__(self, router: ModelRouter, project_root: Path, config: dict, platform_adapter: Any = None):
         self.router = router
         self.project_root = project_root
         from config import resolve_source_docs_dir
@@ -146,8 +146,9 @@ class ConditionExtractor:
         self.cache_dir = resolve_source_docs_dir(config, project_root)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._domain_sources = config.get("source_domains", _DEFAULT_DOMAIN_SOURCES)
+        self._platform_adapter = platform_adapter
 
-    def extract(self, func_name: str, force: bool = False) -> dict:
+    def extract(self, func_name: str, force: bool = False, platform_adapter: Any = None) -> dict:
         """
         Returns structured conditions for the given function.
 
@@ -161,6 +162,10 @@ class ConditionExtractor:
         Uses cached version if available and source hasn't changed.
         After extraction, auto-fills Unknown CAN signal names via signal_mapping.
         """
+        # If platform adapter not set in __init__, set it here
+        if self._platform_adapter is None and platform_adapter:
+            self._platform_adapter = platform_adapter
+
         func_name = func_name.upper()
         cache_path = self.cache_dir / f"{func_name}_conditions.json"
 
@@ -253,15 +258,37 @@ class ConditionExtractor:
         return merged
 
     def _backfill_can_signals(self, conditions: dict) -> dict:
-        """Resolve Unknown CAN signal names in external_suppression via signal_mapping."""
-        from .signal_mapper import extract_signal_mapping, resolve_internal_to_can, load_variable_chains
+        """Resolve Unknown CAN signal names in external_suppression via signal_mapping.
 
-        sig_mapping = extract_signal_mapping(
-            self.source_root,
-            self.cache_dir,
-        )
+        Platform-aware: tries platform adapter first, falls back to Gen6 RteComMapping parser.
+        Gracefully handles missing adapter / empty mapping by marking can_signal as Unknown.
+        """
+        from engines.signal_mapper import extract_signal_mapping, resolve_internal_to_can, load_variable_chains
+
+        sig_mapping: dict = {}
         chains = load_variable_chains(self.cache_dir)
 
+        # Priority 1: platform adapter signal mapping (if available)
+        if self._platform_adapter is not None:
+            adapter_extract = getattr(
+                self._platform_adapter, "extract_signal_mapping", None,
+            )
+            if callable(adapter_extract):
+                try:
+                    sig_mapping = adapter_extract(
+                        self.source_root, self.cache_dir,
+                    )
+                except Exception:
+                    sig_mapping = {}
+
+        # Priority 2: Gen6 RteComMapping parser (fallback)
+        if not sig_mapping:
+            sig_mapping = extract_signal_mapping(
+                self.source_root,
+                self.cache_dir,
+            )
+
+        # Resolve can_signals — even with empty mapping, mark as Unknown (never crash)
         for sup in conditions.get("external_suppression", []):
             can = sup.get("can_signal", "") or ""
             if can and can.lower() not in ("unknown", "?", ""):
@@ -269,7 +296,10 @@ class ConditionExtractor:
             var_name = sup.get("variable", "")
             if not var_name:
                 continue
-            resolved = resolve_internal_to_can(var_name, sig_mapping, chains)
+            try:
+                resolved = resolve_internal_to_can(var_name, sig_mapping, chains)
+            except Exception:
+                resolved = []
             if resolved:
                 sup["can_signal"] = resolved[0]
                 sup["_can_resolved"] = True
@@ -474,6 +504,18 @@ class ConditionExtractor:
                 if full_path.exists():
                     if full_path.stat().st_mtime > cache_mtime:
                         return True
+        # Include platform adapter source domains if applicable
+        adapter_src = getattr(self._platform_adapter, "get_source_domains", None)
+        if callable(adapter_src):
+            try:
+                for files in adapter_src().values():
+                    for rel_path in files:
+                        full_path = self.source_root / rel_path
+                        if full_path.exists():
+                            if full_path.stat().st_mtime > cache_mtime:
+                                return True
+            except Exception:
+                pass
         return False
 
 

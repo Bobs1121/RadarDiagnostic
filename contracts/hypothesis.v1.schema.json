@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/hypothesis.v1.schema.json",
+  "title": "Root-cause Hypothesis v1",
+  "type": "object",
+  "required": [
+    "schema_version", "hypothesis_id", "run_id", "category", "statement",
+    "status", "supporting_claim_refs", "contradicting_claim_refs",
+    "required_evidence", "experiment_refs", "history"
+  ],
+  "properties": {
+    "schema_version": {"const": "hypothesis.v1"},
+    "hypothesis_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "category": {"type": "string"},
+    "statement": {"type": "string", "minLength": 1},
+    "rank": {"type": ["integer", "null"], "minimum": 1},
+    "confidence_band": {"enum": ["low", "medium", "high", "unknown"]},
+    "status": {"enum": ["open", "testing", "supported", "weakened", "rejected", "confirmed_by_user"]},
+    "supporting_claim_refs": {"type": "array", "items": {"type": "object"}},
+    "contradicting_claim_refs": {"type": "array", "items": {"type": "object"}},
+    "required_evidence": {"type": "array"},
+    "experiment_refs": {"type": "array", "items": {"type": "object"}},
+    "history": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": true
+}

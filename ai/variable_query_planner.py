@@ -18,7 +18,7 @@ This planner delegates the "what to probe" decision to the LLM, grounded in:
   3. A compact field inventory of the available data tables
 
 The output is a strict JSON list of probe queries consumed by
-:class:`ai.data_probe.DataProbe`. The planner never executes queries — it
+:class:`engines.data_probe.DataProbe`. The planner never executes queries — it
 only plans.
 
 Contract with DataProbe

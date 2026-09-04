@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/arbe-preflight.v1.schema.json",
+  "title": "CR60 arbe preflight v1",
+  "description": "Read-only arbe/source/config/runtime preflight. Source mappings and public contracts are candidates, not runtime facts.",
+  "type": "object",
+  "required": ["schema_version", "status", "workspace", "runtime", "can_output"],
+  "properties": {
+    "schema_version": {"const": "arbe-preflight.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "workspace": {"type": "object", "additionalProperties": true},
+    "configuration": {"type": "object", "additionalProperties": true},
+    "build": {"type": "object", "additionalProperties": true},
+    "runtime": {"type": "object", "additionalProperties": true},
+    "gdb": {"type": "object", "additionalProperties": true},
+    "can_output": {"type": "object", "additionalProperties": true},
+    "public_evidence": {"type": "object", "additionalProperties": true},
+    "blockers": {"type": "array"},
+    "warnings": {"type": "array"}
+  },
+  "additionalProperties": true
+}

@@ -86,6 +86,7 @@ class CodeGraphRenderer:
                         "access": s.get("type", ""),
                         "rte": s.get("rte_call", ""),
                         "used_by": fn.name,
+                        "internal_var": s.get("internal_var", ""),
                     })
 
         if sig_details:
@@ -95,11 +96,13 @@ class CodeGraphRenderer:
             if rx_sigs:
                 parts.append("**Rx 信号:**")
                 for s in rx_sigs:
-                    parts.append(f"- `{s['name']}` (via `{s['rte']}`) — 被 `{s['used_by']}` 使用")
+                    iv = f" → 内部变量 `{s['internal_var']}`" if s["internal_var"] else ""
+                    parts.append(f"- `{s['name']}` (via `{s['rte']}`) — 被 `{s['used_by']}` 使用{iv}")
             if tx_sigs:
                 parts.append("\n**Tx 信号:**")
                 for s in tx_sigs:
-                    parts.append(f"- `{s['name']}` (via `{s['rte']}`) — 被 `{s['used_by']}` 产生")
+                    iv = f" ← 内部变量 `{s['internal_var']}`" if s["internal_var"] else ""
+                    parts.append(f"- `{s['name']}` (via `{s['rte']}`) — 被 `{s['used_by']}` 产生{iv}")
 
         # Call relationships
         call_info = []
