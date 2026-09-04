@@ -24,6 +24,7 @@ class ModelRouter:
 
         local_cfg = ai_cfg.get("local") or ai_cfg.get("gemma", {})
         remote_cfg = ai_cfg.get("remote") or ai_cfg.get("qwen", {})
+        coder_cfg = ai_cfg.get("coder", {})
 
         self.local_client = OpenAI(
             base_url=local_cfg.get("base_url", "http://localhost:11434/v1"),
@@ -31,11 +32,27 @@ class ModelRouter:
         )
         self.local_model = local_cfg.get("model", "qwen3:14b")
 
-        self.remote_client = OpenAI(
-            base_url=remote_cfg.get("base_url"),
-            api_key=remote_cfg.get("api_key", "none"),
-        )
+        # Remote client — graceful degradation when base_url or api_key is missing
+        remote_base_url = remote_cfg.get("base_url")
+        remote_api_key = remote_cfg.get("api_key")
+        if remote_base_url and remote_api_key:
+            self.remote_client = OpenAI(
+                base_url=remote_base_url,
+                api_key=remote_api_key,
+            )
+            self.remote_available = True
+        else:
+            self.remote_client = None
+            self.remote_available = False
         self.remote_model = remote_cfg.get("model", "Qwen3.5-27B-FP16")
+
+        # Coder model — for code generation tasks
+        self.coder_client = OpenAI(
+            base_url=coder_cfg.get("base_url", "http://10.190.161.39:8080/v1"),
+            api_key=coder_cfg.get("api_key", "ollama"),
+        )
+        self.coder_model = coder_cfg.get("model", "qwen3-coder:30b")
+        self.coder_max_tokens = coder_cfg.get("max_tokens", 2000)
 
         self.thinking_mode = ai_cfg.get("thinking", "off")
 
@@ -66,6 +83,11 @@ class ModelRouter:
 
         if complexity == "simple":
             client, model = self.local_client, self.local_model
+        elif complexity == "coder":
+            client, model = self.coder_client, self.coder_model
+            # KV cache protection: cap max_tokens
+            if max_tokens > self.coder_max_tokens:
+                max_tokens = self.coder_max_tokens
         else:
             client, model = self.remote_client, self.remote_model
 
@@ -80,7 +102,7 @@ class ModelRouter:
         if response_format:
             kwargs["response_format"] = response_format
 
-        if complexity != "simple":
+        if complexity != "simple" and complexity != "coder":
             extra = {"chat_template_kwargs": {"enable_thinking": thinking}, "top_k": 20}
             if thinking:
                 extra["presence_penalty"] = 1.5
@@ -89,6 +111,12 @@ class ModelRouter:
             else:
                 kwargs["top_p"] = 0.8
             kwargs["extra_body"] = extra
+        elif complexity == "coder":
+            # Coder: no thinking, low temperature for deterministic code
+            if temperature > 0.3:
+                temperature = 0.3
+            kwargs["temperature"] = temperature
+            kwargs["top_p"] = 0.9
 
         try:
             t0 = time.perf_counter()
@@ -96,8 +124,12 @@ class ModelRouter:
             elapsed = time.perf_counter() - t0
             self._print_usage(response, model, complexity, elapsed)
             choice = response.choices[0]
+            # qwen3 on Ollama puts output in reasoning field — use it as fallback
+            message_content = choice.message.content or ""
+            if not message_content and hasattr(choice.message, 'reasoning') and choice.message.reasoning:
+                message_content = choice.message.reasoning
             result = {
-                "content": choice.message.content or "",
+                "content": message_content,
                 "model": model,
                 "complexity": complexity,
                 "finish_reason": choice.finish_reason,
@@ -130,8 +162,11 @@ class ModelRouter:
                     elapsed = time.perf_counter() - t0
                     self._print_usage(response, self.remote_model, "complex (fallback)", elapsed)
                     choice = response.choices[0]
+                    fc_content = choice.message.content or ""
+                    if not fc_content and hasattr(choice.message, 'reasoning') and choice.message.reasoning:
+                        fc_content = choice.message.reasoning
                     return {
-                        "content": choice.message.content or "",
+                        "content": fc_content,
                         "model": self.remote_model,
                         "complexity": "complex (fallback)",
                         "finish_reason": choice.finish_reason,

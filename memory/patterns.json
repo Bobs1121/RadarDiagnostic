@@ -69,32 +69,76 @@
   },
   {
     "function": "FCTB",
-    "symptom": "FCTB未按预期触发",
-    "root_cause": "AEB协同信号异常与目标横向距离超出ROI阈值共同导致制动请求阻断",
+    "symptom": "FCTB功能未触发",
+    "root_cause": "触发条件未满足或配置错误",
     "keywords": [
-      "AEBBAActv_0x137",
-      "AEBIBActv_0x137",
-      "HoldRelease模式",
-      "ROI阈值",
-      "bFctbKeepBrakeFlg清零"
+      "FCTB",
+      "未触发",
+      "条件检查",
+      "配置验证"
     ],
-    "fix_hint": "检查AEB协同信号逻辑异常，优化目标横向距离ROI阈值判定，确保制动状态维持机制有效性",
-    "_learned_at": "2026-04-20T15:15:12.779725",
-    "_id": "b145c572"
+    "fix_hint": "检查触发逻辑与相关配置参数",
+    "_learned_at": "2026-05-22T18:31:01.828951",
+    "_id": "de00ed5c"
   },
   {
     "function": "FCTB",
-    "symptom": "测试CCCscp near side 60kph时FCTB功能未触发",
-    "root_cause": "档位状态不满足(D/R)导致使能关闭且外部抑制信号清除制动保持状态",
+    "symptom": "FCTB 功能未触发，档位状态不满足或外部抑制信号清零保持状态",
+    "root_cause": "1) 车辆工况不满足（档位 N/P）导致系统使能关闭 (`fctb_enable`=0)；2) ESP 侧 AEB 协同信号 (`AEBBAActv_0x137`) 持续为 0，在首次触发 `HoldRelease` 模式后，副作用变量 `bFctbKeepBrakeFlg` 被清零，导致制动请求无法维持。",
     "keywords": [
-      "actual_gear",
-      "fctb_enable",
-      "HoldRelease",
-      "AEBBAActv_0x137",
-      "bFctbKeepBrakeFlg"
+      "FCTB",
+      "No Trigger",
+      "Gear Position",
+      "AEBBAActv",
+      "HoldRelease Reset"
     ],
-    "fix_hint": "检查档位使能逻辑与AEB协同释放信号的优先级冲突，验证制动保持状态清除条件",
-    "_learned_at": "2026-04-23T17:20:02.223235",
-    "_id": "a82b5626"
+    "fix_hint": "检查档位使能逻辑与 AEB 协同释放信号的优先级冲突，验证制动保持状态清除条件。确保在 N/P 档时使能信号正确关闭，或在 D/R 档时 AEB 信号能正确维持制动状态。",
+    "_learned_at": "2026-06-09T12:26:33.811964",
+    "_id": "42c72a03"
+  },
+  {
+    "function": "RCTA",
+    "symptom": "RCTA 功能未触发，数据完整性缺失导致根因无法唯一确定",
+    "root_cause": "BLF 文件中缺失所有关键外部抑制信号（GearPos, CarSpd, RCTASwtReq 等），导致 TPE 无法解析 `adasFunc.c` 中的状态机逻辑，且 Variable Probe 显示无满足 `TTM <= 4.2s` 的目标。",
+    "keywords": [
+      "RCTA",
+      "No Trigger",
+      "Data Missing",
+      "Signal Chain",
+      "TTM Threshold"
+    ],
+    "fix_hint": "优先检查数据链路完整性，确保 BLF 记录包含所有关键 CAN 信号（GearPos, CarSpd, RCTASwtReq）。若数据完整，则检查 TTM 计算逻辑及目标筛选阈值。",
+    "_learned_at": "2026-06-09T12:26:33.820963",
+    "_id": "570b2a46"
+  },
+  {
+    "function": "FCTA",
+    "symptom": "FCTA功能在特定车速下未触发预警",
+    "root_cause": "雷达输入信号脉冲过短或特征缺失导致未能满足ECU端多帧连续累积的防抖条件，或实际车速超出功能激活范围",
+    "keywords": [
+      "时序防抖",
+      "多帧累积",
+      "雷达脉冲",
+      "车速阈值",
+      "状态机滞留"
+    ],
+    "fix_hint": "检查雷达信号持续时间与ECU防抖帧数阈值是否匹配，或核实车速是否在功能激活范围内",
+    "_learned_at": "2026-06-09T12:49:02.111914",
+    "_id": "704d36ea"
+  },
+  {
+    "function": "FCTA",
+    "symptom": "FCTA功能在宣称60km/h速度下未触发报警",
+    "root_cause": "自车速度信号实测值(11km/h)与工况宣称值(60km/h)严重不符，导致激活速度上限条件不满足，系统状态机滞留于Standby态，进而门控拦截报警输出",
+    "keywords": [
+      "速度信号异常",
+      "状态机门控",
+      "激活条件不满足",
+      "Standby滞留",
+      "报警抑制"
+    ],
+    "fix_hint": "1. 校验车速传感器硬件及CAN信号映射(GWM_Adas_EgoVel)准确性；2. 检查工况测试环境是否真实达到60km/h；3. 确认fFctaActiveUpSpd阈值配置与测试工况匹配性",
+    "_learned_at": "2026-06-09T13:01:09.761968",
+    "_id": "86c36167"
   }
 ]

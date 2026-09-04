@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/claim.v1.schema.json",
+  "title": "Evidence-bound Claim v1",
+  "type": "object",
+  "required": [
+    "schema_version", "claim_id", "run_id", "scope", "statement", "status",
+    "created_by", "created_at", "evidence_refs", "assumptions", "conflicts", "binding"
+  ],
+  "properties": {
+    "schema_version": {"const": "claim.v1"},
+    "claim_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "step_id": {"type": "string"},
+    "scope": {"type": "string"},
+    "statement": {"type": "string", "minLength": 1},
+    "status": {"enum": ["observed", "derived", "inferred", "contradicted", "not_available"]},
+    "created_by": {"enum": ["tool", "ai", "user"]},
+    "created_at": {"type": "string"},
+    "evidence_refs": {"type": "array", "items": {"type": "object"}},
+    "assumptions": {"type": "array"},
+    "conflicts": {"type": "array"},
+    "binding": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "observed"}}},
+      "then": {"properties": {"evidence_refs": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"created_by": {"const": "ai"}}},
+      "then": {"properties": {"status": {"not": {"const": "observed"}}}}
+    }
+  ],
+  "additionalProperties": true
+}

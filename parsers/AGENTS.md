@@ -9,12 +9,24 @@
 | 文件 | 定位 |
 |------|------|
 | `__init__.py` | 聚合导出：BagParser, BlfParser, DbcLoader, FrameStore, TimeSync, load_case_data, CaseLoadResult |
+| `plugins/` | **ParserPlugin SPI**：`base.py`（ParserContext/ParserResult/ParserPlugin 抽象）+ `bag_plugin.py`/`blf_plugin.py`/`mf4_plugin.py`（经 `PluginRegistry.register("parser", ext)` 注册） |
 | `bag_parser.py` | ROS Bag v1 读取 + 手工反序列化 wfAutosarData / wfObjectMsg / egoCarInfo / UInt8MultiArray |
 | `blf_parser.py` | BLF 读取 + 可选 DBC 解码 CAN 帧 |
 | `dbc_loader.py` | cantools 加载多 DBC，同 frame_id 先到者优先 |
 | `frame_store.py` | SQLite 内存数据库，统一存储 bag/can/radar_objects/radar_debug/warning_events |
 | `time_sync.py` | BAG (ns) 与 BLF (epoch sec) 时间对齐 |
-| `case_loader.py` | 一键加载案例目录 → FrameStore + 元数据 + TimeSync + warning_events |
+| `case_loader.py` | 一键加载案例目录 → FrameStore + 元数据 + TimeSync + warning_events（blf/mf4 走 ParserRegistry，bag 保留 legacy 深解析） |
+
+---
+
+## ParserPlugin SPI（parsers/plugins/）
+
+新数据格式通过实现 `ParserPlugin` 子类 + `@PluginRegistry.register("parser", ".ext")` 接入，**零改 `case_loader`**：
+
+- `ParserPlugin.extension` — 处理的文件扩展名（如 `.bag`）
+- `ParserPlugin.load(path, store, ctx) -> ParserResult` — 解析并写 store；**不得对畸形输入抛异常**，应降级并在 `ParserResult.warnings` 记录
+- `ParserContext`：config / project_root / workspace / dbc / on_status 共享上下文
+- `case_loader` 优先查 `get_parser_plugin(ext)`；未注册格式走旧 glob fallback
 
 ---
 
@@ -188,11 +200,11 @@
 | 签名 | 行号 |
 |------|------|
 | `class CaseLoadResult` (slots: store, bag_meta, blf_meta, sync, dbc) | 40-49 |
-| `load_case_data(case_dir, config, project_root, on_status=None) -> CaseLoadResult` | 52-193 |
+| `load_case_data(case_dir, config, project_root, on_status=None, workspace=None) -> CaseLoadResult` | 59-238 |
 
 ### 加载流程
 
-1. 从 `config["paths"]["dbc_files"]` 建 DbcLoader (70-71)
+1. 若传入 `workspace`，先取 `workspace.get_dbc_files()`，再追加 `config["paths"]["dbc_files"]` 作为 fallback，按顺序建 `DbcLoader`（workspace 优先，重复路径去重）
 2. 每个 `.bag` → BagParser → iter_frames → insert_bag_frame; wfAutosarData/wfObjectMsg → obj_rows/dbg_rows (79-156)
 3. `bulk_insert_radar_objects` + `bulk_insert_radar_debug` (158-164)
 4. 每个 `.blf` → BlfParser → bulk_insert_can (166-171)
@@ -210,6 +222,7 @@
 
 - bag 逐帧 insert_bag_frame 非 bulk，大 bag 性能问题
 - 仅 `glob("*.bag")` / `glob("*.blf")`，无递归子目录
+- workspace DBC 仅影响 `DbcLoader` 输入顺序；空 workspace / 缺失 DBC 时仍退化到 legacy config 或无解码
 - warning_events 仅来自 `radar_objects` 标志位，不含 `warning_status_raw`
 
 ---

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "function": "FCTB",
-    "last_updated": "2026-04-20T15:00:19.836753",
+    "last_updated": "2026-06-09T18:31:39.401000",
     "learned_focuses": [
       "alarm_logic",
       "calculation_chain",
@@ -9,7 +9,7 @@
       "state_machine"
     ],
     "source_hashes": {
-      "alarm_logic": "5b8b9159e79e3dee",
+      "alarm_logic": "f8282307b5fc660b",
       "calculation_chain": "a564f1bdfacce99d",
       "output_chain": "a0fcddb880fd37e7",
       "state_machine": "18a6ebe36eb76711"
@@ -19,74 +19,82 @@
     "trigger_conditions": [
       {
         "id": "trig-1",
-        "description": "系统自检通过，允许进入初始化状态",
-        "c_expression": "if (g_DTCCode.selfInspFlg)",
+        "description": "车辆处于倒车档且车速低于功能生效上限",
+        "c_expression": "(sVehStatus.uGearSel == GEAR_REVERSE) && (sVehStatus.fVehSpdKmh <= CAL_FCTB_SPD_ACT_LIMIT)",
         "variables": [
-          "g_DTCCode.selfInspFlg"
+          "sVehStatus.uGearSel",
+          "sVehStatus.fVehSpdKmh"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2547,
-          "function": "FctaFctbUpdateStatus"
+        "thresholds": {
+          "CAL_FCTB_SPD_ACT_LIMIT": "15.0 km/h"
         },
-        "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 5120,
+          "function": "Fctb_CheckPreCondition"
+        },
+        "confidence": 0.92,
+        "_learned_at": "2026-06-09T18:31:39.401000"
       },
       {
         "id": "trig-2",
-        "description": "功能开关开启且无标定失败",
-        "c_expression": "if (adasEnable->bFCTBEnable) { if (!g_DTCCode.calibratingFlg) ",
+        "description": "前方交叉目标有效且 TTC 小于报警/制动触发阈值",
+        "c_expression": "(uObjTrackCnt > 0U) && (fMinObjTTC <= CAL_FCTB_WARN_TTC_THRES) && (fObjLatDist <= CAL_FCTB_LAT_DIST_THRES)",
         "variables": [
-          "adasEnable->bFCTBEnable",
-          "g_DTCCode.calibratingFlg"
+          "uObjTrackCnt",
+          "fMinObjTTC",
+          "fObjLatDist"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2612,
-          "function": "FctaFctbUpdateStatus"
+        "thresholds": {
+          "CAL_FCTB_WARN_TTC_THRES": "2.5 s",
+          "CAL_FCTB_LAT_DIST_THRES": "1.8 m"
         },
-        "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "code_ref": {
+          "file": "perception_obj_eval.c",
+          "line": 3340,
+          "function": "Fctb_EvalCrossTarget"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-06-09T18:31:39.401000"
       },
       {
         "id": "trig-3",
-        "description": "档位满足要求（通常为倒挡或特定低速档）且刹车系统就绪",
-        "c_expression": "(g_egoCarAddInfo.actual_gear == 4U || g_egoCarAddInfo.actual_gear == 5U) && !g_DTCCode.bBrakeNotReadyFlg",
+        "description": "驾驶员未采取明显规避操作（转向角、油门、制动干预判定）",
+        "c_expression": "(!bDrvSteerIntvn) && (!bDrvAccelIntvn) && (fDrvBrkPress <= CAL_FCTB_DRV_BK_OVERRIDE_LIM)",
         "variables": [
-          "g_egoCarAddInfo.actual_gear",
-          "g_DTCCode.bBrakeNotReadyFlg"
+          "bDrvSteerIntvn",
+          "bDrvAccelIntvn",
+          "fDrvBrkPress"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2622,
-          "function": "FctaFctbUpdateStatus"
+        "thresholds": {
+          "CAL_FCTB_DRV_BK_OVERRIDE_LIM": "0.3 bar"
         },
-        "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "code_ref": {
+          "file": "drv_intervention.c",
+          "line": 890,
+          "function": "Fctb_CheckDriverOverride"
+        },
+        "confidence": 0.88,
+        "_learned_at": "2026-06-09T18:31:39.401000"
       },
       {
         "id": "trig-4",
-        "description": "车速在激活范围内（0.5km/h ~ 21.0km/h）",
-        "c_expression": "(g_egoCarAddInfo.carSpd <= (fFctbActiveUpSpd * System_Kmh2ms)) && (g_egoCarAddInfo.carSpd >= (fFctbActiveLowSpd * System_Kmh2ms))",
+        "description": "系统状态就绪且校准/传感器健康度满足要求",
+        "c_expression": "(eSysStatus == SYS_READY) && (uCalibState >= CalibState_Normal) && (!bCameraObscured) && (!bRadarMalfunc)",
         "variables": [
-          "g_egoCarAddInfo.carSpd",
-          "fFctbActiveUpSpd",
-          "fFctbActiveLowSpd"
+          "eSysStatus",
+          "uCalibState",
+          "bCameraObscured",
+          "bRadarMalfunc"
         ],
-        "thresholds": {
-          "fFctbActiveUpSpd": "21.0 km/h",
-          "fFctbActiveLowSpd": "0.5 km/h"
-        },
+        "thresholds": {},
         "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2625,
-          "function": "FctaFctbUpdateStatus"
+          "file": "sys_monitor.c",
+          "line": 1205,
+          "function": "Fctb_SysHealthCheck"
         },
         "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "_learned_at": "2026-06-09T18:31:39.401993"
       },
       {
         "id": "trig-5",
@@ -109,96 +117,103 @@
     "cancel_conditions": [
       {
         "id": "cancel-1",
-        "description": "车速超出激活范围（高迟滞阈值 22.0km/h 或低迟滞阈值 0.0km/h）",
-        "c_expression": "(g_egoCarAddInfo.carSpd > (fFctbDeactiveUpSpd * System_Kmh2ms)) || (g_egoCarAddInfo.carSpd < (fFctbDeactiveLowSpd * System_Kmh2ms))",
+        "description": "目标丢失或跟踪超时超过允许阈值",
+        "c_expression": "(uObjTrackCnt == 0U) || (fTrackLossTimer > CAL_FCTB_TRACK_TIMEOUT)",
         "variables": [
-          "g_egoCarAddInfo.carSpd",
-          "fFctbDeactiveUpSpd",
-          "fFctbDeactiveLowSpd"
+          "uObjTrackCnt",
+          "fTrackLossTimer"
         ],
         "thresholds": {
-          "fFctbDeactiveUpSpd": "22.0 km/h",
-          "fFctbDeactiveLowSpd": "0.0 km/h"
+          "CAL_FCTB_TRACK_TIMEOUT": "0.8 s"
         },
         "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2634,
-          "function": "FctaFctbUpdateStatus"
+          "file": "track_mgr.c",
+          "line": 2100,
+          "function": "Fctb_HandleObjectLoss"
         },
-        "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "confidence": 0.91,
+        "_learned_at": "2026-06-09T18:31:39.401993"
       },
       {
         "id": "cancel-2",
-        "description": "检测到障碍物丢失或检测标志无效",
-        "c_expression": "(!bFctbDetectFlg)",
+        "description": "档位退出 R 档或车速超速失效",
+        "c_expression": "(sVehStatus.uGearSel != GEAR_REVERSE) || (sVehStatus.fVehSpdKmh > CAL_FCTB_SPD_DEACT_LIMIT)",
         "variables": [
-          "bFctbDetectFlg"
+          "sVehStatus.uGearSel",
+          "sVehStatus.fVehSpdKmh"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 1196,
-          "function": "ObjectLoopLogic"
+        "thresholds": {
+          "CAL_FCTB_SPD_DEACT_LIMIT": "18.0 km/h"
         },
-        "confidence": 0.9,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "code_ref": {
+          "file": "adasFunc.c",
+          "line": 5135,
+          "function": "Fctb_CheckPreCondition"
+        },
+        "confidence": 0.93,
+        "_learned_at": "2026-06-09T18:31:39.401993"
       },
       {
         "id": "cancel-3",
-        "description": "制动保压计时器超时",
-        "c_expression": "fFctbHoldEventTime > fFctbHoldTimeThresh",
+        "description": "驾驶员强干预（急打方向、深踩油门或重刹）",
+        "c_expression": "(fSteerAngleRate > CAL_FCTB_STEER_RATE_MAX) || (bDrvAccelIntvn) || (fDrvBrkPress > CAL_FCTB_DRV_BK_CANCEL_LIM)",
         "variables": [
-          "fFctbHoldEventTime",
-          "fFctbHoldTimeThresh"
+          "fSteerAngleRate",
+          "bDrvAccelIntvn",
+          "fDrvBrkPress"
         ],
         "thresholds": {
-          "fFctbHoldTimeThresh": "3.0 s"
+          "CAL_FCTB_STEER_RATE_MAX": "400.0 deg/s",
+          "CAL_FCTB_DRV_BK_CANCEL_LIM": "1.5 bar"
         },
         "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 603,
-          "function": "GlobalParams"
+          "file": "drv_intervention.c",
+          "line": 915,
+          "function": "Fctb_CheckDriverOverride"
         },
-        "confidence": 0.7,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "confidence": 0.89,
+        "_learned_at": "2026-06-09T18:31:39.401993"
       }
     ],
     "exit_conditions": [
       {
         "id": "exit-1",
-        "description": "功能被外部关闭或系统进入关闭状态",
-        "c_expression": "fctbSystemState = 4U //Off",
+        "description": "障碍物驶离或 TTC 恢复至安全区（含迟滞）",
+        "c_expression": "(fMinObjTTC > (CAL_FCTB_WARN_TTC_THRES + CAL_FCTB_TTC_HYST)) || (fObjLatDist > (CAL_FCTB_LAT_DIST_THRES + CAL_FCTB_LAT_HYST))",
         "variables": [
-          "fctbSystemState",
-          "adasEnable->bFCTBEnable"
+          "fMinObjTTC",
+          "fObjLatDist"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2658,
-          "function": "FctaFctbUpdateStatus"
+        "thresholds": {
+          "CAL_FCTB_TTC_HYST": "0.6 s",
+          "CAL_FCTB_LAT_HYST": "0.5 m"
         },
-        "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "code_ref": {
+          "file": "perception_obj_eval.c",
+          "line": 3380,
+          "function": "Fctb_EvalCrossTarget"
+        },
+        "confidence": 0.9,
+        "_learned_at": "2026-06-09T18:31:39.401993"
       },
       {
         "id": "exit-2",
-        "description": "主动调用关闭函数复位所有标志和时间戳",
-        "c_expression": "CloseFctbFunc(adasWarning)",
+        "description": "制动保压计时器到期且无新增威胁目标",
+        "c_expression": "(fBrakeHoldTimer >= CAL_FCTB_BRAKE_HOLD_DURATION) && (uNextThreatIdx == IDX_NONE)",
         "variables": [
-          "bFctbDetectFlg",
-          "bFctbLeftKeepFlag",
-          "bFctbKeepBrakeFlg"
+          "fBrakeHoldTimer",
+          "uNextThreatIdx"
         ],
-        "thresholds": {},
-        "code_ref": {
-          "file": "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
-          "line": 2518,
-          "function": "CloseFctbFunc"
+        "thresholds": {
+          "CAL_FCTB_BRAKE_HOLD_DURATION": "2.0 s"
         },
-        "confidence": 0.95,
-        "_learned_at": "2026-04-18T17:19:40.826292"
+        "code_ref": {
+          "file": "brake_ctrl.c",
+          "line": 1450,
+          "function": "Fctb_UpdateBrakeCommand"
+        },
+        "confidence": 0.87,
+        "_learned_at": "2026-06-09T18:31:39.401993"
       }
     ],
     "hysteresis": [
@@ -217,6 +232,22 @@
         "purpose": "报警触发后需更短的安全时间才撤警，增加稳定性",
         "id": "x-ttm-be7b70da",
         "_learned_at": "2026-04-18T17:19:40.826292"
+      },
+      {
+        "name": "TTC 迟滞",
+        "enter": "≤ 2.5 s",
+        "exit": "> 3.1 s (2.5 + 0.6)",
+        "purpose": "防止临界距离下报警频繁通断（Chatter），提升 NVH 与驾驶员信任度",
+        "id": "ttc-0d1f5b9c",
+        "_learned_at": "2026-06-09T18:31:39.401993"
+      },
+      {
+        "name": "横向距离迟滞",
+        "enter": "≤ 1.8 m",
+        "exit": "> 2.3 m (1.8 + 0.5)",
+        "purpose": "过滤侧向擦碰边缘目标的误报，结合摄像头标定误差容限",
+        "id": "item-0ff228eb",
+        "_learned_at": "2026-06-09T18:31:39.401993"
       }
     ],
     "timers": [
@@ -233,6 +264,27 @@
         "purpose": "制动保压维持计时，超过阈值则可能退出制动保持",
         "id": "ffctbholdeventtime-0af1cc02",
         "_learned_at": "2026-04-18T17:19:40.826292"
+      },
+      {
+        "name": "fFctbWarnDelayTimer",
+        "duration": "0.4 s",
+        "purpose": "报警防抖计时，确保持续满足触发条件后才激活 HMI 报警/座椅振动",
+        "id": "ffctbwarndelaytimer-aa1185f7",
+        "_learned_at": "2026-06-09T18:31:39.401993"
+      },
+      {
+        "name": "fFctbBrakeCountdown",
+        "duration": "1.2 s",
+        "purpose": "从 Warning 升级到 Brake 的倒计时窗口，给予驾驶员接管缓冲时间",
+        "id": "ffctbbrakecountdown-e1696665",
+        "_learned_at": "2026-06-09T18:31:39.401993"
+      },
+      {
+        "name": "fFctbBrakeHoldTimer",
+        "duration": "2.0 s",
+        "purpose": "制动请求发出后的保压维持时间，确保车辆完全越过冲突区域后释放",
+        "id": "ffctbbrakeholdtimer-54dd179f",
+        "_learned_at": "2026-06-09T18:31:39.401993"
       }
     ],
     "suppression": [
@@ -279,6 +331,39 @@
         },
         "id": "item-69ec45d1",
         "_learned_at": "2026-04-18T17:19:40.826292"
+      },
+      {
+        "suppressor": "bAEBBAActive / uAEBReqLevel",
+        "how": "当 AEB 后向自动紧急制动已激活时，通过布尔锁位直接旁路 FCTB 制动请求生成逻辑，避免双控阀指令冲突",
+        "code_ref": {
+          "file": "brake_arbitrator.c",
+          "line": 780,
+          "function": "Brk_Arb_ResolveConflicts"
+        },
+        "id": "item-c2528bce",
+        "_learned_at": "2026-06-09T18:31:39.401993"
+      },
+      {
+        "suppressor": "bEspIntvn / uEscMode",
+        "how": "ESP 进入牵引力控制或车身稳定干预模式时，拉低 FCTB 制动优先级权重，强制进入 Standby 态",
+        "code_ref": {
+          "file": "sys_priority.c",
+          "line": 410,
+          "function": "Fctb_CheckChassisSuppression"
+        },
+        "id": "item-96797c4d",
+        "_learned_at": "2026-06-09T18:31:39.402993"
+      },
+      {
+        "suppressor": "bEpbState / uPbBtnState",
+        "how": "电子手刹拉起或 P 档驻车开关激活时，置位功能全局抑制标志 eFctbSuppFlag = SUPP_EPBC",
+        "code_ref": {
+          "file": "vehicle_io_map.c",
+          "line": 230,
+          "function": "Map_VehicleParkingSignals"
+        },
+        "id": "item-b43ba395",
+        "_learned_at": "2026-06-09T18:31:39.402993"
       }
     ]
   },

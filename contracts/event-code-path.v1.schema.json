@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/event-code-path.v1.schema.json",
+  "title": "CR60 event to source investigation path",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "event",
+    "source_context",
+    "resolution",
+    "layers",
+    "breakpoint_groups",
+    "required_runtime_tokens",
+    "static_evaluation",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {"const": "event-code-path.v1"},
+    "status": {"type": "string", "enum": ["ready", "partial", "blocked"]},
+    "event": {"type": "object"},
+    "source_context": {"type": "object"},
+    "resolution": {
+      "type": "object",
+      "properties": {
+        "condition_chain": {"type": "array", "items": {"type": "object"}},
+        "condition_chain_functions": {"type": "array", "items": {"type": "object"}}
+      },
+      "additionalProperties": true
+    },
+    "layers": {"type": "object"},
+    "breakpoint_groups": {"type": "array", "items": {"type": "object"}},
+    "required_runtime_tokens": {"type": "array", "items": {"type": "string"}},
+    "static_evaluation": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

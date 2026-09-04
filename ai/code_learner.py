@@ -59,6 +59,13 @@ _CONSTANTS_SOURCE_FILES: list[str] = [
     r"coem\GWM_B26\components\AswPerception\func\adasFunc.c",
 ]
 
+#: 数值常量源文件的挑选关键词：凡是匹配的源码文件被当作常量来源。
+#: 用于按 variant 自适应解析（见 CodeLearner._resolve_constants_source_files）。
+_CONSTANTS_FILE_KEYWORDS = (
+    "paraDefine", "dotCalibDefine", "globalVarDefine",
+    "perception_public_def", "adasFunc",
+)
+
 _CONSTANTS_SYSTEM_PROMPT = """你是汽车 ADAS 源码的**数值常量抽取专家**。
 你的唯一任务：从给定的 C 源码中**把所有能确定数值的常量解析出来**，
 并把带符号变量的推导式**代入数值**得到最终数字。
@@ -388,34 +395,93 @@ class CodeLearner:
       - ``ensure_overview_docs()``  生成 MD 概览（orchestrator 启动时调用）
     """
 
-    def __init__(self, router: ModelRouter, config: dict, project_root: Path):
+    def __init__(
+        self,
+        router: ModelRouter,
+        config: dict,
+        project_root: Path,
+        platform_adapter: Optional["BaseCodeLearnerAdapter"] = None,
+    ):
+        from config import resolve_source_docs_dir
         self.router = router
         self.config = config
         self.project_root = project_root
+        # Auto-resolve the platform adapter when the caller did not inject one
+        # (prewarm / auto_dream construct CodeLearner without it). Without this,
+        # FOCUS files fall back to hardcoded GWM paths and every variant other
+        # than GWM_B26 silently skips all learning pairs.
+        if platform_adapter is None:
+            platform_adapter = self._auto_resolve_adapter()
+        self.platform_adapter = platform_adapter
 
         ad_cfg = (config.get("auto_dream") or {}).get("code_learning", {}) or {}
         self.enabled: bool = bool(ad_cfg.get("enabled", True))
         self.warmup_pairs: int = int(ad_cfg.get("warmup_pairs", 8))
         self.pairs_per_dream: int = int(ad_cfg.get("pairs_per_dream", 2))
-        self.rotation_focuses: list[str] = list(
-            ad_cfg.get("rotation_focuses", FOCUSES)
-        )
-        self.priority_functions: list[str] = list(
-            ad_cfg.get("priority_functions",
-                       ["FCTB", "FCTA", "RCTB", "RCTA", "BSD", "LCA", "DOW", "RCW"])
-        )
-        self.max_snippet_chars: int = int(ad_cfg.get("max_snippet_chars", 40000))
         self.use_thinking: bool = bool(ad_cfg.get("use_thinking", False))
 
+        # rotation_focuses / priority_functions: adapter-supplied when available,
+        # otherwise fall back to config or hardcoded defaults.
+        if self.platform_adapter:
+            self.rotation_focuses: list[str] = list(
+                ad_cfg.get("rotation_focuses", self.platform_adapter.get_focuses())
+            )
+            self.priority_functions: list[str] = list(
+                ad_cfg.get("priority_functions", self.platform_adapter.get_priority_functions())
+            )
+        else:
+            self.rotation_focuses: list[str] = list(
+                ad_cfg.get("rotation_focuses", FOCUSES)
+            )
+            self.priority_functions: list[str] = list(
+                ad_cfg.get("priority_functions",
+                           ["FCTB", "FCTA", "RCTB", "RCTA", "BSD", "LCA", "DOW", "RCW"])
+            )
+
+        self.max_snippet_chars: int = int(ad_cfg.get("max_snippet_chars", 40000))
+
         self.source_root = Path(config["paths"]["source_code"])
-        self.key_source_files: list[str] = list(
-            config.get("paths", {}).get("key_source_files", [])
-        )
-        self.knowledge_dir = project_root / "memory" / "code_knowledge"
+
+        # key_source_files: adapter-supplied when available, otherwise config
+        if self.platform_adapter:
+            self.key_source_files: list[str] = list(
+                self.platform_adapter.get_key_source_files()
+            )
+        else:
+            self.key_source_files: list[str] = list(
+                config.get("paths", {}).get("key_source_files", [])
+            )
+        # Per-project knowledge dir (falls back to legacy global for backward compat)
+        proj = config.get("project", {})
+        memory_dir = proj.get("memory_dir", project_root / "memory")
+        self.knowledge_dir = Path(memory_dir) / "code_knowledge"
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.knowledge_dir / "learning_state.json"
-        self.overview_dir = project_root / "source_docs"
+        self.overview_dir = resolve_source_docs_dir(config, project_root)
         self.overview_dir.mkdir(parents=True, exist_ok=True)
+
+    def _auto_resolve_adapter(self) -> Optional["BaseCodeLearnerAdapter"]:
+        """Resolve the platform adapter from the active variant's platform_id."""
+        try:
+            from ai.platform_adapters.factory import get_code_learner_adapter
+            identity = self.config.get("identity") or {}
+            variant_id = identity.get("variant_id")
+            if not variant_id:
+                return None
+            from config import get_variant, resolve_variant_id
+            resolved = resolve_variant_id(self.config, variant_id)
+            _variant, _codebase, platform = get_variant(self.config, resolved)
+            platform_id = getattr(platform, "platform_id", None) or getattr(
+                _codebase, "platform_id", None
+            )
+            if not platform_id:
+                return None
+            return get_code_learner_adapter(
+                platform_id, Path(self.config["paths"]["source_code"]),
+                self.config, self.project_root,
+            )
+        except Exception:  # noqa: BLE001 - adapter is an enhancement, never fatal
+            return None
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -564,7 +630,10 @@ class CodeLearner:
         need_update: list[tuple[str, str, str]] = []  # (func, snippets, new_hash)
         skipped: list[str] = []
         for func in targets:
-            keywords = FUNC_KEYWORDS.get(func, [func.lower(), func])
+            if self.platform_adapter:
+                keywords = self.platform_adapter.get_func_keywords(func)
+            else:
+                keywords = FUNC_KEYWORDS.get(func, [func.lower(), func])
             snippets = self._extract_snippets(file_contents, keywords)
             new_hash = hashlib.sha256(snippets.encode("utf-8", "ignore")).hexdigest()[:16]
             md_path = self.overview_dir / f"{func}.md"
@@ -617,10 +686,8 @@ class CodeLearner:
     def _write_overview_hashes(self, data: dict) -> None:
         path = self.overview_dir / ".overview_hashes.json"
         try:
-            path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            from memory.memory_system import atomic_write_json
+            atomic_write_json(path, data, indent=2)
         except OSError:
             pass
 
@@ -663,6 +730,34 @@ class CodeLearner:
 
     # ── 数值常量学习（全局、一次性、hash 驱动） ──────────────────────────
 
+    def _resolve_constants_source_files(self) -> list[str]:
+        """解析数值常量的来源源码文件（按 variant 自适应）。
+
+        优先级：显式 `paths.constants_source_files`（存在时）›
+        从 `key_source_files`（variant 已按项目注入）筛选存在的常量文件 ›
+        回退硬编码 `_CONSTANTS_SOURCE_FILES`。
+
+        这样 BYD_UKE 等变体项目(常量实际位于 `coem/<project>/.../func/adasFunc.c`
+        与 `.../calib/dotCalibDefine.h`)能读到自身的 ROI/阈值常量，
+        而不再依赖写死的 GWM_B26 路径。
+        """
+        candidate = list(
+            self.config.get("paths", {}).get("constants_source_files", [])
+            or self.config.get("paths", {}).get("key_source_files", [])
+        )
+        matched: list[str] = []
+        for rel in candidate:
+            leaf = str(rel).replace("\\", "/")
+            if any(kw in leaf for kw in _CONSTANTS_FILE_KEYWORDS):
+                if (self.source_root / rel).exists():
+                    matched.append(rel)
+        if matched:
+            return matched
+        # Fallback: adapter-supplied or hardcoded.
+        if self.platform_adapter:
+            return list(self.platform_adapter.get_constants_source_files())
+        return list(_CONSTANTS_SOURCE_FILES)
+
     def _learn_constants_if_needed(
         self,
         status_cb: Callable[[str], None],
@@ -682,9 +777,11 @@ class CodeLearner:
         """
         out_path = self.knowledge_dir / "constants.json"
 
+        constant_files = self._resolve_constants_source_files()
+
         file_contents: dict[str, str] = {}
         hash_inputs: list[str] = []
-        for rel in _CONSTANTS_SOURCE_FILES:
+        for rel in constant_files:
             full = self.source_root / rel
             if not full.exists():
                 continue
@@ -754,10 +851,8 @@ class CodeLearner:
             "source_files": sorted(file_contents.keys()),
         }
 
-        out_path.write_text(
-            json.dumps(parsed, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from memory.memory_system import atomic_write_json
+        atomic_write_json(out_path, parsed)
 
         counts = {
             k: len(parsed.get(k, {}))
@@ -848,7 +943,10 @@ class CodeLearner:
         status_cb: Callable[[str], None],
     ) -> dict:
         """学习单个 (func, focus) 对。"""
-        files = FOCUS_FILES.get(focus, [])
+        if self.platform_adapter:
+            files = self.platform_adapter.get_focus_files(focus)
+        else:
+            files = FOCUS_FILES.get(focus, [])
         if not files:
             return {"skipped": True, "reason": "no_focus_files"}
 
@@ -879,7 +977,10 @@ class CodeLearner:
             return {"skipped": True, "reason": "source_unchanged"}
 
         # 抽取 func 相关片段
-        keywords = FUNC_KEYWORDS.get(func, [func.lower(), func])
+        if self.platform_adapter:
+            keywords = self.platform_adapter.get_func_keywords(func)
+        else:
+            keywords = FUNC_KEYWORDS.get(func, [func.lower(), func])
         snippets = self._extract_snippets(file_contents, keywords)
         if not snippets.strip():
             return {"skipped": True, "reason": "no_relevant_snippets"}
@@ -1015,10 +1116,8 @@ class CodeLearner:
 
         existing[focus] = focus_section
 
-        path.write_text(
-            json.dumps(existing, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from memory.memory_system import atomic_write_json
+        atomic_write_json(path, existing)
         return {"added": added, "updated": updated}
 
     # ── State I/O ───────────────────────────────────────────────────────
@@ -1038,10 +1137,8 @@ class CodeLearner:
         }
 
     def _write_state(self, state: dict) -> None:
-        self.state_path.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from memory.memory_system import atomic_write_json
+        atomic_write_json(self.state_path, state)
 
 
 # ── 辅助：按 id 合并列表 / 按 key 合并 dict ─────────────────────────────

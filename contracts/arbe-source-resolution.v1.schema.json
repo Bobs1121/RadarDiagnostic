@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/arbe-source-resolution.v1.schema.json",
+  "title": "Arbe source resolution v1",
+  "description": "Read-only current algo_source identity and target branch/tag resolution.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "target",
+    "current_source",
+    "resolution",
+    "provenance",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "const": "arbe-source-resolution.v1" },
+    "status": { "enum": ["planned", "ready", "partial", "needs_confirmation", "blocked", "failed"] },
+    "target": {
+      "type": "object",
+      "required": ["algo_source_root"],
+      "properties": {
+        "arbe_root": { "type": "string" },
+        "algo_source_root": { "type": "string", "minLength": 1 },
+        "server_host": { "type": "string" },
+        "server_user": { "type": "string" },
+        "server_port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "additionalProperties": true
+    },
+    "command": { "type": "string" },
+    "execute_requested": { "type": "boolean" },
+    "current_source": { "type": "object" },
+    "resolution": {
+      "type": "object",
+      "required": ["requested_ref", "effective_ref", "status"],
+      "properties": {
+        "requested_ref": { "type": "string" },
+        "effective_ref": { "type": "string" },
+        "ref_source": { "type": "string" },
+        "derived": { "type": "object" },
+        "target_branch_local": { "type": "string" },
+        "target_tag_local": { "type": "string" },
+        "remote_refs": { "type": "array" },
+        "status": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "provenance": { "type": "object" },
+    "diagnostics": { "type": "array", "items": { "type": "string" } },
+    "command_result": { "type": "object" },
+    "artifact_path": { "type": "string" }
+  },
+  "additionalProperties": true
+}

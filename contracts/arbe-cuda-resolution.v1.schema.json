@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/arbe-cuda-resolution.v1.schema.json",
+  "title": "Arbe CUDA resolution v1",
+  "description": "Read-only current-source CUDA workbook discovery and launch YAML alignment.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "target",
+    "candidates",
+    "selected",
+    "configuration",
+    "provenance",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "const": "arbe-cuda-resolution.v1" },
+    "status": { "enum": ["planned", "ready", "partial", "blocked", "failed"] },
+    "target": {
+      "type": "object",
+      "required": ["arbe_root", "algo_source_root", "vehicle"],
+      "properties": {
+        "arbe_root": { "type": "string", "minLength": 1 },
+        "algo_source_root": { "type": "string", "minLength": 1 },
+        "vehicle": { "type": "string", "minLength": 1 },
+        "coem": { "type": "string" },
+        "cuda_sheet": { "type": "string" },
+        "server_host": { "type": "string" },
+        "server_user": { "type": "string" },
+        "server_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "config_dir": { "type": "string", "minLength": 1 },
+        "config_name": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "command": { "type": "string" },
+    "execute_requested": { "type": "boolean" },
+    "cuda_source_dir_status": { "type": "string" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "basename", "source"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "basename": { "type": "string", "minLength": 1 },
+          "mtime_epoch": { "type": ["integer", "number"] },
+          "size_bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "sha256": { "type": "string" },
+          "source": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "selected": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    },
+    "configuration": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "resolved": { "type": "object" },
+        "alignment": { "type": "string" },
+        "conflicts": { "type": "array" }
+      },
+      "additionalProperties": true
+    },
+    "provenance": { "type": "object" },
+    "diagnostics": { "type": "array", "items": { "type": "string" } },
+    "command_result": { "type": "object" },
+    "artifact_path": { "type": "string" }
+  },
+  "additionalProperties": true
+}

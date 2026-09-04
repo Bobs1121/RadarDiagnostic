@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/cr60-data-transfer-session.v1.schema.json",
+  "title": "CR60 data transfer session v1",
+  "description": "Approval-bound invocation of the configured upstream bosch-data-transfert executor.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "target",
+    "command",
+    "side_effects",
+    "upstream"
+  ],
+  "properties": {
+    "schema_version": { "const": "cr60-data-transfer-session.v1" },
+    "status": { "enum": ["planned", "approval_required", "completed", "failed", "timeout"] },
+    "target": { "type": "object" },
+    "command": { "type": "string", "minLength": 1 },
+    "source_type": { "enum": ["xlsx", "list"] },
+    "source_prefix": { "type": "string" },
+    "execute_requested": { "type": "boolean" },
+    "approved": { "type": "boolean" },
+    "upstream": { "const": "bosch-data-transfert" },
+    "side_effects": { "type": "array", "items": { "type": "string" } },
+    "diagnostics": { "type": "array", "items": { "type": "string" } },
+    "command_result": { "type": "object" },
+    "duration_sec": { "type": "number" },
+    "artifact_path": { "type": "string" }
+  },
+  "additionalProperties": true
+}

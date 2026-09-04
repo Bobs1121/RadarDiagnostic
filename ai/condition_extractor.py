@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from .model_router import ModelRouter
 from .utils import parse_json_from_llm, extract_relevant_sections, build_keyword_variants
@@ -138,20 +138,34 @@ _EXTRACT_PROMPT = """你是嵌入式 ADAS 代码分析专家。请从以下源�
 class ConditionExtractor:
     """Extract and cache structured activation conditions from source code."""
 
-    def __init__(self, router: ModelRouter, project_root: Path, config: dict):
+    def __init__(self, router: ModelRouter, project_root: Path, config: dict, platform_adapter: Any = None):
         self.router = router
         self.project_root = project_root
+        from config import resolve_source_docs_dir
         self.source_root = Path(config["paths"]["source_code"])
-        self.cache_dir = project_root / "source_docs"
+        self.cache_dir = resolve_source_docs_dir(config, project_root)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._domain_sources = config.get("source_domains", _DEFAULT_DOMAIN_SOURCES)
+        self._platform_adapter = platform_adapter
 
-    def extract(self, func_name: str, force: bool = False) -> dict:
+    def extract(self, func_name: str, force: bool = False, platform_adapter: Any = None) -> dict:
         """
         Returns structured conditions for the given function.
+
+        Dual-layer extraction:
+          1. RuleConditionExtractor (deterministic, no LLM) — fast baseline
+          2. ConditionExtractor AI  (LLM-based) — rich semantics
+
+        Results are merged with deterministic layer as the base,
+        LLM layer filling gaps and adding context.
+
         Uses cached version if available and source hasn't changed.
         After extraction, auto-fills Unknown CAN signal names via signal_mapping.
         """
+        # If platform adapter not set in __init__, set it here
+        if self._platform_adapter is None and platform_adapter:
+            self._platform_adapter = platform_adapter
+
         func_name = func_name.upper()
         cache_path = self.cache_dir / f"{func_name}_conditions.json"
 
@@ -160,22 +174,121 @@ class ConditionExtractor:
             if cached and not self._source_changed(cached, cache_path):
                 return cached
 
-        conditions = self._extract_with_ai(func_name)
-        if conditions and "error" not in conditions:
+        # Layer 1: Deterministic extraction (fast, no LLM)
+        rule_conditions = self._extract_with_rules(func_name)
+
+        # Layer 2: LLM extraction (richer semantics)
+        ai_conditions = self._extract_with_ai(func_name)
+
+        # Merge: deterministic as base, LLM fills gaps
+        if ai_conditions and "error" not in ai_conditions:
+            conditions = self._merge_conditions(rule_conditions, ai_conditions)
+        else:
+            # Fallback: use deterministic results only
+            conditions = rule_conditions
+
+        if conditions:
             conditions = self._backfill_can_signals(conditions)
             self._save_cache(cache_path, conditions)
         return conditions
 
-    def _backfill_can_signals(self, conditions: dict) -> dict:
-        """Resolve Unknown CAN signal names in external_suppression via signal_mapping."""
-        from .signal_mapper import extract_signal_mapping, resolve_internal_to_can, load_variable_chains
+    def _extract_with_rules(self, func_name: str) -> dict:
+        """Layer 1: Deterministic condition extraction using RuleConditionExtractor."""
+        from .rule_condition_extractor import RuleConditionExtractor
 
-        sig_mapping = extract_signal_mapping(
-            self.source_root,
-            self.cache_dir,
-        )
+        extractor = RuleConditionExtractor(self.source_root, func_name)
+
+        # Collect source files to scan
+        source_files = []
+        for domain, files in self._domain_sources.items():
+            for f in files:
+                source_files.append(self.source_root / f)
+
+        result = extractor.extract(source_files)
+        return extractor.to_json(result)
+
+    @staticmethod
+    def _merge_conditions(rule_result: dict, ai_result: dict) -> dict:
+        """Merge deterministic (rule) conditions with LLM conditions.
+
+        Strategy:
+        - Use rule_result as the base (guaranteed structure)
+        - Use AI result to fill in gaps and enrich descriptions
+        - For external_suppression: combine both, deduplicate by variable name
+        - For thresholds: use AI values if rule layer missed them
+        - Preserve rule confidence scores
+        """
+        merged = dict(rule_result)
+        merged["extractors"] = ["RuleConditionExtractor", "ConditionExtractor"]
+
+        # Merge external_suppression: combine both lists, deduplicate by variable
+        rule_supp = {s.get("variable", ""): s for s in rule_result.get("external_suppression", [])}
+        ai_supp_list = ai_result.get("external_suppression", [])
+
+        for ai_item in ai_supp_list:
+            var = ai_item.get("variable", "")
+            if var and var in rule_supp:
+                # Enrich existing rule entry with AI details
+                existing = rule_supp[var]
+                for key in ("condition", "suppression_trigger", "normal_value", "effect", "can_signal", "source"):
+                    if ai_item.get(key) and not existing.get(key):
+                        existing[key] = ai_item[key]
+            else:
+                merged.setdefault("external_suppression", []).append(ai_item)
+
+        # Merge thresholds: add AI thresholds not covered by rules
+        rule_thresh_vars = {t.get("variable", "") for t in merged.get("thresholds", [])}
+        for ai_thresh in ai_result.get("thresholds", []):
+            var = ai_thresh.get("variable", "")
+            if var not in rule_thresh_vars:
+                merged.setdefault("thresholds", []).append(ai_thresh)
+
+        # Use AI's system_state if it's richer
+        if ai_result.get("system_state"):
+            merged["system_state"] = ai_result["system_state"]
+
+        # Use AI's ego_speed_ranges if richer
+        if ai_result.get("ego_speed_ranges"):
+            merged["ego_speed_ranges"] = ai_result["ego_speed_ranges"]
+
+        # Use AI's other_conditions
+        if ai_result.get("other_conditions"):
+            merged["other_conditions"] = ai_result["other_conditions"]
+
+        return merged
+
+    def _backfill_can_signals(self, conditions: dict) -> dict:
+        """Resolve Unknown CAN signal names in external_suppression via signal_mapping.
+
+        Platform-aware: tries platform adapter first, falls back to Gen6 RteComMapping parser.
+        Gracefully handles missing adapter / empty mapping by marking can_signal as Unknown.
+        """
+        from engines.signal_mapper import extract_signal_mapping, resolve_internal_to_can, load_variable_chains
+
+        sig_mapping: dict = {}
         chains = load_variable_chains(self.cache_dir)
 
+        # Priority 1: platform adapter signal mapping (if available)
+        if self._platform_adapter is not None:
+            adapter_extract = getattr(
+                self._platform_adapter, "extract_signal_mapping", None,
+            )
+            if callable(adapter_extract):
+                try:
+                    sig_mapping = adapter_extract(
+                        self.source_root, self.cache_dir,
+                    )
+                except Exception:
+                    sig_mapping = {}
+
+        # Priority 2: Gen6 RteComMapping parser (fallback)
+        if not sig_mapping:
+            sig_mapping = extract_signal_mapping(
+                self.source_root,
+                self.cache_dir,
+            )
+
+        # Resolve can_signals — even with empty mapping, mark as Unknown (never crash)
         for sup in conditions.get("external_suppression", []):
             can = sup.get("can_signal", "") or ""
             if can and can.lower() not in ("unknown", "?", ""):
@@ -183,7 +296,10 @@ class ConditionExtractor:
             var_name = sup.get("variable", "")
             if not var_name:
                 continue
-            resolved = resolve_internal_to_can(var_name, sig_mapping, chains)
+            try:
+                resolved = resolve_internal_to_can(var_name, sig_mapping, chains)
+            except Exception:
+                resolved = []
             if resolved:
                 sup["can_signal"] = resolved[0]
                 sup["_can_resolved"] = True
@@ -197,20 +313,34 @@ class ConditionExtractor:
     MAX_RETRIES = 2
 
     def _extract_with_ai(self, func_name: str) -> dict:
-        """Use Qwen3.5 to extract conditions from source code."""
+        """Use Qwen3.5 to extract conditions from source code.
+
+        Uses CodeGraph to pinpoint relevant code sections instead of
+        blind keyword matching across all files.
+        """
         source_parts = []
-        for domain, files in self._domain_sources.items():
-            for rel_path in files:
-                full_path = self.source_root / rel_path
-                if not full_path.exists():
-                    continue
-                try:
-                    text = full_path.read_text(encoding="utf-8", errors="replace")
-                    relevant = self._extract_relevant_sections(text, func_name)
-                    if relevant:
-                        source_parts.append(f"### {rel_path} (相关段落)\n```c\n{relevant}\n```")
-                except Exception:
-                    pass
+
+        # Strategy 1: CodeGraph-guided extraction (precise)
+        cg_source_parts = self._extract_with_codegraph(func_name)
+        if cg_source_parts:
+            source_parts.extend(cg_source_parts)
+
+        # Strategy 2: Legacy keyword matching (fallback + supplement)
+        if len(source_parts) < 3:
+            for domain, files in self._domain_sources.items():
+                for rel_path in files:
+                    full_path = self.source_root / rel_path
+                    if not full_path.exists():
+                        continue
+                    try:
+                        text = full_path.read_text(encoding="utf-8", errors="replace")
+                        relevant = self._extract_relevant_sections(text, func_name)
+                        if relevant:
+                            already_present = any(rel_path in sp for sp in source_parts)
+                            if not already_present:
+                                source_parts.append(f"### {rel_path} (相关段落)\n```c\n{relevant}\n```")
+                    except Exception:
+                        pass
 
         if not source_parts:
             return {"error": "源码不可用", "function": func_name}
@@ -257,6 +387,100 @@ class ConditionExtractor:
             text, build_keyword_variants(func_name), context_lines=15, max_chunks=30,
         )
 
+    def _extract_with_codegraph(self, func_name: str) -> list[str]:
+        """Use CodeGraph to precisely locate relevant code sections.
+
+        Returns list of markdown-formatted source code snippets.
+        """
+        result = []
+        try:
+            from .codegraph import CodeGraph
+            from config import resolve_codegraph_db
+            cg_path = resolve_codegraph_db(self.config, self.project_root)
+            if not cg_path.exists():
+                return result
+
+            cg = CodeGraph(cg_path)
+
+            # 1. Find functions in this module
+            funcs = cg.get_functions_by_module(func_name)
+            if not funcs:
+                cg.close()
+                return result
+
+            # 2. For each function, read the actual source code
+            seen_files = set()
+            for func_info in funcs:
+                # NodeInfo has file_id like "FILE:coem/.../file.c"
+                file_id = getattr(func_info, 'file_id', '') or ''
+                if not file_id:
+                    continue
+                file_rel = file_id.split(":", 1)[-1]  # strip "FILE:" prefix
+                if file_rel in seen_files:
+                    continue
+
+                full_path = self.source_root / file_rel
+                if not full_path.exists():
+                    continue
+
+                try:
+                    text = full_path.read_text(encoding="utf-8", errors="replace")
+
+                    # Get function start/end lines
+                    func_name_attr = getattr(func_info, 'name', '')
+                    func_start = getattr(func_info, 'start_line', 0) or 0
+                    func_end = getattr(func_info, 'end_line', 0) or 0
+
+                    if func_start and func_end:
+                        # Extract exact function body + context
+                        lines = text.split("\n")
+                        ctx_start = max(0, func_start - 10)
+                        ctx_end = min(len(lines), func_end + 5)
+                        func_code = "\n".join(lines[ctx_start:ctx_end])
+                    else:
+                        # Fallback: keyword extraction
+                        func_code = self._extract_relevant_sections(text, func_name_attr)
+
+                    if func_code:
+                        seen_files.add(file_rel)
+                        result.append(
+                            f"### {file_rel} (CodeGraph: {func_name_attr})\n"
+                            f"```c\n{func_code[:5000]}\n```"
+                        )
+                except Exception:
+                    pass
+
+            # 3. Also include callers (upstream context)
+            for func_info in funcs[:3]:  # top 3 functions only
+                func_name_attr = getattr(func_info, 'name', '')
+                callers = cg.find_callers(func_name_attr)
+                for caller in callers[:2]:  # top 2 callers
+                    caller_file_id = getattr(caller, 'file_id', '') or ''
+                    if not caller_file_id or caller_file_id in seen_files:
+                        continue
+                    caller_file = caller_file_id.split(":", 1)[-1]
+
+                    caller_path = self.source_root / caller_file
+                    if caller_path.exists():
+                        try:
+                            text = caller_path.read_text(encoding="utf-8", errors="replace")
+                            caller_name = getattr(caller, 'name', '?')
+                            caller_code = self._extract_relevant_sections(text, caller_name)
+                            if caller_code:
+                                seen_files.add(caller_file)
+                                result.append(
+                                    f"### {caller_file} (Caller: {caller_name})\n"
+                                    f"```c\n{caller_code[:3000]}\n```"
+                                )
+                        except Exception:
+                            pass
+
+            cg.close()
+        except Exception:
+            pass  # silent fallback to legacy
+
+        return result
+
     @staticmethod
     def _load_cache(cache_path: Path) -> Optional[dict]:
         try:
@@ -280,6 +504,18 @@ class ConditionExtractor:
                 if full_path.exists():
                     if full_path.stat().st_mtime > cache_mtime:
                         return True
+        # Include platform adapter source domains if applicable
+        adapter_src = getattr(self._platform_adapter, "get_source_domains", None)
+        if callable(adapter_src):
+            try:
+                for files in adapter_src().values():
+                    for rel_path in files:
+                        full_path = self.source_root / rel_path
+                        if full_path.exists():
+                            if full_path.stat().st_mtime > cache_mtime:
+                                return True
+            except Exception:
+                pass
         return False
 
 

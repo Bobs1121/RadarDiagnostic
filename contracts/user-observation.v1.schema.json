@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/user-observation.v1.schema.json",
+  "title": "Manual user observation v1",
+  "description": "A user-provided observation kept separate from automatic runtime evidence.",
+  "type": "object",
+  "required": [
+    "schema_version", "observation_id", "run_id", "kind", "summary", "artifact_refs",
+    "target", "created_by", "created_at", "binding", "evidence_layer", "runtime_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "user-observation.v1"},
+    "observation_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "kind": {"enum": ["manual_vscode", "gdb_transcript", "screenshot", "note"]},
+    "summary": {"type": "string", "minLength": 1},
+    "content": {"type": "string"},
+    "artifact_refs": {"type": "array", "items": {"type": "object"}},
+    "target": {"type": "object"},
+    "experiment_id": {"type": "string"},
+    "hypothesis_refs": {"type": "array", "items": {"type": "object"}},
+    "created_by": {"const": "user"},
+    "created_at": {"type": "string"},
+    "binding": {"type": "object"},
+    "evidence_layer": {"const": "user_observation"},
+    "runtime_eligible": {"const": false}
+  },
+  "additionalProperties": true
+}

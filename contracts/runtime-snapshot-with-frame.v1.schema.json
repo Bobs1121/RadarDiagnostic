@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/runtime-snapshot-with-frame.v1.schema.json",
+  "title": "CR60 public arbe runtime snapshot with frame association",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "source_context",
+    "warning_rising_edges",
+    "snapshots",
+    "unbound_objects",
+    "association_policy",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {"const": "runtime-snapshot-with-frame.v1"},
+    "status": {"type": "string", "enum": ["ready", "partial", "blocked"]},
+    "source_context": {"type": "object"},
+    "warning_rising_edges": {"type": "array", "items": {"type": "object"}},
+    "snapshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["radar_id", "frame_id", "association_status", "objects"],
+        "properties": {
+          "radar_id": {},
+          "frame_id": {},
+          "association_status": {"enum": ["frame_verified", "callback_correlated", "publication_correlated", "unbound"]},
+          "warning": {"type": ["object", "null"]},
+          "radar_info": {"type": ["object", "null"]},
+          "objects": {"type": "array", "items": {"type": "object"}},
+          "object_association_status": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "ignored_objects": {"type": "array", "items": {"type": "object"}},
+    "unbound_objects": {"type": "array", "items": {"type": "object"}},
+    "association_policy": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}

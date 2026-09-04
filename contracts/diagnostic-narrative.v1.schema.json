@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/diagnostic-narrative.v1.schema.json",
+  "title": "CR60 evidence-bound diagnostic narrative v1",
+  "description": "Textual read model derived from selected event, condition trace and alert timeline. It is not a feature rule engine.",
+  "type": "object",
+  "required": ["schema_version", "status", "scope", "alarm_assessment", "condition_assessment", "narrative", "next_actions", "policy"],
+  "properties": {
+    "schema_version": {"const": "diagnostic-narrative.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "scope": {"type": "object", "additionalProperties": true},
+    "alarm_assessment": {
+      "type": "object",
+      "required": ["status", "should_alert", "statement"],
+      "properties": {
+        "status": {"type": "string"},
+        "should_alert": {"enum": ["yes_observed", "supported_yes", "indeterminate", "no_observed"]},
+        "statement": {"type": "string"},
+        "recorded_alarm_observed": {"type": "boolean"},
+        "algorithm_output_observed": {"type": "boolean"},
+        "object_warning_observed": {"type": "boolean"},
+        "can_tx_observed": {"type": "boolean"},
+        "output_endpoint": {"enum": ["algorithm", "can_tx"]},
+        "output_authority": {"type": "string"},
+        "can_data_status": {"enum": ["present", "absent", "not_detected", "unknown"]},
+        "can_required": {"type": "boolean"},
+        "algorithm_output_is_terminal": {"type": "boolean"},
+        "algorithm_rising_frames": {"type": "array"},
+        "can_tx_rising_frames": {"type": "array"}
+      },
+      "additionalProperties": true
+    },
+    "condition_assessment": {"type": "object", "additionalProperties": true},
+    "condition_digest": {"type": "object", "additionalProperties": true},
+    "condition_items": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "operating_condition": {"type": "object", "additionalProperties": true},
+    "runtime_facts": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "can_output": {"type": "object", "additionalProperties": true},
+    "output_policy": {
+      "type": "object",
+      "properties": {
+        "requested_endpoint": {"enum": ["auto", "algorithm", "can_tx"]},
+        "effective_endpoint": {"enum": ["algorithm", "can_tx"]},
+        "output_authority": {"type": "string"},
+        "can_data_status": {"enum": ["present", "absent", "not_detected", "unknown"]},
+        "can_required": {"type": "boolean"},
+        "algorithm_output_is_terminal": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "object_warning_observed": {"type": "boolean"},
+    "object_warning_facts": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "executive_summary": {"type": "string"},
+    "diagnostic_story": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"const": "diagnostic-story.v1"},
+        "status": {"type": "string"},
+        "title": {"type": "string"},
+        "operating_condition": {"type": "object", "additionalProperties": true},
+        "code_path": {"type": "object", "additionalProperties": true},
+        "condition_walk": {"type": "object", "additionalProperties": true},
+        "geometry": {"type": "object", "additionalProperties": true},
+        "output": {"type": "object", "additionalProperties": true},
+        "output_chain": {"type": "object", "additionalProperties": true},
+        "conclusion": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": true
+    },
+    "analysis_flow": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"const": "diagnostic-analysis-flow.v1"},
+        "status": {"type": "string"},
+        "steps": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+        "policy": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "narrative": {"type": "array", "items": {"type": "string"}},
+    "next_actions": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "evidence_summary": {"type": "object", "additionalProperties": true},
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

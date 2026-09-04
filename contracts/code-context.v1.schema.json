@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/code-context.v1.schema.json",
+  "title": "CR60 source-bound code context snapshot",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "context_id",
+    "status",
+    "created_at",
+    "source_context",
+    "build",
+    "artifacts",
+    "summary",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {"const": "code-context.v1"},
+    "context_id": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["ready", "blocked", "failed"]},
+    "operation": {"type": "string", "enum": ["built", "reused"]},
+    "created_at": {"type": "string", "minLength": 1},
+    "source_context": {
+      "type": "object",
+      "required": ["source_root", "snapshot_hash", "files"],
+      "properties": {
+        "source_root": {"type": "string", "minLength": 1},
+        "snapshot_hash": {"type": "string", "minLength": 1},
+        "files": {"type": "array", "items": {"type": "object"}},
+        "git": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "build": {"type": "object"},
+    "artifacts": {
+      "type": "object",
+      "required": ["code_context", "code_index", "codegraph_db"],
+      "properties": {
+        "code_context": {"type": "string", "minLength": 1},
+        "code_index": {"type": "string", "minLength": 1},
+        "codegraph_db": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "summary": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

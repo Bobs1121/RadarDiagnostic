@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/gdb-session.v1.schema.json",
+  "title": "Generic headless GDB session v1",
+  "type": "object",
+  "required": ["schema_version", "status", "target", "commands"],
+  "properties": {
+    "schema_version": { "const": "gdb-session.v1" },
+    "status": { "enum": ["planned", "approval_required", "succeeded", "failed", "timeout", "blocked"] },
+    "target": { "type": "object" },
+    "commands": { "type": "array", "items": { "type": "string" } },
+    "execution_commands": { "type": "array", "items": { "type": "string" } },
+    "argv": { "type": "array", "items": { "type": "string" } },
+    "execute_requested": { "type": "boolean" },
+    "approved": { "type": "boolean" },
+    "side_effects": { "type": "array", "items": { "type": "string" } },
+    "diagnostics": { "type": "array", "items": { "type": "string" } },
+    "observations": {
+      "type": "object",
+      "properties": {
+        "stops": { "type": "array", "items": { "type": "string" } },
+        "backtrace": { "type": "array", "items": { "type": "object" } },
+        "args": { "type": "array", "items": { "type": "object" } },
+        "locals": { "type": "array", "items": { "type": "object" } },
+        "expressions": { "type": "array", "items": { "type": "object" } },
+        "diagnostics": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "stdout": { "type": "string" },
+    "stderr": { "type": "string" },
+    "command_result": { "type": "object" },
+    "evidence_status": { "enum": ["complete", "partial", "not_available"] },
+    "producer": { "type": "object", "additionalProperties": true },
+    "plan_fingerprint": { "type": "string" }
+  },
+  "additionalProperties": true
+}

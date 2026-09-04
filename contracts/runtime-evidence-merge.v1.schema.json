@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/runtime-evidence-merge.v1.schema.json",
+  "title": "CR60 runtime evidence merge result v1",
+  "description": "Additive binding result. It never changes static alarm/frame/object facts.",
+  "type": "object",
+  "required": ["schema_version", "status", "binding", "observation_matches", "matched_observation_count", "observation_count"],
+  "properties": {
+    "schema_version": {"const": "runtime-evidence-merge.v1"},
+    "status": {"enum": ["ready", "partial", "blocked", "failed"]},
+    "binding": {
+      "type": "object",
+      "required": ["status", "overlay_eligible"],
+      "properties": {
+        "status": {"enum": ["verified", "partial", "conflict"]},
+        "overlay_eligible": {"type": "boolean"},
+        "required_binding_verified": {"type": "boolean"},
+        "diagnostics": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "observation_matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["observation_id", "status"],
+        "properties": {
+          "observation_id": {"type": "string"},
+          "event_id": {"type": ["string", "null"]},
+          "candidate_event_ids": {"type": "array", "items": {"type": "string"}},
+          "status": {"enum": ["matched", "ambiguous", "unmatched"]}
+        },
+        "additionalProperties": true
+      }
+    },
+    "matched_observation_count": {"type": "integer", "minimum": 0},
+    "observation_count": {"type": "integer", "minimum": 0},
+    "scope": {"type": "object", "additionalProperties": true},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

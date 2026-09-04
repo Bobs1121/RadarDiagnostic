@@ -1,0 +1,165 @@
+{
+  "report_type": "harness_aggregate",
+  "generated_at": "2026-06-14T13:29:00.978026",
+  "total_cases": 6,
+  "passed": 5,
+  "failed": 1,
+  "pass_rate": 0.8333,
+  "avg_overall_score": 0.7621,
+  "min_overall_score": 0.2039,
+  "max_overall_score": 0.9323,
+  "min_score_case": "sc6hrcta001",
+  "max_score_case": "BSDLCA001",
+  "layer_stats": {
+    "l0_structural": {
+      "count": 6,
+      "avg": 0.9561,
+      "min": 0.8158,
+      "max": 1.0
+    },
+    "l1_evidence": {
+      "count": 6,
+      "avg": 0.9081,
+      "min": 0.7674,
+      "max": 1.0
+    },
+    "l2_conclusion": {
+      "count": 6,
+      "avg": 0.7839,
+      "min": 0.6928,
+      "max": 0.8731
+    }
+  },
+  "dimension_analysis": {
+    "classification": {
+      "avg": 1.0,
+      "min": 1.0,
+      "worst_case": "BSDLCA001",
+      "count": 6
+    },
+    "localization": {
+      "avg": 0.6667,
+      "min": 0.0,
+      "worst_case": "FCTABLate001",
+      "count": 6
+    },
+    "causal": {
+      "avg": 0.6422,
+      "min": 0.5,
+      "worst_case": "sc6hrcta001",
+      "count": 6
+    }
+  },
+  "worst_cases": [
+    {
+      "case_id": "sc6hrcta001",
+      "score": 0.2039,
+      "passed": false,
+      "reasons": [
+        "L0=0.82 (结构不合格)",
+        "Errors: L0 结构分 0.82 < 0.90，不满足评估前提"
+      ]
+    },
+    {
+      "case_id": "FCTABLate001",
+      "score": 0.7945,
+      "passed": true,
+      "reasons": [
+        "综合分数偏低"
+      ]
+    },
+    {
+      "case_id": "FCTA001",
+      "score": 0.8606,
+      "passed": true,
+      "reasons": [
+        "综合分数偏低"
+      ]
+    }
+  ],
+  "top_gap_items": [
+    {
+      "check": "L1/signal/Radar=2 (FR)",
+      "avg_score": 0.0,
+      "cases_evaluated": 1
+    },
+    {
+      "check": "L1/signal/fctb_obj_flag",
+      "avg_score": 0.0,
+      "cases_evaluated": 1
+    },
+    {
+      "check": "L1/condition/AEB Brake Active 非激活 -> 应释放 Brake Hold",
+      "avg_score": 0.0,
+      "cases_evaluated": 1
+    },
+    {
+      "check": "L1/condition/AEB Inactive Brake 非激活 -> 应释放 Brake Hold",
+      "avg_score": 0.0,
+      "cases_evaluated": 1
+    },
+    {
+      "check": "L2/causal/primary_cause_keywords",
+      "avg_score": 0.2845,
+      "cases_evaluated": 6
+    }
+  ],
+  "case_details": [
+    {
+      "case_id": "BSDLCA001",
+      "overall": 0.9323,
+      "passed": true,
+      "l0": 1.0,
+      "l1": 1.0,
+      "l2": 0.8306,
+      "errors": []
+    },
+    {
+      "case_id": "FCTA001",
+      "overall": 0.8606,
+      "passed": true,
+      "l0": 1.0,
+      "l1": 0.94,
+      "l2": 0.7041,
+      "errors": []
+    },
+    {
+      "case_id": "FCTA002",
+      "overall": 0.8613,
+      "passed": true,
+      "l0": 0.9737,
+      "l1": 0.7674,
+      "l2": 0.8731,
+      "errors": []
+    },
+    {
+      "case_id": "FCTABLate001",
+      "overall": 0.7945,
+      "passed": true,
+      "l0": 0.9737,
+      "l1": 0.7826,
+      "l2": 0.6928,
+      "errors": []
+    },
+    {
+      "case_id": "FCTB003",
+      "overall": 0.92,
+      "passed": true,
+      "l0": 0.9737,
+      "l1": 0.9583,
+      "l2": 0.8529,
+      "errors": []
+    },
+    {
+      "case_id": "sc6hrcta001",
+      "overall": 0.2039,
+      "passed": false,
+      "l0": 0.8158,
+      "l1": 1.0,
+      "l2": 0.75,
+      "errors": [
+        "L0 结构分 0.82 < 0.90，不满足评估前提"
+      ]
+    }
+  ]
+}

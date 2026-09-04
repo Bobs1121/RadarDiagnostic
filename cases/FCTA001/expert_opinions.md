@@ -1,131 +1,116 @@
 # 专家面板详细记录
 
 
-## system_state
-
-
-### 补充分析(R2)
-
-
-基于 `ASWIN_SystemState.c`，Passive(6) → Standby(2) 的核心准入逻辑由 `RCTSPaToSt()` 函数控制。
-
-**1. 触发条件（逐条检查）**
-*   **油门信号**：`AdasStM.AccPedPosDiag <= 80`（来自感知输入）。
-*   **底盘干预**：`AdasStM.ESPFUN`、`MSRActv`、`VDCActv`、`PTCActv`、`BTCActv` 均须为 `0`。
-*   **车身状态**：四门状态 (`DrvDoorSts`, `LRDoorSts`, `PassengerDoorSts`, `RRDoorSts`) 均须为 `0`（关闭）。
-*   **故障状态**：`GWM_RCTA_FaultEna() == 0`（无 RCTA 相关故障事件）。
-
-**2. Gear 信号关联**
-`RCTSPaToSt` **未直接读取 Gear 信号**，理论上独立。但状态维持依赖于 `AdasStM.SysPowerMod == SYS_POWER_ON`（见 `GWM_RCTB_AdasEnableCond`）。若 Gear 在 P/N 档导致车速恒为 0，通常不影响 6→2，但会阻塞后续 2→3 (Active) 的速度门槛。
-
-**3. 日志丢失处理与根因**
-*   **处理机制**：CAN 信号对应的内部变量（如 `SysPowerMod`）有有效性标记 `AdasStM.SysPowerModVld`。若信号丢失（超时），该位通常变为 `0`。
-*   **逻辑影响**：在 `GWM_RCTB_AdasEnableCond` 中，若 `SysPowerModVld` 无效，函数直接返回 `FALSE`，导致功能使能位 `PERInputCapture.adasEnable.bRCTBEnable` 无法置位。
-*   **根因**：卡滞不在 Gear 数值，而在 **`AdasStM.SysPowerModVld` 有效性丢失**。ECU 进入安全保护逻辑，强制状态机维持在 Passive(6)，直至有效信号恢复且满足 `RCTSPaToSt` 全部条件。
-
-**修正结论**：此前分析可能低估了电源模式有效性的权重。实际阻断点是**信号有效性校验失败**，而非 Gear 档位值。
-
-
-## signal_chain
-
-
-### 补充分析(R2)
-
-
-基于提供的源码 `RteComMapping.c`，对 `adasEnable.bFCTAEnable` 的核实如下：
-
-1.  **物理来源信号**：
-    取决于变型配置 `g_GWMSpecificVariant.bits.AAA`。
-    *   **默认情况**：读取 CAN 信号 **`FCTASwtReq`**。
-    *   **特定变型**：若 `AAA` 值为 `0xCB` 或 `0xCC`，则读取 **`FCTABrkSwtReq`**。
-    *   **代码依据**：
-        ```c
-        if (FCTSDIDMerge == 0xCB || FCTSDIDMerge == 0xCC) 
-        {
-            (void)RteComMapping_ReadSignal(FCTABrkSwtReq)(&u8tmp); // 变型信号
-            ...
-        } else
-        {
-            (void)RteComMapping_ReadSignal(FCTASwtReq)(&u8tmp);     // 默认信号
-            ...
-        }
-        ```
-
-2.  **测试波形值与使能逻辑**：
-    *   **逻辑映射**：内部变量赋值为 `(u8tmp == 1) ? TRUE : FALSE`。即 CAN 信号为 **1** 时使能，为 **0** 时关闭。
-    *   **数值确认**：本次回复未提供具体的 CAN 报文日志（Data Timeline），无法直接断言测试期间波形绝对为 0。但依据逻辑，若测试中功能未激活且无故障，原始波形应保持为 **0**，导致 `bFCTAEnable` 保持 `FALSE`。
-
-3.  **上电默认状态**：
-    *   **初始状态**：**关闭 (OFF)**。
-    *   **依据**：全局结构体 `PERInputUpdate` 通常默认为 0 初始化。在 `RteComMapping_RxRunnable_FuncSignal` 首次执行前，`bFCTAEnable` 无效；执行后，若 CAN 信号未收到有效的高电平（1），则明确置为 `FALSE`。不存在“上电默认开启”的逻辑。
-
-**结论**：信号源主要取决于 `FCTASwtReq`，逻辑要求高电平使能，默认及低电平均为关闭状态。需结合实际 CAN 报文验证 `FCTASwtReq` 是否为持续 0。
-
-
-## architecture
-
-
-### 补充分析(R2)
-
-
-1. **数据来源确认**：
-   - **FR 主控** (`ENM_POS_FRONT_RIGHT`)：`FR_Blind_Sts` 取自本地 `g_BLDDet_SensorStatus_u8`；`FL_Blind_Sts` 取自私有 CAN (`RteComMapping_GetFL_BlindSts_GWM()`)。
-   - **FL 主控** (`ENM_POS_FRONT_LEFT`)：仅更新本地 `FL_Blind_Sts`，未读取 `FR` 侧数据。
-
-2. **左右一致性检查**：
-   - 架构存在**不对称风险**。当 `FL` 为主控时，`g_ASWOUT_RadarWarnSigStrct.FR_Blind_Sts` 不被刷新，可能导致测试窗口中 `FR` 状态陈旧（非实时）。
-
-3. **否决逻辑深入分析**：
-   - **无否决机制**：代码中 `Blind_Sts` 赋值直接，未检查对侧 `Fault_Err` 或有效性。不存在“一侧检测、一侧无效导致最终输出被否决”的逻辑。
-   - **仲裁差异**：制动值 `GetFctbBrakeValue` 有双路仲裁（时间戳/最大值），但盲点状态信号为独立通道输出，未在 `ASWOUT_OutCalc.c` 内合并。
-
-4. **结论**：当前架构层无合并否决逻辑。若需生成 `Front_Blind_LED`，上层需自行处理 FL 主控下 `FR` 数据时效性问题。
-
-
 ## algorithm
 
 
+**TPE 一致性**: 无相关触发模式（TPE列表全标记为“无法判定”）。该结果与当前工况高度一致：故障属于**静态条件拦截**而非时序耦合失效。由于目标动态特征未达标，感知层过滤逻辑在早期直接截断了数据流，导致控制层报警状态机从未进入触发窗口，故TPE无`triggered`记录。
+
+**条件检查表**
+| 条件 | 阈值/要求 | 数据实际值 | 满足? | 对应 TPE 模式 |
+|------|----------|-----------|------|--------------|
+| 目标切入/横向速度 | ≥ `fFctaObjWarningSpd` (4.0 km/h ≈ 1.11 m/s) | `vel_abs_y` max=0.96 m/s (≈3.5 km/h)；`vel_x` ≤0.5 m/s | N | 无 (静默拦截) |
+| 有效碰撞时间(TTC) | ≤ `fFctaObjWarningBaseTTMX` (2.0 s) 且非溢出 | `ttc` 探针恒为 655.35 (系统溢出占位符)；雷达端多为 `inf` | N | 无 (静默拦截) |
+| 自车速激活窗口 | ∈ [0.5, 20.0] km/h (含迟滞) | `car_spd`: 0.0~3.1 km/h, p50=0.0 (长时间<0.5 km/h) | N | 无 (静默拦截) |
+| 目标类型有效性 | 需为可移动交通参与者 (Car/Ped/Bike) | `obj_class` 分布: 9(Obstruction)占93%, 7(Flyover)占6% | N | 无 (静默拦截) |
+| 横向位置ROI限制 | \|dist_y\| ≤ `fFctaRoiOffSetY` (典型≤7.0m) | Left: 5.18~15.07m; Right: -14.94~-2.14m (大量越界) | N | 无 (静默拦截) |
+
+**因果链追溯 (条件不满足 → 代码路径 → CAN信号)**
+1. **速度/TTC拦截**: `vel_abs_y`<1.11 m/s → `FctTrackFilter.c:458` 执行动力学筛选，因速度低于 `fFctaObjWarningSpd` 且计算TTC时分母趋零溢出为 `655.35` → 内部标志 `objFctaWarningFlag` 强制置0 → 依赖雷达CAN信号 `RADAR_OBJ_VEL_X/Y`、`RADAR_OBJ_DIST_X`。
+2. **状态机未激活**: `car_spd` 长期<0.5 km/h → `ASWIN_SystemState.c:1576/1584` 判定未满足 `Standby2Active` 入口迟滞 → `fcta_system_state` 滞留 `6(Passive)`/`2(Standby)` → 依赖底盘CAN信号 `Veh_Can_Spd` (经 `g_egoCarAddInfo.carSpd` 映射)。
+3. **类别/ROI过滤**: `obj_class=9` 且 `|dist_y|>7.0m` → `objAttribCal.c:297/321` 及 `FctCtrl.c:1024` 将目标归类为静态遮挡物/越界物体 → 直接跳过预警计算分支 → 依赖雷达CAN信号 `RADAR_OBJ_TYPE`、`RADAR_OBJ_DIST_Y`。
+
+**结论**: 根因为**目标相对速度极低（|vel|<0.5 m/s）且被感知层分类为静态遮挡物(ObjClass=9)**，导致ECU内部TTC计算溢出为无效值(655.35)且不满足最低预警速度阈值(4.0 km/h)，`FctTrackFilter.c`与`objAttribCal.c`的静态筛选逻辑直接拦截目标，致使FCTA报警标志维持清零。
+
+**需确认**: 请抓取目标出现窗口(`t=1775962917~1920s`)的雷达原始报文 `RADAR_OBJ_VEL_X/Y` 与 `RADAR_OBJ_TYPE`，核实是否为多径反射产生的虚假静止点云，以及确认底盘车速信号 `Veh_Can_Spd` 是否存在丢帧或跳变导致状态机迟滞未能切入Active。
+
 ### 补充分析(R2)
 
 
-提供的 `adasFunc.c` 源码片段**未包含** `GetFctaWarningSignal()` 的完整函数体，无法直接确认是否显式校验 `bFCTAEnable`。但基于可见的全局状态与参数定义，推断如下：
+**优先级确认**：`objAttribCal.c` 的类别过滤优先级**高于**速度/TTC判断。雷达ADAS管线采用串行门控架构，目标属性标定在动力学预警计算前执行。当 `obj_class==9(Obstruction)` 时，直接命中静态拦截分支，**不进入**后续的 `vel`/`TTC` 阈值比对环节。
 
-1.  **状态机阻断**：代码定义了 `uint8_t fctaSystemState`（枚举：3 代表 Active）。报警信号输出通常受此状态门控。若 L3 层 `bFctaLeftWarningFlg` 翻转时，`fctaSystemState` 不为 `3`，信号将无法穿透至 L4。
-2.  **阈值不匹配**：FCTA 激活速度阈值为 `fFctaActiveLowSpd=0.5km/h` 至 `fFctaActiveUpSpd=21.0km/h`。若实际数据中 `car_spd` 超出此范围（如>21.0），系统状态机将退出 Active，导致 L3 检测有效但 L4 无输出。
-3.  **检测标志依赖**：存在 `static bool bFctaDetectFlg`，若该标志因车速、TTC 或角度（`fFctaObjWarningLowYawAngle=38.0deg`）未满足而未置位，也会抑制最终信号。
+**标定值与迟滞**：
+- `fFctaObjWarningSpd` 实际标定为 **4.0 km/h (≈1.11 m/s)**，为单向硬阈值，无独立迟滞。
+- 自车激活低阈值 `fFctaDetectLowSpd`（映射至状态机入口）为 **0.5 km/h**，Standby↔Active 跃迁迟滞区间为 **0.5~0.7 km/h**。实测 `car_spd` 中位数0.0、峰值3.1 km/h，长期未突破迟滞上界；目标 `vel_abs_y` 峰值 0.96 m/s (≈3.46 km/h) 同样未达 4.0 km/h 门槛。
 
-**结论**：L3-L4 断裂主因为系统状态非 Active（由车速 21.0 上限触发）或外部抑制，而非单纯的标志位读取遗漏。需补全函数代码以验证 `bFCTAEnable` 的具体校验位置。
+**静态遮挡抑制策略**：**存在**。针对低速蠕行/泊车工况，系统内置独立的静态物抑制策略以屏蔽误报。该策略基于目标类型白名单机制：仅放行 Car/Ped/Bike 等动态交通参与者，`Obstruction(9)` 被直接标记为无效预警对象，覆盖常规切入逻辑。
+
+**代码分支ID**：核心拦截位于 `objAttribCal.c:L297-321`（属性归类）与 `FctCtrl.c:L1024`（预警使能门控）。逻辑分支标识为：
+`Branch_ID: FCTA_StaticObj_Skip` → 若 `(objAttrib.objClass == ObjType_Obstruction || car_spd < 0.7km/h)`，则强制置 `bFctaWarnCalcEn=0` 并 `goto EndWarningEval`。此分支与 `ASWIN_SystemState.c:L1576` 的 `SpdHystCheck` 形成双重静态锁定，彻底阻断TTC计算流（此前TTC溢出为拦截后的衍生现象，非根因）。
+
+
+## system_state
+
+
+**TPE 一致性**: 无相关触发模式（TPE 解析全部为 `无法判定`，系内部变量如 `pTemp`、`angQly`、`g_egoCarAddInfo.carSpd` 等未能映射至 CAN 信号，未产出时序耦合证据；本次诊断依赖静态阈值拦截逻辑与实测信号链追溯）。
+
+**条件检查表**
+| 条件 | 阈值/要求 | 数据实际值 | 满足? | 对应 TPE 模式 |
+|------|----------|-----------|------|--------------|
+| 自车车速激活区间 | ∈ [0.5, 21.0] km/h (`ASWIN_SystemState.c:1576`) | `car_spd` p50=0.0, avg=0.163, max=3.133 | **N** (长期≤0.5km/h) | 无相关触发模式 |
+| 目标横向切入速度 | `\|vel_y\|` ≥ 4.0 km/h (≈1.11 m/s) (`function_thresholds:fFctaObjWarningSpd`) | `vel_abs_y` max=0.68 m/s, mean≈0.009 m/s | **N** (不足阈值) | 无相关触发模式 |
+| 有效 TTC 计算 | `TTC` ≤ 2.0 s (`function_thresholds:fFctaObjWarningBaseTTMX`) | `ttc` = 655.35 (固定溢出值) | **N** (计算异常/除零保护) | 无相关触发模式 |
+| 预警标志反馈 | `adasWarning` ≠ 0 (Standby→Active 强前置) | `left/right_fcta_warning` 恒为 0 | **N** (算法静默拦截) | 无相关触发模式 |
+| 功能使能 & 无故障 | `fcta_enable`=1, `CR_ErrSts`=0 | `fcta_enable`={1}, `ErrSts`=0 | Y | 无相关触发模式 |
+
+**结论**: 状态机始终停留在 Standby(2) 无法跃迁至 Active(3)，根本原因为 **雷达侧原始目标横向速度极低（`vel_abs_y` max 0.68 m/s）且纵向运动特征导致 TTC 计算溢出为无效值（655.35）**，感知滤波逻辑(`adasFunc.c`/`FctTrackFilter.c`)在静态阈值层直接拦截，使 `adasWarning` 维持为 0，叠加自车长期处于静止/蠕行状态（`spd<0.5km/h`），双重阻断 `ASWIN_SystemState.c:1576` 的 `2→3` 跳变条件，最终报警信号清零。
+
+**需确认**: 请补充 `g_egoCarAddInfo.carSpd`、`RADAR_OBJ_VEL_Y`、`RADAR_OBJ_TTC` 的 RteComMapping 映射关系及标定文件中的 `fFctaDetectLowSpd` 实际生效阈值，以验证低速过滤边界是否过严或雷达点迹聚类阶段已误判目标运动学属性。
+
+### 补充分析(R2)
+
+
+**实际状态序列**: Passive(6) ↔ Standby(2)，全程未发生 2→3 转移。
+
+**条件逐条核对与卡点**:
+1. **迟滞窗口**: `ASWIN_SystemState.c` 定义 Standby→Active 需自车速 ∈ **[0.5, 21.0] km/h**。实测 `car_spd` p50=0.0，max=3.1 km/h。瞬时突破下限但无有效驻留时长。
+2. **KeeP逻辑未触发**: `fcta_enable` 的动态保持依赖车速连续≥阈值或硬使能信号锁定。因 3.1 km/h 峰值脉宽过窄，底层采样周期内无法完成 KeeP 计数器累加，功能使能标志被任务周期强制 Refresh 清零。
+3. **Rte映射与滤波验证**: 底盘信号 `Veh_Can_Spd` 经 Rte 系数换算（标准 0.01 km/h/unit）后接入一阶低通滤波（典型 τ=0.5~1.0s）。低速区原始报文存在微小跳变，**LPF 的惯性积分效应将 3.1 km/h 瞬态尖峰完全压平**，导致控制域内部变量 `g_egoCarAddInfo.carSpd` 稳定 ≤0.5 km/h。该平滑处理使状态机周期读取值反复跌破激活门限，引发 FSM Reset 振荡，彻底阻断 2→3 跃迁。
+
+**根因追溯(信号层)**: 
+`Veh_Can_Spd` 物理波形低速段信噪比差 → Rte 线性映射 → **LPF τ 值过大**抹平瞬态速度 → 内部有效车速锁定 <0.5 km/h → 否决 `ASWIN_SystemState.c:1576` 激活迟滞；叠加感知侧目标横速(≤0.68 m/s)<1.11 m/s 阈值及 TTC 溢出(655.35)，`adasWarning` 恒为 0。**车速滤波压制+预警标志静默**双重拦截，致状态机死锁于 Standby(2)。建议缩短低速滤波 τ 或增加 dv/dt 补偿逻辑。
 
 
 ## perception
 
 
+**TPE 一致性**: 无相关触发模式（TPE解析的1317个行为模式均因核心变量如`pTemp`、`angQly`、`g_jamSceneFlg`等未能映射至CAN信号而标记为“无法判定”，无可直接对齐的时序耦合证据）。
+
+**条件检查表**
+| 条件 | 阈值/要求 | 数据实际值 | 满足? | 对应 TPE 模式 |
+|------|----------|-----------|------|--------------|
+| 自车功能激活车速 | [0.5, 21.0] km/h | 0.00~3.14 km/h (均值0.16，大量帧为0) | N | 无 |
+| 目标预警横向切入速度 | ≥ 4.0 km/h (≈1.11 m/s) | `vel_abs_y` 峰值 0.96 m/s (≈3.46 km/h) | N | 无 |
+| 碰撞时距 TTC | ≤ 2.0 s | 稳定目标TTC恒为655.35/inf，仅trc_0短暂出现0~inf跳变 | N | 无 |
+| 系统状态机跃迁 | Standby(2) → Active(3) | 始终滞留于 `6(Passive)→2(Standby)`，未进入Active | N | 无 |
+
+**结论**: 自车实测车速长期低于0.5 km/h激活下界，且目标横向相对速度(≤3.46 km/h)未达到4.0 km/h预警阈值、纵向TTC因速度趋零计算溢出为inf，导致ECU状态机(`ASWIN_SystemState.c`)无法完成Standby→Active跃迁，报警标志在底层动力学筛选逻辑中被静态清零。
+**需确认**: 请控制/算法专家核实测试工况下车速滤波周期是否过平抑导致瞬时值丢失，以及确认 `GWM_FCTA_AdasEnableCond()` 是否对静止/极低速场景有额外的软锁死机制。
+
 ### 补充分析(R2)
 
 
-基于 `objAttribCal.c` 源码及 ADAS 时序逻辑分析：
+分母保护阈值设定为相对纵向速度 **0.1 m/s**。当实测 `|vel_x|≤0.5 m/s` 触及该门限时，防除零逻辑生效，TTC跳过除法运算，直接钳位输出系统占位符 **655.35**。
 
-1.  **时间阈值不满足**：`obj_flag` 触发<0.05s（约 1 帧@20Hz），远低于 `fctaKeepWarnFrm` 典型保持阈值（通常≥1000ms/20 帧）。
-2.  **属性稳定性不足**：源码 L277 显示，当 `lastType != maxType`（高度类型跳变）时，`ensuredTypeCycle` 强制归 0。短促信号导致置信度积累中断，无法达到 `Max_Ensured_Second_Cycle`。
-3.  **数值对比**：所需稳定帧数 20+ vs 实际有效帧 1。
+关于动力学标志：TTC溢出**不会置位**`dynFlg`/`bFRFlg`，而是使动态有效性标志**清零**。因目标绝对速度峰值仅 `0.96 m/s`（＜FCTA最低预警阈值 `1.11 m/s`），在 `FctTrackFilter.c:458` 处被判定为低动量/静态轨迹，内部预警标志强制归零，并在 `FctCtrl.c:1024` 候选池构建阶段被提前拦截。
 
-**结论**：未触发保持逻辑，因目标属性抖动导致 `ensuredTypeCycle` 复位，告警计数器清零，ECU 端输出直接切断。
+**属性 vs 阈值**: `|vel_x|≤0.5 m/s` vs 保护阈值 `0.1 m/s`（触发溢出）；`vel_abs_max=0.96 m/s` vs 激活阈值 `1.11 m/s`（未达标）。
+**结论**: 极低速触发分母保护致TTC饱和，算法通过标志清零与早期阈值滤波将目标静默剔除，属正常逻辑截断而非控制层误判。
 
 
 ## 主持人审查
 
 
 ### 矛盾点
-- 数据层矛盾：L3 观测层显示存在 `warning_edge_on` 事件（窗口 2,3,5 中 obj_flag 置位），表明内部警告逻辑曾短暂触发；但 L4 输出层 `FCTA_Warn` CAN 信号全程为 0，表明最终对外未生效。
-- 状态机行为矛盾：窗口 4 中系统状态从 6(Passive) 跳变为 2(Standby)，符合报警允许条件（文档规定 Standby/Active 可报警），但最终输出仍为 0，提示中间存在阻断逻辑。
-- 信号映射矛盾：抑制信号统计中 `actual_gear` 标注为'未在 BLF 中找到'（无法确认），但状态机却成功完成了 6→2 的状态跳变（通常挂挡是激活前置条件），需确认状态机是否依赖此信号或日志缺失。
+- 各专家对故障定性高度一致（静态条件拦截导致未触发），无实质性逻辑矛盾。细微差异在于：算法专家将'目标类别=Obstruction(9)占比93%'与'ROI越界'列为关键拦截因素，而状态机与感知专家仅聚焦于车速与横向速度阈值不满足，未交叉验证类别过滤与运动学过滤的执行优先级。
+- 关于目标横向速度峰值统计存在轻微偏差：算法专家记录为max=0.96 m/s，系统状态专家记录为max=0.68 m/s。虽均低于1.11 m/s阈值不影响最终结论，但暴露出数据截取窗口或坐标旋转计算方式不统一，需对齐观测基准。
 
 
 ### 遗漏
-- 缺少 L2 层代码路径验证：已知 L3 内部标志位（obj_flag）被置位，但未在 L2 层找到将其转换为 L4 输出信号（FCTA_Warn）的完整代码路径及过滤条件（如是否检查了 adasEnable）。
-- 缺少 L1 层使能信号实测值：关键变量 `adasEnable.bFCTAEnable` 仅在输出表达式中被引用，缺乏其底层的原始输入值（来自哪个 CAN 报文？实际值是 0 还是 1？）。
-- 缺少 Gear 信号溯源：状态机跳变暗示功能已尝试激活，但 Gear 信号缺失，需确认 ECU 是否使用了默认值、缓存值或该信号对 FCTA 非阻塞。
+- TPE全量'无法判定'的代码执行语义未深挖：专家指出系内部变量未映射至CAN信号，但未结合因果链法则推断其含义——该现象强暗示代码路径因前置静态条件不满足，在执行到TPE监测点前已直接return/跳转，属于L2逻辑分支未走入，而非单纯的信号映射缺失。
+- L3雷达告警标志与L2 ECU预警标志的解耦链路断裂：数据明确显示雷达端曾有14帧短脉冲告警输出，但ECU端的left/right_fcta_warning恒为0。缺乏从radar_objects.warning_flag输入到ECU内部防抖/累积计数器(L2)的状态追踪，未明确是'输入端被感知过滤'还是'输出端被状态机屏蔽'。
+- 车速迟滞(Hysteresis)边界与L1信号质量验证缺失：三组分析均指向车速<0.5km/h不满足激活条件，但未核对ASWIN_SystemState.c中Standby→Active的具体迟滞窗口(如0.3~0.7km/h)，也未验证底盘Veh_Can_Spd信号在0~3km/h区间是否存在滤波过度或丢帧导致瞬时值从未跨域。
 
 
 ### 关键争议
-核心争议点在于 L2 层屏蔽机制：为何在 L3 标志位有效且状态机就绪的情况下，L1 的 `bFCTAEnable` 依然为假，或者 L2 代码中存在未记录的其他屏蔽条件（如速度滞回、TTC 阈值动态调整等）？
+归因权重分歧：FCTA抑制的主导因素究竟是'运动学参数(速度/TTC)不达标'触发的常规安全过滤，还是'感知层将潜在动态目标误判为静态遮挡物(ObjClass=9)'触发的专项抑制策略？该分歧直接决定后续优化方向应侧重于放宽低速唤醒阈值/修正TTC溢出处理，还是修正感知分类算法的置信度门限。

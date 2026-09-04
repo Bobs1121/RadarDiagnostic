@@ -1,6 +1,6 @@
 # Project Memory
 
-## [2026-04-20 记忆整理 & 知识更新 v15]
+## [2026-05-22 记忆整理 & 知识更新 v16]
 角雷达问题分析系统，目标平台：TI AWR2E44P, 项目代码：cr60_light (GWM_B26 COEM)。
 
 ### 系统架构
@@ -111,5 +111,9 @@
   - **LCA 根因二次确认**: 结合最新会话 (BSDLCA001_20260420_104016)，进一步确认 `LCASwtReq` 抖动是 LCA 报警晚/中断的唯一根因，L6 代码逻辑与 L2 已知问题完全匹配。
   - **FCTB 阈值调优案例**: 记录 FCTB 阈值 `fFctbObjWarningBaseTTMX` (1.0s -> 1.5s) 调优测试案例，用于后续灵敏度分析参考。
   - **知识体系成熟度**: 系统已具备从 L1 信号 -> L2 逻辑 -> L3 模式 -> L6 源码的全链路闭环分析能力，L6 代码知识成为根因分析的“黄金标准”。
+- [2026-05-22] **v16 最新增量**:
+  - **FCTB 档位抑制根因确认**: 新增 FCTB005 根因，确认 `actual_gear` (N/P) 导致 `fctb_enable` 关闭，叠加 `AEBBAActv` 信号清零 `HoldRelease` 状态，导致制动请求无法维持。该结论已整合至 L2 FCTB known_issues。
+  - **RCTA 数据完整性警告**: 新增 RCTA 诊断中的“数据完整性缺失”模式，当 BLF 缺失关键抑制信号 (GearPos, CarSpd) 时，TPE 无法解析状态机，需优先检查数据链路。
+  - **代码学习进度更新**: L6 代码学习已完成 26 对 (total_pairs=26)，覆盖 8 大功能的 alarm_logic/calculation_chain/output_chain/state_machine，所有核心功能链路知识已闭环。
 
 注意：各功能的个案诊断结论存储在 memory/functions/<FUNC>.json 中，不在此处记录。

@@ -1,0 +1,246 @@
+{
+  "function": "RCTA",
+  "system_state": {
+    "state_values": {
+      "0": "None",
+      "1": "Init",
+      "2": "Standby",
+      "3": "Active",
+      "4": "Off",
+      "5": "Failure",
+      "6": "Passive"
+    },
+    "transitions": [
+      {
+        "from": "0",
+        "to": "1",
+        "conditions": [
+          {
+            "condition": "Self Inspection Finished",
+            "variable": "g_DTCCode.selfInspFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:1748"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "4",
+        "conditions": [
+          {
+            "condition": "RCTA Enable Condition False",
+            "variable": "adasEnable->bRCTAEnable",
+            "threshold": "FALSE",
+            "source": "adasFunc.c:1808"
+          },
+          {
+            "condition": "Calibration Flag Enabled",
+            "variable": "g_DTCCode.calibratingFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:1803"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "5",
+        "conditions": [
+          {
+            "condition": "Failure Flag Set",
+            "variable": "g_DTCCode.failureFlg",
+            "threshold": "TRUE",
+            "source": "adasFunc.c:1764"
+          }
+        ]
+      },
+      {
+        "from": "*",
+        "to": "2",
+        "conditions": [
+          {
+            "condition": "Gear is Reverse",
+            "variable": "g_egoCarAddInfo.actual_gear",
+            "threshold": "7",
+            "source": "adasFunc.c:1770"
+          },
+          {
+            "condition": "Speed within Active Range",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "[fRctaActiveLowSpd, fRctaActiveUpSpd] (0-15 km/h)",
+            "source": "adasFunc.c:1772"
+          }
+        ]
+      },
+      {
+        "from": "2/3",
+        "to": "6",
+        "conditions": [
+          {
+            "condition": "Speed out of Active Range (Deactive)",
+            "variable": "g_egoCarAddInfo.carSpd",
+            "threshold": "> fRctaDeactiveUpSpd (17 km/h) OR < fRctaDeactiveLowSpd (0 km/h)",
+            "source": "adasFunc.c:1781"
+          },
+          {
+            "condition": "Gear not Reverse",
+            "variable": "g_egoCarAddInfo.actual_gear",
+            "threshold": "!= 7",
+            "source": "adasFunc.c:1797"
+          }
+        ]
+      }
+    ]
+  },
+  "target_filter": {
+    "skip_function": "N/A",
+    "conditions": [
+      {
+        "condition": "Object Yaw Angle Range",
+        "variable": "sObj->yawAng",
+        "threshold": "[45.0, 135.0] degrees",
+        "note": "Enter Warning"
+      },
+      {
+        "condition": "Object Yaw Angle Range (Exit)",
+        "variable": "sObj->yawAng",
+        "threshold": "[43.0, 137.0] degrees",
+        "note": "Exit Warning"
+      }
+    ]
+  },
+  "detect_enable": {
+    "flag": "bRctaDetectFlg",
+    "conditions": [
+      {
+        "condition": "System State is Standby or Active",
+        "variable": "rctaSystemState",
+        "threshold": "2 or 3"
+      }
+    ]
+  },
+  "ego_speed_ranges": {
+    "active": {
+      "low": "fRctaActiveLowSpd=0.0",
+      "high": "fRctaActiveUpSpd=15.0",
+      "unit": "km/h"
+    },
+    "deactive": {
+      "low": "fRctaDeactiveLowSpd=0.0",
+      "high": "fRctaDeactiveUpSpd=17.0",
+      "unit": "km/h"
+    },
+    "detect": {
+      "low": "fRctaDetectLowSpd=0.0",
+      "high": "fRctaDetectUpSpd=15.0",
+      "unit": "km/h"
+    }
+  },
+  "target_speed_ranges": {
+    "warning_enter": {
+      "low": "fRctaObjWarningSpd=0.0",
+      "high": "fRctaObjWarningUpSpd=200.0",
+      "unit": "km/h"
+    },
+    "warning_exit": {
+      "low": "fRctaObjDeWarningSpd=0.0",
+      "high": "fRctaObjDeWarningUpSpd=200.0",
+      "unit": "km/h"
+    }
+  },
+  "external_suppression": [
+    {
+      "source_system": "Driver Operation (Gear)",
+      "condition": "Gear must be Reverse for RCTA to be active/standby. If not Reverse, state goes to Passive/Off.",
+      "variable": "g_egoCarAddInfo.actual_gear",
+      "can_signal": "GearPos",
+      "suppression_trigger": "!= 7",
+      "normal_value": "== 7",
+      "effect": "Disable/Passive",
+      "source": "adasFunc.c:1770"
+    },
+    {
+      "source_system": "Driver Operation (Accelerator)",
+      "condition": "Accelerator pedal position must be low for Standby state transition in ASWIN logic.",
+      "variable": "AdasStM.AccPedPosDiag",
+      "can_signal": "AccPedPos",
+      "suppression_trigger": "> 80",
+      "normal_value": "<= 80",
+      "effect": "Prevent Standby",
+      "source": "ASWIN_SystemState.c:1659"
+    },
+    {
+      "source_system": "Vehicle Status (Trailer)",
+      "condition": "Trailer status must be 0 (No Trailer) for RCTA to be active.",
+      "variable": "AdasStM.TrailerSts",
+      "can_signal": "TrailerSts",
+      "suppression_trigger": "== 1",
+      "normal_value": "== 0",
+      "effect": "Disable/Passive",
+      "source": "ASWIN_SystemState.c:1657"
+    },
+    {
+      "source_system": "ESP/Chassis",
+      "condition": "ESP Diagnostic Active must be 0.",
+      "variable": "AdasStM.ESPDiagActv",
+      "can_signal": "ESPDiagActv",
+      "suppression_trigger": "!= 0",
+      "normal_value": "== 0",
+      "effect": "Disable/Passive",
+      "source": "ASWIN_SystemState.c:1657"
+    },
+    {
+      "source_system": "Fault/DTC",
+      "condition": "RCTA Fault Enable (Failure Flag) must be false.",
+      "variable": "g_DTCCode.failureFlg",
+      "can_signal": "N/A",
+      "suppression_trigger": "TRUE",
+      "normal_value": "FALSE",
+      "effect": "Failure State",
+      "source": "adasFunc.c:1764"
+    },
+    {
+      "source_system": "Calibration",
+      "condition": "Calibration Flag must be false.",
+      "variable": "g_DTCCode.calibratingFlg",
+      "can_signal": "N/A",
+      "suppression_trigger": "TRUE",
+      "normal_value": "FALSE",
+      "effect": "Off State",
+      "source": "adasFunc.c:1803"
+    },
+    {
+      "source_system": "System Power",
+      "condition": "System Power Mode must be ON.",
+      "variable": "AdasStM.SysPowerMod",
+      "can_signal": "SysPowerMod",
+      "suppression_trigger": "!= SYS_POWER_ON",
+      "normal_value": "== SYS_POWER_ON",
+      "effect": "Disable Enable Condition",
+      "source": "ASWIN_SystemState.c:1152"
+    },
+    {
+      "source_system": "Variant/Configuration",
+      "condition": "TAM Variant must be 2, 3, or 4.",
+      "variable": "g_GWMSpecificVariant.bits.TAM",
+      "can_signal": "N/A",
+      "suppression_trigger": "!= 0x02 && != 0x03 && != 0x04",
+      "normal_value": "== 0x02 || == 0x03 || == 0x04",
+      "effect": "Disable Enable Condition",
+      "source": "ASWIN_SystemState.c:1152"
+    }
+  ],
+  "other_conditions": [
+    {
+      "category": "Warning Logic",
+      "condition": "TTM (Time To Impact) Threshold",
+      "variable": "fTTM",
+      "threshold": "<= 4.2s (Enter), > 5.2s (Exit)"
+    },
+    {
+      "category": "Warning Logic",
+      "condition": "DDCI (Distance to Collision Intersection) Range",
+      "variable": "fDDCI",
+      "threshold": "[-5.0, 0.0] m (Warning Base), with offsets"
+    }
+  ]
+}

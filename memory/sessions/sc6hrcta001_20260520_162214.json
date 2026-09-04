@@ -1,0 +1,223 @@
+{
+  "session_id": "sc6hrcta001_20260520_162214",
+  "case_id": "sc6hrcta001",
+  "problem": "RCTA没有触发",
+  "expected": "应该触发",
+  "created_at": "2026-05-20T16:22:14.663044",
+  "status": "completed",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-05-20T16:22:19.918818",
+      "detail": {
+        "function": "RCTA",
+        "confidence": 1.0,
+        "reasoning": "用户明确报告 RCTA 功能未触发，属于典型的漏报（False Negative）问题。需要分析从感知输入到状态机激活再到报警输出的完整链路。",
+        "fail_type": "FN",
+        "key_variables": [
+          "adasEnable.bRCTAEnable",
+          "EgoSpeed",
+          "RCTA_SystemState",
+          "PEROutput.adasWarning",
+          "g_RctaObjList",
+          "TTM",
+          "ObjYawAngle",
+          "GWM_RCTA_FaultEna",
+          "bRCTAEnable"
+        ],
+        "related_functions": [
+          "RCTB",
+          "RCW"
+        ]
+      }
+    },
+    {
+      "step": "classify",
+      "timestamp": "2026-05-20T16:22:51.471067",
+      "detail": {
+        "task_type": "diagnose",
+        "confidence": 0.95,
+        "target_function": "RCTA",
+        "focus_parameters": [
+          "TTC",
+          "DDCI",
+          "ANGLE"
+        ],
+        "focus_signals": [
+          "car_spd",
+          "trc_0_vel_x",
+          "trc_0_dist_y"
+        ],
+        "reasoning": "RCTA未触发属于功能行为异常，需分析TTC、DDCI、角度等关键参数是否满足触发条件。"
+      }
+    },
+    {
+      "step": "parse",
+      "timestamp": "2026-05-20T16:22:54.855186",
+      "detail": {
+        "bag_frames": 0,
+        "can_frames": 36561
+      }
+    },
+    {
+      "step": "windows",
+      "timestamp": "2026-05-20T16:22:54.893735",
+      "detail": {
+        "count": 0,
+        "windows": []
+      }
+    },
+    {
+      "step": "evidence",
+      "timestamp": "2026-05-20T16:22:58.917739",
+      "detail": {
+        "keys": [
+          "timeline",
+          "state_transitions",
+          "radar_objects_summary",
+          "can_summary",
+          "KEY_FACTS",
+          "tpe_report",
+          "tpe_block"
+        ],
+        "key_facts": "[全段数据] (未检测到窗口，使用均匀抽样)\n\n[状态跳变] 无\n\n==================================================\n[因果层次说明] 以下数据分为「观测层」和「配置层」，根因分析必须沿因果链向上追溯：\n  观测层(雷达端) → 仅说明「发生了什么」\n  配置层(ECU端)  → 说明「为什么发生」→ 需追溯到代码逻辑",
+        "window_count": 0,
+        "transition_count": 0
+      }
+    },
+    {
+      "step": "conditions",
+      "timestamp": "2026-05-20T16:24:06.267366",
+      "detail": {
+        "has_conditions": true,
+        "preview": "### RCTA 激活条件\n\n**自车速度范围:**\n  active: [fRctaActiveLowSpd=0.0, fRctaActiveUpSpd=15.0] km/h\n  deactive: [fRctaDeactiveLowSpd=0.0, fRctaDeactiveUpSpd=17.0] km/h\n  detect: [fRctaDetectLowSpd=0.0, fRctaDetectUpSpd=15.0] km/h\n\n**目标速度范围:**\n  warning_enter: (fRctaObjWarningSpd=0.0, fRctaObjWarningUpSpd=200.0"
+      }
+    },
+    {
+      "step": "tpe",
+      "timestamp": "2026-05-20T16:24:06.803645",
+      "detail": {
+        "pattern_count": 8,
+        "triggered_count": 0,
+        "unresolved_variables": 10,
+        "missing_can_signals": 0,
+        "has_triggers": false
+      }
+    },
+    {
+      "step": "variable_probe",
+      "timestamp": "2026-05-20T16:24:29.120076",
+      "detail": {
+        "plan_count": 6,
+        "plans": [
+          {
+            "field": "ttc",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (ttc <= 4.2)",
+            "reasoning": "检查是否存在满足 TTM 警告阈值 (4.2s) 的目标。如果 count 为 0，说明 TTC 条件未满足，这是 RCTA 触发的核心条件之一。"
+          },
+          {
+            "field": "ddci",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (ttc <= 4.2)",
+            "reasoning": "在满足 TTC 条件的目标中，检查 DDCI (Distance to Collision Intersection) 值。RCTA 触发需要目标进入特定的 ROI 区域，DDCI 是判定目标是否处于危险交汇区域的关键参数。"
+          },
+          {
+            "field": "dist_y",
+            "table": "radar_objects",
+            "stats": [
+              "count",
+              "min",
+              "max",
+              "p50"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target & (ttc <= 4.2)",
+            "reasoning": "检查满足 TTC 条件的目标的横向位置 (dist_y)。RCTA 对目标的偏航角/横向位置有特定范围要求 (Yaw Angle Range)，dist_y 结合距离可间接反映角度是否在触发范围内。"
+          },
+          {
+            "field": "actual_spd",
+            "table": "radar_debug",
+            "stats": [
+              "min",
+              "max",
+              "p50"
+            ],
+            "filter": "in_window",
+            "reasoning": "检查自车速度是否在 RCTA 激活范围内。根据代码知识，系统需进入 Active 状态，且速度通常需低于 fRctaActiveUpSpd (15.0 km/h) 或处于特定低速区间。如果速度过高，功能可能未激活。"
+          },
+          {
+            "field": "rcta_enable",
+            "table": "radar_debug",
+            "stats": [
+              "min",
+              "max"
+            ],
+            "filter": "in_window",
+            "reasoning": "确认 RCTA 功能开关是否开启。如果 rcta_enable 为 0，则功能被抑制，不会触发报警。"
+          },
+          {
+            "field": "rcta_flag",
+            "table": "radar_objects",
+            "stats": [
+              "count"
+            ],
+            "group_by": "side",
+            "filter": "in_window & is_stable_target",
+            "reasoning": "检查雷达底层是否已经标记了 rcta_flag。如果底层 flag 为 1 但上层未报警，可能是上层逻辑（如迟滞、去警告、系统状态）的问题；如果底层 flag 为 0，则问题出在感知或底层判定条件（TTC/DDCI/Angle）未满足。"
+          }
+        ],
+        "result_preview": "## 按问题动态探查 (Variable Probe)\n> 由 VariableQueryPlanner 根据问题+L6代码知识自动生成的查询结果\n\n### ttc  (group_by=side)  [filter: in_window & is_stable_target & (ttc <= 4.2)]\n_规划理由_: 检查是否存在满足 TTM 警告阈值 (4.2s) 的目标。如果 count 为 0，说明 TTC 条件未满足，这是 RCTA 触发的核心条件之一。\n- 参与行数: 0\n\n### ddci  (group_by=side)  [filter: in_window & is_stable_target & (ttc <= 4.2)]\n_规划理由_: 在满足 TTC 条件的目标中，检查 DDCI (Distance to Collision Intersection) 值。RCTA 触发需要目标进入特定的 ROI 区域，DDCI 是判定目标是否处于危险交汇区域的关键参数。\n- 参与行数: 0\n\n### dist_y  (group_by=side)  [filter: i"
+      }
+    },
+    {
+      "step": "suppression_check",
+      "timestamp": "2026-05-20T16:24:29.141073",
+      "detail": {
+        "signal_count": 8,
+        "result_preview": "### [Driver Operation (Gear)] Gear must be Reverse for RCTA to be active/standby. If not Reverse, state goes to Passive/Off.\n  变量: g_egoCarAddInfo.actual_gear, CAN: GearPos\n  **未在BLF中找到匹配信号，无法确认** → 效果: Disable/Passive\n\n### [Driver Operation (Accelerator)] Accelerator pedal position must be low for Standby state transition in ASWIN logic.\n  变量: AdasStM.AccPedPosDiag, CAN: AccPedPos\n  **未在BLF中找到匹配信号，无法确认** → 效果: Prevent Standby\n\n### [Vehicle Status (Trailer)] Trailer status must be 0 (No Trailer)"
+      }
+    },
+    {
+      "step": "expert_panel",
+      "timestamp": "2026-05-20T16:27:21.450737",
+      "detail": {
+        "rounds": 3,
+        "contradictions": [
+          "感知专家将根因归结为'感知层未检测到满足条件的目标'，隐含假设系统已处于Active状态；而算法专家和系统状态专家指出，由于关键CAN信号（Gear, Speed等）缺失，无法确认系统是否激活，甚至推测系统可能因未挂倒挡而处于Passive/Off状态。两者对'系统当前状态'的假设存在根本冲突。",
+          "感知专家认为'无目标满足TTC阈值'是直接观测事实，暗示雷达有数据但过滤后无结果；系统状态专家则指出若系统未激活，则根本不会进行目标检测逻辑，此时'无目标'是逻辑抑制的结果而非感知失败。"
+        ],
+        "verdict_preview": "**根因**\n**数据完整性缺失导致根因无法唯一确定**：BLF 文件中缺失所有关键外部抑制信号（GearPos, CarSpd, RCTASwtReq 等），导致 TPE 无法解析 `adasFunc.c` 中的状态机逻辑，且 Variable Probe 显示无满足 `TTM <= 4.2s` 的目标（来源：Variable Probe/抑制信号实测）。最可能的因果链为：**关键 CAN 信号缺失/未录制** → **ECU 无法确认 RCTA 激活条件（Gear=7, Spd<15km/h）** → **系统处于 Passive/Off 状态** → **抑制目标检测与报警逻辑** → **RCTA 未触发**。若假设信号存在但工况不满足，则根因为**车辆未挂倒挡或车速过高**导致系统未激活。\n\n### 时序耦合(TPE触发清单)\n| 模式 | 源文件:行 | 首触发t | 持续 | 触发信号 | 副作用 |\n|------|----------|--------|------|---------|--------|\n| 无 | 无 | 无 | 无 | 无 | 无 |\n*(注：T"
+      }
+    },
+    {
+      "step": "visualize",
+      "timestamp": "2026-05-20T16:27:22.423360",
+      "detail": {
+        "html_path": "D:\\RamboStar\\idea\\radarAnalyze\\cases\\sc6hrcta001\\report.html",
+        "charts_built": 0,
+        "warnings": [
+          "ego speed chart skipped: no ego_info frames",
+          "output signal chart skipped: no CAN signals found"
+        ]
+      }
+    }
+  ],
+  "findings": [],
+  "completed_at": "2026-05-20T16:27:32.833826",
+  "result_summary": "Report saved to D:\\RamboStar\\idea\\radarAnalyze\\cases\\sc6hrcta001\\report.md"
+}

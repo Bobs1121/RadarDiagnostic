@@ -77,6 +77,75 @@ class BagFrame:
     fields: dict = field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Topic auto-discovery
+# ---------------------------------------------------------------------------
+
+# Keywords that indicate radar-related topics
+_RADAR_TOPIC_KEYWORDS = [
+    "wf", "radar", "corner", "object", "target", "lgu_data",
+    "objectlist", "autosar", "ego_car", "warning_status",
+]
+
+# Suffix pattern for radar ID extraction: _1, _2, _3, _4
+import re as _re
+_RADAR_ID_SUFFIX_RE = _re.compile(r"_(\d+)$")
+
+
+def discover_radar_topics(bag_path: str | Path) -> dict:
+    """Auto-discover radar-related topics from a bag file.
+
+    Returns a dict mapping topic name to discovery metadata:
+        {
+            "/wf/corner_radar/lgu_data_1": {
+                "radar_id": 1,
+                "msg_type": "arbe_msgs/msg/wfAutosarData",
+                "type": "wfa",          # wfa | wfo | ego | warning | other
+                "keyword_match": ["wf", "radar", "lgu_data"],
+            },
+            ...
+        }
+    """
+    from rosbags.rosbag1 import Reader
+
+    result = {}
+    bag = Path(bag_path)
+    if not bag.exists():
+        return result
+
+    with Reader(bag) as reader:
+        for name, info in reader.topics.items():
+            name_lower = name.lower()
+            matched_keywords = [k for k in _RADAR_TOPIC_KEYWORDS if k in name_lower]
+            if not matched_keywords:
+                continue
+
+            # Determine topic type
+            if "lgu_data" in name_lower or "autosar" in info.msgtype.lower():
+                topic_type = "wfa"
+            elif "objectlist" in name_lower or "wfobject" in info.msgtype.lower():
+                topic_type = "wfo"
+            elif "ego_car" in name_lower:
+                topic_type = "ego"
+            elif "warning" in name_lower:
+                topic_type = "warning"
+            else:
+                topic_type = "other"
+
+            # Extract radar_id from topic suffix (_1, _2, _3, _4)
+            suffix_match = _RADAR_ID_SUFFIX_RE.search(name)
+            radar_id = int(suffix_match.group(1)) if suffix_match else 0
+
+            result[name] = {
+                "radar_id": radar_id,
+                "msg_type": info.msgtype,
+                "type": topic_type,
+                "keyword_match": matched_keywords,
+            }
+
+    return result
+
+
 class BagParser:
     """Parse ROS bag files and extract structured per-frame data."""
 

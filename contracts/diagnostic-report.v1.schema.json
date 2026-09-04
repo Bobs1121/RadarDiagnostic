@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/diagnostic-report.v1.schema.json",
+  "title": "CR60 diagnostic report v1",
+  "description": "Evidence-bound detailed report projection with optional AI inference.",
+  "type": "object",
+  "required": ["schema_version", "status", "identity", "overview", "event_index", "alert_timeline", "diagnostic_narrative", "conclusion", "diagnosis", "next_actions"],
+  "properties": {
+    "schema_version": {"const": "diagnostic-report.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "generated_at": {"type": "string"},
+    "identity": {"type": "object"},
+    "overview": {"type": "object"},
+    "event_index": {"type": "array", "items": {"type": "object"}},
+    "selected_event": {"type": ["object", "null"]},
+    "alert_timeline": {"type": "object"},
+    "diagnostic_narrative": {"type": "object"},
+    "diagnostic_story": {"type": "object", "additionalProperties": true},
+    "analysis_flow": {"type": "object", "additionalProperties": true},
+    "geometry_projection": {"type": "object"},
+    "gdb_confirmation": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"const": "gdb-confirmation.v1"},
+        "status": {"type": "string"},
+        "actual_hit": {"type": "boolean"},
+        "session_status": {"type": "string"},
+        "runner_status_verified": {"type": "boolean"},
+        "evidence_status": {"type": "string"},
+        "frame_id": {},
+        "algorithm_rising_frame": {},
+        "frame_relation_to_algorithm_rise": {"type": "string"},
+        "radar_id": {},
+        "object_id": {},
+        "source_location": {"type": "object", "additionalProperties": true},
+        "captured_fields": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+        "observed_field_count": {"type": "integer"},
+        "missing_probe_count": {"type": "integer"}
+      },
+      "additionalProperties": true
+    },
+    "execution_context": {
+      "type": "object",
+      "properties": {
+        "data_source": {"type": "string"},
+        "algorithm_execution": {"type": "string"},
+        "hilmodel": {},
+        "buildmodel": {},
+        "replay_strategy": {"type": "string"},
+        "replay_mode_label": {"type": "string"},
+        "warmup": {"type": "object", "additionalProperties": true},
+        "gdb_actual_hit": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "can_output": {"type": "object", "additionalProperties": true},
+    "output_policy": {
+      "type": "object",
+      "properties": {
+        "requested_endpoint": {"enum": ["auto", "algorithm", "can_tx"]},
+        "effective_endpoint": {"enum": ["algorithm", "can_tx"]},
+        "output_authority": {"type": "string"},
+        "can_data_status": {"enum": ["present", "absent", "not_detected", "unknown"]},
+        "can_required": {"type": "boolean"},
+        "algorithm_output_is_terminal": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "arbe_preflight": {"type": "object", "additionalProperties": true},
+    "conclusion": {"type": "object"},
+    "diagnosis": {"type": "object"},
+    "next_actions": {"type": "array", "items": {"type": "object"}},
+    "analysis_trace": {"type": "object"},
+    "code_context": {"type": "object"},
+    "evidence_layers": {"type": "array", "items": {"type": "object"}},
+    "input_refs": {"type": "array", "items": {"type": "object"}},
+    "artifact_refs": {"type": "array", "items": {"type": "object"}},
+    "analysis_run_ref": {"type": "object"},
+    "conflicts": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "report_fingerprint": {"type": "string"}
+  },
+  "additionalProperties": true
+}

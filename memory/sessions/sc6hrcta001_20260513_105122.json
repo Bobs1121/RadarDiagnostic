@@ -1,0 +1,70 @@
+{
+  "session_id": "sc6hrcta001_20260513_105122",
+  "case_id": "sc6hrcta001",
+  "problem": "看下是什么问题，多展现一些数据和问题点",
+  "expected": "自己确认",
+  "created_at": "2026-05-13T10:51:22.016229",
+  "status": "started",
+  "steps": [
+    {
+      "step": "understand",
+      "timestamp": "2026-05-13T10:51:32.634565",
+      "detail": {
+        "function": "ALL",
+        "confidence": 0.5,
+        "reasoning": "用户未提供具体的故障现象、日志数据或功能名称，仅要求'多展现一些数据和问题点'。由于缺乏具体输入，无法锁定单一功能。基于系统架构知识，需全面扫描所有8大功能（BSD, LCA, DOW, RCW, RCTA, RCTB, FCTA, FCTB）的状态机、报警标志及底层感知数据，以排查潜在的系统性异常或数据不一致问题。",
+        "fail_type": "OTHER",
+        "key_variables": [
+          "fctaSystemState",
+          "fctbSystemState",
+          "rctaSystemState",
+          "rctbSystemState",
+          "bsdSystemState",
+          "lcaSystemState",
+          "dowSystemState",
+          "rcwSystemState",
+          "objFctaWarningFlag",
+          "objFctbBrakeFlag",
+          "objRctaWarningFlag",
+          "objRctbBrakeFlag",
+          "objBsdWarningFlag",
+          "objLcaWarningFlag",
+          "objDowWarningFlag",
+          "objRcwWarningFlag",
+          "EgoSpeed",
+          "g_DTCCode",
+          "adasEnable",
+          "bFCTAEnable",
+          "bFCTBEnable",
+          "bRCTAEnable",
+          "bRCTBEnable",
+          "bBSDEnable",
+          "bLCAEnable",
+          "bDOWEnable",
+          "bRCWEnable",
+          "rbMPR_GetPoweronMR",
+          "g_RteComMapping_RLWarnSig"
+        ],
+        "related_functions": [
+          "ASWIN_SystemState",
+          "adasFunc",
+          "ASWOUT_OutCalc",
+          "RteComMapping"
+        ]
+      }
+    },
+    {
+      "step": "classify",
+      "timestamp": "2026-05-13T10:51:48.539018",
+      "detail": {
+        "task_type": "query",
+        "confidence": 0.85,
+        "target_function": "UNKNOWN",
+        "focus_parameters": [],
+        "focus_signals": [],
+        "reasoning": "用户仅要求展示数据和潜在问题点，未指定具体功能或异常现象，属于通用数据查询请求。"
+      }
+    }
+  ],
+  "findings": []
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/agent-composition.v1.schema.json",
+  "title": "Pi atomic tool composition v1",
+  "type": "object",
+  "required": ["steps"],
+  "properties": {
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["tool", "params"],
+        "properties": {
+          "tool": { "type": "string", "minLength": 1 },
+          "params": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "done": { "type": "boolean" },
+    "answer": { "type": "string" }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "required": ["$ref"],
+      "properties": {
+        "$ref": { "pattern": "^steps\\[[0-9]+\\]\\.(result\\.)?data\\..+" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

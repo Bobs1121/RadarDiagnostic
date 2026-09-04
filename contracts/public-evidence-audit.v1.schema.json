@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/public-evidence-audit.v1.schema.json",
+  "title": "Public arbe evidence audit v1",
+  "type": "object",
+  "required": ["schema_version", "status", "frame_evidence", "ego_evidence", "object_evidence", "warning_evidence"],
+  "properties": {
+    "schema_version": { "const": "public-evidence-audit.v1" },
+    "status": { "enum": ["ready", "partial", "blocked"] },
+    "frame_evidence": { "type": "object" },
+    "ego_evidence": { "type": "object" },
+    "object_evidence": { "type": "object" },
+    "warning_evidence": { "type": "object" },
+    "decoder_contract": { "type": "object" },
+    "without_gdb": { "type": "array", "items": { "type": "string" } },
+    "gdb_required_or_unavailable": { "type": "array", "items": { "type": "string" } },
+    "evidence_gaps": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

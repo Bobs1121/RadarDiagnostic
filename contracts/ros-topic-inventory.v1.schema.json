@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/ros-topic-inventory.v1.schema.json",
+  "title": "ROS topic inventory v1",
+  "type": "object",
+  "required": ["schema_version", "status", "server", "requested_topics", "topics"],
+  "properties": {
+    "schema_version": { "const": "ros-topic-inventory.v1" },
+    "status": { "enum": ["planned", "ready", "failed", "blocked"] },
+    "server": { "type": "object" },
+    "requested_topics": { "type": "array", "items": { "type": "string" } },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["topic", "type", "publishers", "subscribers", "publisher_count", "subscriber_count", "data_observable", "status"],
+        "properties": {
+          "topic": { "type": "string" },
+          "type": { "type": "string" },
+          "publishers": { "type": "array", "items": { "type": "string" } },
+          "subscribers": { "type": "array", "items": { "type": "string" } },
+          "publisher_count": { "type": "integer", "minimum": 0 },
+          "subscriber_count": { "type": "integer", "minimum": 0 },
+          "publisher_present": { "type": "boolean" },
+          "message_observable": { "type": ["boolean", "null"] },
+          "observability_basis": { "type": "string" },
+          "sample": { "type": "object" },
+          "data_observable": { "type": "boolean" },
+          "status": { "enum": ["ready", "not_found"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "diagnostics": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

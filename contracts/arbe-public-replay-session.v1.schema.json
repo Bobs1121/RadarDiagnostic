@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cr60.local/contracts/arbe-public-replay-session.v1.schema.json",
+  "title": "Remote arbe public replay session v1",
+  "description": "Auditable plan/result for one short SSH replay that records public ROS outputs.",
+  "type": "object",
+  "required": ["schema_version", "status", "mode", "target", "command", "execute_requested", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "arbe-public-replay-session.v1"},
+    "status": {"enum": ["planned", "approval_required", "completed", "partial", "failed", "timeout"]},
+    "mode": {"const": "remote_public"},
+    "target": {"type": "object", "additionalProperties": true},
+    "command": {"type": "string"},
+    "execute_requested": {"type": "boolean"},
+    "analysis_options": {
+      "type": "object",
+      "properties": {
+        "object_association_mode": {"enum": ["strict", "publication_order"]},
+        "object_validity_policy": {"enum": ["preserve", "arbe_wf_sobj"]}
+      },
+      "additionalProperties": true
+    },
+    "remote_capture_bag": {"type": "string"},
+    "remote_capture_json": {"type": "string"},
+    "marker_result": {"type": "object", "additionalProperties": true},
+    "command_result": {"type": "object", "additionalProperties": true},
+    "fetch_result": {"type": "object", "additionalProperties": true},
+    "local_capture_json": {"type": "string"},
+    "runtime_snapshot": {"type": "object", "additionalProperties": true},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifacts": {"type": "array", "items": {"type": "string"}},
+    "artifact_path": {"type": "string"}
+  },
+  "additionalProperties": true
+}
