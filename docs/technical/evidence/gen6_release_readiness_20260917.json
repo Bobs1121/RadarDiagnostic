@@ -1,0 +1,430 @@
+{
+  "schema_version": "release-gate.v1",
+  "status": "blocked",
+  "release_id": "gen6-ai-first-release",
+  "baseline_version": "gen6-ddd.v1",
+  "workspace_commit": "2a2e87efa87223625bb4e556f8d788f1c6181b4f",
+  "generated_at": "2026-09-17T01:59:38.882815+00:00",
+  "required_entries": 16,
+  "passed_required": 0,
+  "errors": [
+    "G6-AC01:required_status:specified",
+    "G6-AC01:evidence_missing",
+    "G6-AC01:test_level_evidence_missing:integration",
+    "G6-AC01:test_level_evidence_missing:Pi-product",
+    "G6-AC01:command_missing",
+    "G6-AC01:checks_not_run",
+    "G6-AC02:required_status:specified",
+    "G6-AC02:evidence_missing",
+    "G6-AC02:test_level_evidence_missing:unit/contract",
+    "G6-AC02:test_level_evidence_missing:integration",
+    "G6-AC02:test_level_evidence_missing:real-data",
+    "G6-AC02:command_missing",
+    "G6-AC02:checks_not_run",
+    "G6-AC03:required_status:specified",
+    "G6-AC03:evidence_missing",
+    "G6-AC03:test_level_evidence_missing:real-data",
+    "G6-AC03:test_level_evidence_missing:browser/UX",
+    "G6-AC03:command_missing",
+    "G6-AC03:checks_not_run",
+    "G6-AC04:required_status:specified",
+    "G6-AC04:evidence_missing",
+    "G6-AC04:test_level_evidence_missing:real-replay/GDB",
+    "G6-AC04:test_level_evidence_missing:Pi-product",
+    "G6-AC04:command_missing",
+    "G6-AC04:checks_not_run",
+    "G6-AC05:required_status:specified",
+    "G6-AC05:evidence_missing",
+    "G6-AC05:test_level_evidence_missing:real-data",
+    "G6-AC05:test_level_evidence_missing:Pi-product",
+    "G6-AC05:command_missing",
+    "G6-AC05:checks_not_run",
+    "G6-AC06:required_status:specified",
+    "G6-AC06:evidence_missing",
+    "G6-AC06:test_level_evidence_missing:unit/contract",
+    "G6-AC06:test_level_evidence_missing:integration",
+    "G6-AC06:test_level_evidence_missing:real-replay/GDB",
+    "G6-AC06:command_missing",
+    "G6-AC06:checks_not_run",
+    "G6-AC07:required_status:specified",
+    "G6-AC07:evidence_missing",
+    "G6-AC07:test_level_evidence_missing:real-replay/GDB",
+    "G6-AC07:test_level_evidence_missing:Pi-product",
+    "G6-AC07:command_missing",
+    "G6-AC07:checks_not_run",
+    "G6-AC08:required_status:specified",
+    "G6-AC08:evidence_missing",
+    "G6-AC08:test_level_evidence_missing:unit/contract",
+    "G6-AC08:test_level_evidence_missing:integration",
+    "G6-AC08:command_missing",
+    "G6-AC08:checks_not_run",
+    "G6-AC09:required_status:specified",
+    "G6-AC09:evidence_missing",
+    "G6-AC09:test_level_evidence_missing:performance",
+    "G6-AC09:command_missing",
+    "G6-AC09:checks_not_run",
+    "G6-AC10:required_status:specified",
+    "G6-AC10:evidence_missing",
+    "G6-AC10:test_level_evidence_missing:integration",
+    "G6-AC10:test_level_evidence_missing:Pi-product",
+    "G6-AC10:test_level_evidence_missing:browser/UX",
+    "G6-AC10:command_missing",
+    "G6-AC10:checks_not_run",
+    "G6-AC11:required_status:specified",
+    "G6-AC11:evidence_missing",
+    "G6-AC11:test_level_evidence_missing:real-replay/GDB",
+    "G6-AC11:command_missing",
+    "G6-AC11:checks_not_run",
+    "G6-AC12:required_status:specified",
+    "G6-AC12:evidence_missing",
+    "G6-AC12:test_level_evidence_missing:real-data",
+    "G6-AC12:test_level_evidence_missing:real-replay/GDB",
+    "G6-AC12:test_level_evidence_missing:browser/UX",
+    "G6-AC12:command_missing",
+    "G6-AC12:checks_not_run",
+    "G6-AC13:required_status:specified",
+    "G6-AC13:evidence_missing",
+    "G6-AC13:test_level_evidence_missing:browser/UX",
+    "G6-AC13:command_missing",
+    "G6-AC13:checks_not_run",
+    "G6-AC14:required_status:specified",
+    "G6-AC14:evidence_missing",
+    "G6-AC14:test_level_evidence_missing:integration",
+    "G6-AC14:test_level_evidence_missing:browser/UX",
+    "G6-AC14:command_missing",
+    "G6-AC14:checks_not_run",
+    "G6-AC15:required_status:specified",
+    "G6-AC15:evidence_missing",
+    "G6-AC15:test_level_evidence_missing:clean-install",
+    "G6-AC15:command_missing",
+    "G6-AC15:checks_not_run",
+    "G6-AC16:required_status:specified",
+    "G6-AC16:evidence_missing",
+    "G6-AC16:test_level_evidence_missing:integration",
+    "G6-AC16:test_level_evidence_missing:browser/UX",
+    "G6-AC16:command_missing",
+    "G6-AC16:checks_not_run"
+  ],
+  "entries": [
+    {
+      "id": "G6-AC01",
+      "phase": "G6",
+      "title": "单 bag+问题无需内部 artifact；正确身份自动复用，版本/COEM 冲突只问必要业务信息，错版本不进入 runtime",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:integration",
+        "test_level_evidence_missing:Pi-product",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC02",
+      "phase": "G6",
+      "title": "四雷达、多次报警、同 ID/复用；全局目录和深查范围明确；选择不同事件不串数据",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:unit/contract",
+        "test_level_evidence_missing:integration",
+        "test_level_evidence_missing:real-data",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC03",
+      "phase": "G6",
+      "title": "位置/单位/几何与独立参考一致；缺尺寸不造框；视频错位明确，场景/曲线/代码联动",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:real-data",
+        "test_level_evidence_missing:browser/UX",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC04",
+      "phase": "G6",
+      "title": "Pi 按问题选择两模式；实际宏/阶段、reset/warmup/ACK 证据；目标级不能宣称前级重算",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:real-replay/GDB",
+        "test_level_evidence_missing:Pi-product",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC05",
+      "phase": "G6",
+      "title": "已知缺陷、正常/性能取舍、无报警/证据不足；真实模型按证据解释和裁决，不编造唯一根因",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:real-data",
+        "test_level_evidence_missing:Pi-product",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC06",
+      "phase": "G6",
+      "title": "无授权拒绝，范围内不重复问，计划变化需复核；重复提交/重连不能重复副作用",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:unit/contract",
+        "test_level_evidence_missing:integration",
+        "test_level_evidence_missing:real-replay/GDB",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC07",
+      "phase": "G6",
+      "title": "真实授权 diff→构建→回灌→同输入比较；预定义标准，相关功能行为检查，不以禁用功能当修复",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:real-replay/GDB",
+        "test_level_evidence_missing:Pi-product",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC08",
+      "phase": "G6",
+      "title": "关键失败注入均保留可用成果、准确缺口、下一步；错版本/未知值不伪装成功",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:unit/contract",
+        "test_level_evidence_missing:integration",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC09",
+      "phase": "G6",
+      "title": "已就绪代表数据含近 10 GB；分析完成 ≤600 s；分段和端到端计时、完成率同时公开",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:performance",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC10",
+      "phase": "G6",
+      "title": "三层增量成果可见；追问/重启保留上下文；身份变化使相关结果 stale，历史可查看",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:integration",
+        "test_level_evidence_missing:Pi-product",
+        "test_level_evidence_missing:browser/UX",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC11",
+      "phase": "G6",
+      "title": "独立会话及产物隔离可证明；人工进程/dirty 不受影响；取消仅清理 own resources，GUI parity 不冒称",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:real-replay/GDB",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC12",
+      "phase": "G6",
+      "title": "可行动结论有真实表达式、同事件值、赋值/消费链；缺映射维持假设，修改前后对应同一证据链",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:real-data",
+        "test_level_evidence_missing:real-replay/GDB",
+        "test_level_evidence_missing:browser/UX",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC13",
+      "phase": "G6",
+      "title": "全旅程对照人工任务，测重复输入/查找/换算/切应用、提问、决策耗时与理解错误，不仅测变量页",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:browser/UX",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC14",
+      "phase": "G6",
+      "title": "Pi 与浏览器共享 run，增量不丢选择；页面动作回流、重复点击/重连幂等；停止结果符合实际执行状态",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:integration",
+        "test_level_evidence_missing:browser/UX",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC15",
+      "phase": "G6",
+      "title": "干净机器按指南首次绑定→首个可信结果；升级保留配置/案件，回退可用，不强迫用户修内部路径",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:clean-install",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    },
+    {
+      "id": "G6-AC16",
+      "phase": "G6",
+      "title": "磁盘满、模型失联、SSH 断开、过期知识、取消/崩溃可解释恢复；导出冻结报告可打开且不误含 secrets/全仓源码",
+      "required_for_release": true,
+      "declared_status": "specified",
+      "passed": false,
+      "errors": [
+        "required_status:specified",
+        "evidence_missing",
+        "test_level_evidence_missing:integration",
+        "test_level_evidence_missing:browser/UX",
+        "command_missing",
+        "checks_not_run"
+      ],
+      "evidence": [],
+      "command": {
+        "status": "not_run"
+      }
+    }
+  ]
+}

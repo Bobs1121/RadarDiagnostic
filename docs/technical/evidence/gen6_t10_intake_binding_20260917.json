@@ -1,0 +1,40 @@
+{
+  "schema_version": "gen6-t10-intake-binding.v1",
+  "task": "T10",
+  "title": "bag+问题到版本车型绑定（本地切片）",
+  "date": "2026-09-17",
+  "scope_note": "真实案例数据在用户服务器（10.190.171.44，当前网络不可达，见 gen6_remote_probe_20260917.json）；本轮交付并验证全部本地可实现部分，real-data 验证待服务器恢复后按 T01 validation_plan 补做",
+  "delivered": {
+    "engine": "engines/arbe/intake_binding.py — bind_intake_identity/load_intake_artifact；解析优先级 case 元数据 > 显式 variant > intake 身份匹配 > 单配置项目自动复用；版本/分支 fail-closed 门（错版本 blocked）；业务语言 business_questions（无技术 token）；版本已知但分支映射未配置时记诊断不问用户",
+    "contract": "contracts/cr60-intake-binding.v1.schema.json",
+    "pi_wiring": [
+      "discover_case_artifacts 新增 intake 候选文件名",
+      "PiModule.run 在 bridge/模型调用前执行 _resolve_case_identity_binding（仅 case_analysis 且存在数据/材料输入）",
+      "needs_confirmation/blocked → pre-model gate：返回业务问题、不调用模型、run 保留 partial 可恢复",
+      "resolved → variant_id 注入 context builder；intake_handoff_id/intake_binding_status 写入 run binding；intake artifact 记入 refs",
+      "register_cli 新增 --intake/--material/--match-text"
+    ]
+  },
+  "design_decisions": [
+    "纯对话（无 case_dir/material/intake）不触发绑定门——无数据则无版本风险，不改变既有行为（由 test_pi_tool_bridge 回归覆盖）",
+    "版本已知但版本→分支映射未配置：不把技术映射问题抛给用户（用户不被要求懂 branch），记 version_to_branch_mapping_unavailable 诊断",
+    "身份缺失 + 单一已配置项目 → 自动复用（正确身份自动复用）；多项目 → 业务问题选择",
+    "缺版本 + 项目声明期望分支 → 必要业务问题（版本影响结果，符合'只问影响结果的信息'）"
+  ],
+  "tests": {
+    "new_unit": "tests/test_intake_binding.py — 15 passed（唯一/歧义/零匹配/单项目回退、版本 aligned/mismatch/未声明、路径名不作证据、unresolved 忽略、artifact 读写）",
+    "new_wiring": "tests/test_pi_intake_binding_gate.py — 6 passed（gate 阻断并保留 run、材料现场解析、intake artifact 注入 variant、错版本 gate、显式 variant、case 元数据多义转业务问题）",
+    "ac01_command": "python -m pytest tests/test_cr60_intake.py tests/test_pi_context.py tests/test_config_gen.py -q → 52 passed",
+    "consumers_regression": "tests/test_pi_tool_bridge.py + test_cli_capabilities.py + test_cli_module_dispatch.py + test_modules_standalone.py → 100 passed（期间发现并修复：绑定门误对无数据纯对话触发，已收窄到存在数据/材料输入）",
+    "governance": "check_ddd 0 errors；test_ddd_governance + test_release_acceptance + 新测试 → 30 passed"
+  },
+  "acceptance_status": {
+    "G6-AC01": "integration 本地部分有真实测试证据（fixture 级）；Pi-product/real-data 层级仍需真实 bag+Pi 会话（服务器恢复后）；status 保持 specified，未升级",
+    "G6-AC10": "绑定结果进 run binding/ledger（部分底座）；增量可见验证属后续切片"
+  },
+  "pending": [
+    "服务器恢复后：真实案例目录 case.yaml/材料 → pi 入口 integration 验证 + Pi-product 会话证据",
+    "batch 模式逐行 intake（后续切片）",
+    "G7 intake 数据指纹与 case_dir 实际文件比对（归 T11）"
+  ]
+}

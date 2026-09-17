@@ -1,8 +1,20 @@
 # Corner Radar Analysis Tool
 
+> **当前开发入口（2026-09-16）**：[Gen6 AI 统一 DDD 文档](docs/technical/GEN6_AI_DOCUMENT_INDEX.md)。覆盖产品、现状/环境、完整用户体验、系统与模块设计、实施和验收。Pi 为主要产品入口；下文直接模块命令保留开发/兼容用途，现有功能说明不等于新整体验收已完成。
+
 **雷达 ADAS 功能自动化根因诊断系统** — 对 BSD/LCA/DOW/RCW/RCTA/RCTB/FCTA/FCTB 等功能的录制数据进行自动化分析，输出结构化的诊断报告。
 
 ## 快速开始
+
+### 持续开发入口
+
+使用 [DDD 执行规范](docs/technical/GEN6_AI_EXECUTION_PROTOCOL.md)、[Sprint 计划](docs/technical/GEN6_AI_SPRINT_PLAN.md) 和 [Handoff](docs/technical/GEN6_AI_HANDOFF.md) 驱动后续开发。规范末尾提供可用于 `/goal` 的目标文本；当前没有自动启动 goal。
+
+```bash
+python tools/check_ddd.py
+```
+
+该命令只检查文档/依赖/任务状态；当前 G6 发布验收尚未完成，release gate 保持 blocked 是预期结果。旧文档均在 `docs/archive/2026-09-17/`，不再是开发指令。
 
 ### 1. 安装
 
@@ -13,6 +25,9 @@ cd radarAnalyze
 
 # 安装依赖
 pip install -r requirements.txt
+
+# 使用本项目已验收的直接依赖版本（推荐交付安装）
+pip install -r requirements.lock
 
 # 配置环境变量（复制 .env.example）
 cp .env.example .env
@@ -96,7 +111,7 @@ set CR60_RADAR_ANALYZE_PYTHON=C:\Python312\python.exe
 ```
 
 脱离 ChatGPT 的完整输入、入口、工具组合、提示词边界和当前可用范围见
-[CR60_PI_STANDALONE_RUN_GUIDE.md](docs/technical/CR60_PI_STANDALONE_RUN_GUIDE.md)。
+[CR60_PI_STANDALONE_RUN_GUIDE.md](docs/archive/2026-09-17/technical/CR60_PI_STANDALONE_RUN_GUIDE.md)。
 
 详细诊断时，如果 runtime/GDB artifact 不在 `--case-dir` 的 canonical 目录中，显式挂载它们；
 要求生成报告时可以直接给 `--output-dir`。Pi 会先生成确定性 `evidence_anchor`，再交给模型解释，
@@ -149,6 +164,63 @@ provider/model、项目配置以及当前数据对应的 source context/远程 a
 已有 artifact 的报告可以不依赖模型直接运行；需要 Pi 自主解释时才需要 provider。Pi 不把自身
 的代码常识当作事实，而是先读取当前 source-bound code context/code index，再组合代码分析、
 公共运行态和 GDB 工具。不同功能、代码版本和数据只能使用本次 identity/freshness 通过的条件链。
+
+点云感知扩展通过两个原子能力接入 Pi：
+
+```bash
+# 只读生成点云感知回放计划；HILMODEL 不是 0 时会明确 blocked
+python cli.py point-cloud-plan --remote-bag-path <bag> \
+  --point-cloud-topic <point-topic> --remote-capture-base <capture-base> \
+  --preflight-path <preflight.json> \
+  --source-context-path <pi-context.json> --output outputs/point-cloud-plan.json
+
+# 对已经采集的点迹/阶段证据生成 perception-report.v1 JSON/HTML
+python cli.py point-cloud-analyze --capture-path <point-capture.json> \
+  --source-context-path <pi-context.json> --output-dir <report-dir>
+
+# 批量处理 manifest；单条坏文件会保留失败条目，不丢失其他报告
+python cli.py point-cloud-batch --manifest-path <point-cloud-manifest.json> \
+  --output-dir <batch-report-dir>
+
+# 只读校验已有 perception-report，不重新解析数据或运行 ROS
+python cli.py point-cloud-validate --report-path <report-dir>/perception-report.json \
+  --output <report-dir>/perception-validation.json
+
+# Pi 对已生成报告做有界查询；lineage 支持按完整 callback_key 精确切片
+python cli.py point-cloud-read --report-path <report-dir>/perception-report.json \
+  --section lineage --callback-key <callback-key> --limit 40
+```
+
+`point-cloud-plan` 只做身份、编译分支和预热策略校验，不启动 ROS；`point-cloud-analyze` 缺少
+点迹或阶段证据时输出 `blocked/partial`，不会把目标注入或 ObjectList 时间近邻数据伪装成完整感知结果。
+`point-cloud-analyze` 还会保留逐雷达字段损失、非有限值、run/attempt 完成帧账本和显式
+recorded↔replay 对齐；没有 producer 给出的 frame/identity 依据时，比较状态为
+`not_available`。`point-cloud-batch` 生成 `perception-batch-index.v1`，每条数据拥有独立
+JSON/HTML 结果或失败原因。传入明确的 `selected_frame` 和角度单位后，报告还会生成
+同帧 `perception-scene.v1`/`perception-timeline.v1` 及离线 SVG；没有选中帧时不会自动
+选择时间最近的点迹。传入多次独立 `warmup_runs` 后还会输出
+`perception-warmup-analysis.v1`，区分稳定与 warm-up-sensitive，但不把稳定性当作算法正确性。
+批处理同样复用 JSON/JSONL/CSV artifact adapter 和 ROS1 BAG 的 `wfAutosarData.dotTrans`
+post-detection adapter；BAG 输入布局未绑定当前 source snapshot 时会保持 partial/blocked。
+MF4/BLF/DB3 在没有专用 parser 时会作为独立 unsupported 条目进入 batch index，不会被静默当作空点云。
+批次 HTML 索引还会透传 `project_id/function/stage/conclusion_level` 并提供离线文本筛选。
+同时生成 `perception-batch-metrics.csv`，便于脚本汇总每条数据的格式、点数、selected frame、
+warm-up 状态、报告路径和失败原因。
+
+### 交付前体检与验收
+
+每个版本使用只读体检和机器可读验收索引，不把历史报告或测试数量直接当作发布证明：
+
+```bash
+python tools/doctor.py --json
+python tools/release_gate.py --json
+```
+
+验收索引位于
+[`docs/technical/release_acceptance.v1.json`](docs/technical/release_acceptance.v1.json)。
+`doctor` 检查 Python、依赖、入口和 capability catalog；`release_gate` 默认按当前 G6 首期范围运行必测命令、
+检查证据路径并输出当前 commit、结果和缺口。远端公共回放及干净机器安装仍必须在受测环境中完成，
+当前 G6 验收初始为 `specified`，缺命令、证据或所需层级时 gate 保持 blocked。旧 M0–M4 清单仅在归档中保留。
 
 详细报告现在还包含 `condition-trace.v1`：它逐项列出当前源码的真实 C 条件、源码位置、同帧
 字段/当前源码参数的代入值、`satisfied` / `not_satisfied` / `not_evaluable` / `unsupported`
@@ -418,7 +490,7 @@ python cli.py runtime-evidence-merge --bundle-path <diagnosis_bundle.json> \
 
 `gdb-service` 不内置 FCTA/FCTB 或任何固定断点；`execute=true` 可能暂停/扰动进程，
 必须由上层审批后显式开启。完整输入输出、证据分层和真实 arbe 现场结论见
-`docs/technical/CR60_PI_UNIFIED_DOCUMENT_INDEX.md`。
+`docs/technical/GEN6_AI_DOCUMENT_INDEX.md`。
 
 Pi 继续编排时可以直接把 merged `diagnosis_bundle.v1` 和
 `runtime-debug-plan.v1` 交给 `pi-context`；它会从 bundle 中已明确声明的 case/data/source
@@ -492,7 +564,7 @@ radarAnalyze/
   config.yaml             # 模型/项目/功能配置
   .env                    # 环境变量（API Key 等）
   requirements.txt        # Python 依赖
-  IMPLEMENTATION.md       # 完整实现文档（归档用）
+  docs/archive/           # 历史文档，非当前设计
 
   ai/                     # AI 分析核心模块
     orchestrator.py       # 诊断管线编排器（15 步）

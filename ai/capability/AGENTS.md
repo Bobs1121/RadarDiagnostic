@@ -50,7 +50,7 @@ Pi 详细分析请求可由 `ai/modules/pi.py` 生成确定性 `evidence_anchor`
 ## 变更与测试
 
 - 修改 catalog 字段、Pi bridge 参数或 context schema 时，同时更新
-  `contracts/`、`docs/technical/CR60_PI_DDD_REQUIREMENTS_AND_ACCEPTANCE.md`、
+  `contracts/`、`docs/technical/GEN6_AI_ACCEPTANCE.md`、
   模块设计和测试。
 - 运行 `tests/test_pi_context.py`、`tests/test_pi_tool_bridge.py`，再跑完整
   radarAnalyze pytest。

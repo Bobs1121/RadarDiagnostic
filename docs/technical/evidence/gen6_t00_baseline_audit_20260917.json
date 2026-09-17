@@ -1,0 +1,103 @@
+{
+  "schema_version": "gen6-t00-baseline-audit.v1",
+  "task": "T00",
+  "title": "核对 Git/dirty、模块现状、环境和所有权",
+  "date": "2026-09-17",
+  "executor": "opencode (GLM) per GEN6_AI_EXECUTION_PROTOCOL.md",
+  "authorization": {
+    "local_development": "authorized by user request 2026-09-17 (software transformation development per GEN6_AI_DOCUMENT_INDEX.md)",
+    "remote_execution": "not authorized; no SSH/replay/GDB/remote build attempted",
+    "git_push_merge": "not authorized; no commit made this round",
+    "existing_dirty_changes": "treated as prior work, not owned by this round; no stash/reset/clean/checkout performed"
+  },
+  "git_state": {
+    "repo_root": "D:/RamboStar/idea/radarAnalyze",
+    "branch": "codex/ros-debug-autonomous",
+    "head": "2a2e87efa87223625bb4e556f8d788f1c6181b4f",
+    "remote_origin": "https://github.com/Bobs1121/RadarDiagnostic.git",
+    "dirty_entries": 292,
+    "dirty_breakdown": {
+      "modified": 94,
+      "deleted": 51,
+      "untracked": 147
+    },
+    "dirty_fingerprint_sha256_prefix": "e75d6eef4c815aae971c024af1b69815",
+    "deleted_scope": "deletions correspond to documented archive move into docs/archive/2026-09-17 (handoff 2026-09-17)",
+    "untracked_major_dirs": {
+      "scripts/": 74,
+      "contracts/": 26,
+      "docs/technical/": 14,
+      "ai/modules/": 10,
+      "tests/": 9,
+      "tools/": 5,
+      "engines/": 3
+    },
+    "last_commits": [
+      "2a2e87e docs: record product commit and cleanup handoff",
+      "22ad587 feat: add pi-driven CR60 diagnostic platform"
+    ]
+  },
+  "checks": [
+    {
+      "command": "python tools/check_ddd.py",
+      "exit_code": 0,
+      "result": "documents_valid; 12 documents, 19 tasks, 16 acceptance items, 0 errors"
+    },
+    {
+      "command": "python tools/release_gate.py --plan-only --json",
+      "exit_code": 1,
+      "result": "blocked; 0/16 passed; all G6-AC remain specified with missing evidence/command; consistent with gen6_release_readiness_20260917.json expectation (honest blocked, not regression)"
+    },
+    {
+      "command": "python cli.py capabilities --json",
+      "exit_code": 0,
+      "result": "capability catalog emitted; 68 capabilities registered incl. 67 unique named entries + registry tools (pi, analysis-run-*, runtime-evidence-*, point-cloud-*, arbe-*, cr60-*, etc.)"
+    },
+    {
+      "command": "python tools/doctor.py --json",
+      "exit_code": 0,
+      "result": "status=ready; python 3.12.10; failures=0; lock_mismatches=0; capability_catalog status=ready returncode=0 capability_count=68; required_imports=7 ok; optional_imports=9; entrypoint_files=5"
+    }
+  ],
+  "module_audit": {
+    "method": "existence check of module design landing points (GEN6_AI_MODULE_DESIGN.md §1) against working tree",
+    "landing_points_checked": 41,
+    "landing_points_missing": 0,
+    "per_module": {
+      "M01": ["config.py", "ai/modules/project_init.py", "ai/modules/cr60_intake.py", "ai/modules/pi_context.py"],
+      "M02": ["parsers/case_loader.py", "ai/providers/cr60_harness.py", "engines/point_cloud_replay.py"],
+      "M03": ["engines/code_context.py", "engines/signal_mapper.py", "engines/event_code_path.py", "engines/condition_trace.py"],
+      "M04": ["ai/modules/pi.py", "ai/pi_bridge.py", "ai/capability/registry.py", "ai/capability/pi_tool_bridge.py", "scripts/gen_pi_extension.py"],
+      "M05": ["engines/analysis_ledger.py", "ai/modules/analysis_collaboration.py", "ai/modules/feedback_review.py"],
+      "M06": ["ai/capability/module_bridge.py", "engines/arbe/execution_binding.py"],
+      "M07": ["engines/arbe/source.py", "engines/arbe/cuda.py", "engines/arbe/patch_plan.py", "engines/arbe/build.py", "engines/arbe/preflight.py", "engines/arbe/remote_replay.py", "ai/modules/sim_verify.py"],
+      "M08": ["engines/gdb_service.py", "engines/runtime_debug_plan.py", "engines/arbe/public_runtime.py", "engines/runtime_evidence.py"],
+      "M09": ["ai/code_fix_engine.py"],
+      "M10": ["engines/analysis_workbench.py", "ai/modules/analysis_workbench.py", "engines/diagnostic_report.py"],
+      "M11": ["core/knowledge_guard.py", "memory/auto_dream.py"],
+      "M12": ["tools/doctor.py", "tools/release_gate.py", "requirements.lock"]
+    },
+    "gap_positioning": "file existence is not capability acceptance; real gaps remain per GEN6_AI_CURRENT_STATE.md §5 (first-run without internal artifacts; durable execution supervision; realtime workbench write-back; real replay binding; real apply/build/feedback loop; ≤10GB/≤600s performance) and release_acceptance.v1.json (0/16 accepted)"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "pytest": "9.0.3",
+    "platform": "win32",
+    "doctor_status": "ready",
+    "sibling_harness": {
+      "path": "D:/RamboStar/idea/cr60-debug-harness",
+      "exists": true,
+      "note": "historical sibling; CLI/contract compatibility still unverified this round"
+    },
+    "remote_host": {
+      "historical": "10.190.171.44 (hoz2wx)",
+      "verified_this_round": false,
+      "note": "historical preflight timeout (2026-09-15) not re-verified; no remote authorization this round"
+    }
+  },
+  "acceptance_links": {
+    "G6-AC01": "partial input: identity/config/intake modules exist and capability catalog runs; real bag+question flow not yet run this round",
+    "G6-AC15": "partial input: doctor.py ready on current machine; clean-machine install not tested"
+  },
+  "conclusion": "T00 audit complete: branch/dirty boundary recorded, 41/41 module landing points present, environment ready, authorization list explicit. No code changes made this task."
+}

@@ -1,0 +1,410 @@
+{
+  "status": "completed",
+  "archive_date": "2026-09-17",
+  "root": "D:\\RamboStar\\idea\\radarAnalyze",
+  "entries": [
+    {
+      "from": "docs/CR60_PI_UNIFIED_PRD.md",
+      "to": "docs/archive/2026-09-17/CR60_PI_UNIFIED_PRD.md",
+      "original_sha256": "ebad8c7fd1124cd0942bd0a1d499e7c3b44d84195c7df5f7897ebc455e2d9294",
+      "archived_sha256": "76e85f79733185fafa6a3d65fdde84d5b4c7e7fe44516fb347f7ec52b3ebeb52"
+    },
+    {
+      "from": "docs/CR60_PI_UNIFIED_RESEARCH_REPORT_2026-08-26.md",
+      "to": "docs/archive/2026-09-17/CR60_PI_UNIFIED_RESEARCH_REPORT_2026-08-26.md",
+      "original_sha256": "75d32fe9ce909679e5a77cc8ee416614b94c4ecfb90cdae7a8b9a7e58c5cd258",
+      "archived_sha256": "3171ff8f186c7c2630743848695e9bdcb3f7c46ed4b2b3db14af54d2e2d8e1c4"
+    },
+    {
+      "from": "docs/GEN5_INTEGRATION_DESIGN.md",
+      "to": "docs/archive/2026-09-17/GEN5_INTEGRATION_DESIGN.md",
+      "original_sha256": "e60073489f64b3ddf1db5aa09507773f3833967feb6251fa3c11a61990d6024e",
+      "archived_sha256": "84656722241e8ae7d9916055670cab0b914442adec1833175534299b6c8d19b6"
+    },
+    {
+      "from": "docs/HANDOFF_gen5_bsd_conditions.md",
+      "to": "docs/archive/2026-09-17/HANDOFF_gen5_bsd_conditions.md",
+      "original_sha256": "dea528bbf03c0b408f42a30979fb9cec19ac20acd51a66de8ab1569f027ef500",
+      "archived_sha256": "aa1810483c21d903d5c97ed7bbfd249301e3a0a66a7064d978c43eb0c3ee3ab6"
+    },
+    {
+      "from": "docs/production/00-surgery-module-map.md",
+      "to": "docs/archive/2026-09-17/production/00-surgery-module-map.md",
+      "original_sha256": "11e12ecdb0556130152ac37b886680cd6469856342e97005b8a1c9fbfcc3d444",
+      "archived_sha256": "17f37ce728e5da8544b8f834e64585531c30c14f4856838ac6f80fa185e25f45"
+    },
+    {
+      "from": "docs/production/01-surgery-pipelines.md",
+      "to": "docs/archive/2026-09-17/production/01-surgery-pipelines.md",
+      "original_sha256": "7985432723507cdacb22ac8e2206b8668c3695cd7a9c6e35f81081b42cab18df",
+      "archived_sha256": "4cc1dbd82eaa04102c5c04ada3a3eb4952851b9b871c4c4c4aac56008640099f"
+    },
+    {
+      "from": "docs/production/02-surgery-defects.md",
+      "to": "docs/archive/2026-09-17/production/02-surgery-defects.md",
+      "original_sha256": "76a49c3e3d5f17132d913c6e82d143debd057cf70e14fe9b785988938c065a09",
+      "archived_sha256": "dcef1df23d46e4211f7035a3d942c33fc017ba5a2f128622854e4293540ab230"
+    },
+    {
+      "from": "docs/production/10-prd.md",
+      "to": "docs/archive/2026-09-17/production/10-prd.md",
+      "original_sha256": "6997976b14298773ef204ddb770649d2a42a281fa03f761928e12b3354bb6f5a",
+      "archived_sha256": "abe00be0700121b8f9213bec2e99f95bb79614e493f849e5798332fb8df5af9a"
+    },
+    {
+      "from": "docs/production/20-system-architecture.md",
+      "to": "docs/archive/2026-09-17/production/20-system-architecture.md",
+      "original_sha256": "9037342209a80c6c9255178044dbd4e8e757e1fbfcbbaeef521d8f62bbd26dc5",
+      "archived_sha256": "6a03617f2478627e255dc1bf86c296899df0c53574fa087346a291294da59be9"
+    },
+    {
+      "from": "docs/production/30-scheme-design.md",
+      "to": "docs/archive/2026-09-17/production/30-scheme-design.md",
+      "original_sha256": "c5af60c83ffa8ecaf4db39a3fc989eaf33ee9b9e57d57e256f3e17740eebbd12",
+      "archived_sha256": "951eedf2c23def1e9b2080f7bd4930b6aec914f6ced8e2109e36cb4990e99a8c"
+    },
+    {
+      "from": "docs/production/31-software-architecture.md",
+      "to": "docs/archive/2026-09-17/production/31-software-architecture.md",
+      "original_sha256": "e69a87951d62ec5fe0e8a9a169fde0da2475db4ce8909311bedd4482f52a4728",
+      "archived_sha256": "5bdf8a3149094cd3b5bd3ab702415835941ff9191a94f1044dbc032d4791b424"
+    },
+    {
+      "from": "docs/production/HANDOFF_refactor_stage.md",
+      "to": "docs/archive/2026-09-17/production/HANDOFF_refactor_stage.md",
+      "original_sha256": "50f0ee95d88b93bddfc8e0e1ab02ffd1bb30493d1fe6feed998c9f1ac1b03554",
+      "archived_sha256": "633f3d73a12de7ce6aabdae1913be664a3577a84a914e9c916353d66db54bdb3"
+    },
+    {
+      "from": "docs/ros_debug/EXPLORATION_NOTES_2026-08-24.md",
+      "to": "docs/archive/2026-09-17/ros_debug/EXPLORATION_NOTES_2026-08-24.md",
+      "original_sha256": "a19051ad7eb370a02a6b834fb1a6bd21b230772cdfd2a82024e81fe406f62c47",
+      "archived_sha256": "846e526dd0892f2bcc11d6b098e785f32e16c5d55de0aac2f0adc00d758b88cb"
+    },
+    {
+      "from": "docs/ros_debug/ROS_DEBUG_DIAGNOSTIC_TOOL_FRAMEWORK.md",
+      "to": "docs/archive/2026-09-17/ros_debug/ROS_DEBUG_DIAGNOSTIC_TOOL_FRAMEWORK.md",
+      "original_sha256": "2ad2e7cd2f57ec962a529da5707b691dfe0ca681158b95f94d8b47f8a4b10f26",
+      "archived_sha256": "edb8c254cd971323532d99c395fffadeec35a03f142f8bd0af693374d4d040db"
+    },
+    {
+      "from": "docs/technical/codegraph-design.md",
+      "to": "docs/archive/2026-09-17/technical/codegraph-design.md",
+      "original_sha256": "da2379e1a79027d7b557a74fbfc1936d88430bb252bd8e1cac38897a47ee483d",
+      "archived_sha256": "cc11fb60989723bfc82c1ab8069e35c63c826ae85a6a3476809f6681f512bb58"
+    },
+    {
+      "from": "docs/technical/CR60_PI_DDD_REQUIREMENTS_AND_ACCEPTANCE.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_DDD_REQUIREMENTS_AND_ACCEPTANCE.md",
+      "original_sha256": "90223244c73b16f20d465c726e1c88948f21902fdd154f9a71f996b7d077903f",
+      "archived_sha256": "7ca61ccfb25df7fe19a5d32a3191d72af702e1239b63b788995403e75a27ab4a"
+    },
+    {
+      "from": "docs/technical/CR60_PI_STANDALONE_RUN_GUIDE.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_STANDALONE_RUN_GUIDE.md",
+      "original_sha256": "41aac28eeecc37c7a045a8820b998bd30181d61fd93966fe642f65d0d369d5ef",
+      "archived_sha256": "63401cf8571800fc77f8be7985a8ed0fa108690a01672107da6130675553ae5c"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_ARBE_REUSE_ASSESSMENT.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_ARBE_REUSE_ASSESSMENT.md",
+      "original_sha256": "7bae19e9eaff0dca08da74aa17fb30bf9a8e6d0275709d162f54d3aedbb2d896",
+      "archived_sha256": "b18c33c1558e4caf5ecf91cd0249f367f0f597a70ce1ceaba2372e1430ed6c08"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_ARCHITECTURE_REVIEW_2026-08-30.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_ARCHITECTURE_REVIEW_2026-08-30.md",
+      "original_sha256": "679035cf1adf00ce118f84567f0668887ee50012bfe12a80929faf02bb1fdbe6",
+      "archived_sha256": "cedddcf1787c457c778956d1a7d0bdfa7c827e086e4262451eef851e4abb91d5"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_DDD_GAP_REVIEW_2026-09-01.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_DDD_GAP_REVIEW_2026-09-01.md",
+      "original_sha256": "e78e0d099a142080e0cc86633935bdcf45e3653665b80ecac366b1aa11a0d0b6",
+      "archived_sha256": "135430a48f63bde936c4a700a9017cc77c895a9cec6d981c7e895502986c9807"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_DECISIONS.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_DECISIONS.md",
+      "original_sha256": "a1db58b276dfc8a67bffa41cef13dd2e00a1a10c5227addf38428bd9be905414",
+      "archived_sha256": "5b42086f3afff9b1f67069031945b547c31e4598453a6492ead36a6d099c18e7"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_DOCUMENT_INDEX.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_DOCUMENT_INDEX.md",
+      "original_sha256": "53aa20ace7940b9184c79022c3751a05cf78a44212d9bb8ff3dc11078c7ce459",
+      "archived_sha256": "427dead599bb70a895ff1e09a6f290402331e772244c52c8da6097b43e04331e"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-26_ATOMIC_TOOLS.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-26_ATOMIC_TOOLS.md",
+      "original_sha256": "cd7c8193b9a64490e65002aaedb3225732fc3f79352125b20afd56b75c9a57f9",
+      "archived_sha256": "96fda8321ba2532318a4609f8997bfbf774225221e6623c15a74a8e34e095cc5"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-27_FCTB_RUNTIME.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-27_FCTB_RUNTIME.md",
+      "original_sha256": "53c31d33ad1315803a9426a07b95dda4df1e5ec038ce3b83240b604a2f11fcc9",
+      "archived_sha256": "9cda8a30af6c1145d3990ea39894f301e5bb86f10b1fd7891d361d281d4d26ba"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-28_RUNTIME_PLAN.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-28_RUNTIME_PLAN.md",
+      "original_sha256": "7fe0361ac971eaa6e18588b6592e4935553ced161e73599f6a9101894ff17416",
+      "archived_sha256": "77d219157e43cde6871688191bed4e74a968afb680ff32842165f4b954d43488"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-30_ARBE_SOURCE_CUDA_READONLY.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-30_ARBE_SOURCE_CUDA_READONLY.md",
+      "original_sha256": "9bf89eb253ca35c9ceb93d9d3cd9b9227c811ee9e8a077d1f2546397af5cf277",
+      "archived_sha256": "8755994ac62287f889f737169e11decfb296caca2d5724aaad1ea085e6c614e5"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-30_ARCHITECTURE_REVIEW.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-30_ARCHITECTURE_REVIEW.md",
+      "original_sha256": "049bce1a4f14a319e2636a6c8684dc0a65242c76e25fe6fcc1f28f19dec8e650",
+      "archived_sha256": "db3ea37f39356e2812dc57f554dd45be71d46acf76b18342112f17a63bf961ea"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-31_ANALYSIS_LEDGER_MVP.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-31_ANALYSIS_LEDGER_MVP.md",
+      "original_sha256": "cdf5f55b3253ca1d2dfeb274ca6cdac9cf067e42bb89275e3d07d32528a9f959",
+      "archived_sha256": "9e388d408a11f8c5494e8da716a4948b39a4d4c338c3d54c3c45fb29c5facc99"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-31_CODE_CONTEXT_PUBLIC_RUNTIME.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-31_CODE_CONTEXT_PUBLIC_RUNTIME.md",
+      "original_sha256": "798ddd268137e9a9c1f3809cfc02c34c26f09ea2d07599f2fbcff8de3bc73e66",
+      "archived_sha256": "87a5799cd0e2330964c889e2b50eacb2f1d184866d8ba4e30c13a422e17e3438"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-01_DDD_GAP_REVIEW.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-01_DDD_GAP_REVIEW.md",
+      "original_sha256": "3063a287aa730783866583a00bb4117c0cb9cfccd51cfb91aa9e372c0b96b4f0",
+      "archived_sha256": "e555adcb2825eea10ff0d2f1c0fdaf2981686e210797d94043975eddc242d16c"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-01_THREE_PRODUCT_CAPABILITIES.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-01_THREE_PRODUCT_CAPABILITIES.md",
+      "original_sha256": "4690468ef59d75cd9f67b43086137ea418bfdfd547f8122edefdd0d7605e38ec",
+      "archived_sha256": "51e7150eb39e2e8d1207766e9a71aa7b2d6669d5cd59c51e65db691adcd8d8ef"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-03_PRODUCTIZATION.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-03_PRODUCTIZATION.md",
+      "original_sha256": "fcac1312c344e1444cf42d308cda444218db3cea2c83e5e4e587eb2992949574",
+      "archived_sha256": "f7da811db23a0a11f26ae9093ca4ed3f5bc1af130d9020a4c52c4f28fa4b279b"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-09_M0_M4.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-09_M0_M4.md",
+      "original_sha256": "01b0be7f677d4c359f1b7acef95a66b3838a8dca4c63310b77c65172bac83236",
+      "archived_sha256": "f94bf153dfdbccb824b37ae945b5d722d6c81c6f331b0710c5203982e46285b8"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_HANDOFF_TEMPLATE.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_HANDOFF_TEMPLATE.md",
+      "original_sha256": "4641abad52f9d71cff7ebfc323dcc79460090a931390434689bf12085c9c300c",
+      "archived_sha256": "e207c74dd66e9919f3d74c3d9daf27b57f9d9aa0b25b1ee9b7027f9db89af870"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_IMPLEMENTATION_PLAN.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_IMPLEMENTATION_PLAN.md",
+      "original_sha256": "fc547b5027d7d1503d56ea03f0801f54624975da571ac8c9b2c98bd391176ef3",
+      "archived_sha256": "c2631529ca5ee7e4281b115d146d29f760320496da7f0ae7307d34c75caef8f5"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_MODULE_DESIGN.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_MODULE_DESIGN.md",
+      "original_sha256": "f7dbf65947b6c12311aea735ecba56c97a8f7693550b3e820f4488f799cd59ad",
+      "archived_sha256": "97accd10a9695571e353b51fbd76ad0934b3d904e415bb4033fc026042ac80ae"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_S2B_MVP_DESIGN_2026-09-01.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_S2B_MVP_DESIGN_2026-09-01.md",
+      "original_sha256": "9d4af4265380b234d6108e576ff381155a1e383e92a68a931b73731607e86d01",
+      "archived_sha256": "72b79ac2d723adb0f1a1d90c49c5b7a0f75405c8811ed1bdc0ca2f12910193fc"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_SOFTWARE_DESIGN.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_SOFTWARE_DESIGN.md",
+      "original_sha256": "18498d7e4bbec69e6d98b1e1366734a77040ec761bdc65888adf633e6a2b2af9",
+      "archived_sha256": "87ec38b007a4b2928b3c79d8cb2ddbc5fca00504379e928b57cdf0ca5a50676d"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_SPRINT_PLAN.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_SPRINT_PLAN.md",
+      "original_sha256": "7e5e7324cd212dadc1341f787ce26b48e23b506a95f6540f17a49da9635f6ee6",
+      "archived_sha256": "aeb4f44d4390b18daa3fe38097dc55a8b39ab852912b16a750b4854edc58cac7"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_SYSTEM_DESIGN.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_SYSTEM_DESIGN.md",
+      "original_sha256": "2b84055caff2310a3b4eb628401b9954ba00cf43b45def44c2fced4d01d491b0",
+      "archived_sha256": "de089f665b519ff25d0d20d165d245525b92db34e96e1c6677df842c1fb8e05b"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_TODO_2026-09-03_PRODUCTIZATION.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_TODO_2026-09-03_PRODUCTIZATION.md",
+      "original_sha256": "8be9c585679cb54469b9c89252b4d071a5f98093f503c78721fa660c850832ef",
+      "archived_sha256": "961a6c2a0c0df73a1a8c50fe3b2f4ace0524f2b237f0262c361713ad8d301e7c"
+    },
+    {
+      "from": "docs/technical/CR60_PI_UNIFIED_USER_WORKFLOW_QUESTIONNAIRE.md",
+      "to": "docs/archive/2026-09-17/technical/CR60_PI_UNIFIED_USER_WORKFLOW_QUESTIONNAIRE.md",
+      "original_sha256": "2a88c413a0d60a8702bd0fccad542d8691b5a5ff2ac0ff6ff28cdad37919a75a",
+      "archived_sha256": "7ca33392da9447f4cf2139e996756a8bf308ccd05ae73fb42eab8b9619f27a05"
+    },
+    {
+      "from": "docs/technical/data-flow-and-architecture-assessment.md",
+      "to": "docs/archive/2026-09-17/technical/data-flow-and-architecture-assessment.md",
+      "original_sha256": "bbbe7128aae4388e37881e6536560d95c9ec5c266f190901965a2b0dca0306e6",
+      "archived_sha256": "d22395b648d34bf03f92e0f77f1341103478b8ef01823866282261cdb9a5d2ce"
+    },
+    {
+      "from": "docs/technical/harness-design-research.md",
+      "to": "docs/archive/2026-09-17/technical/harness-design-research.md",
+      "original_sha256": "377d3c2cb71d04bb73713634d57c5c81376ed8b647827b72f5b231481e374e05",
+      "archived_sha256": "5b4304d233852e4c3aaab54cf233499ab16d105d190393ce88f6ca63478860f5"
+    },
+    {
+      "from": "docs/technical/POINT_CLOUD_PERCEPTION_DDD_PROPOSAL_2026-09-10.md",
+      "to": "docs/archive/2026-09-17/technical/POINT_CLOUD_PERCEPTION_DDD_PROPOSAL_2026-09-10.md",
+      "original_sha256": "e5a3e4236682e1433a2dfa04f3e60fd228bc93a2690beea4349c1fbf6112929c",
+      "archived_sha256": "f4d0757052b3e9b3136936421cceed33bffdce77b2cddc1922abf624854855b2"
+    },
+    {
+      "from": "docs/technical/project-architecture-and-codegraph-plan.md",
+      "to": "docs/archive/2026-09-17/technical/project-architecture-and-codegraph-plan.md",
+      "original_sha256": "36d72042c3bd6a09f5a6da3239730dfc86755fa15f193c1c2b3bbfc289a6f315",
+      "archived_sha256": "9cdaab3c317015bfbae902d77e9baf02385e33cc600bfe9de3f6c5df8bca65c6"
+    },
+    {
+      "from": "docs/technical/RADAR_ANALYZE_DELIVERY_REVIEW_2026-09-09.md",
+      "to": "docs/archive/2026-09-17/technical/RADAR_ANALYZE_DELIVERY_REVIEW_2026-09-09.md",
+      "original_sha256": "5faca2e0ffb7ff8f89e249cdea667d2c0dd426de0705b6e37f64b3f00f9b8b31",
+      "archived_sha256": "7dd1d7fddab70dbb125adde42c9c44e32646cc33cd6f7568671c700b14457ba3"
+    },
+    {
+      "from": "docs/technical/RADARANALYZE_OVERVIEW.md",
+      "to": "docs/archive/2026-09-17/technical/RADARANALYZE_OVERVIEW.md",
+      "original_sha256": "7a10889b54ddf1f6288a5f7b3ce40689da3f2f59557788ca8c128c10345e54e3",
+      "archived_sha256": "99c64f703dc888ddf1ad116440a60e6d8a942d5d0b1d89d6ba73f450a636feb6"
+    },
+    {
+      "from": "docs/technical/release_acceptance.v1.json",
+      "to": "docs/archive/2026-09-17/technical/release_acceptance.v1.json",
+      "original_sha256": "a6bf9b937e0f280fe022e50faa50cbddbf85a65342c4c66c3c7786a1f8db5251",
+      "archived_sha256": "f55b21be1c3d3519c25d154d3a838ff26a80973d7ec6860398d07bc67a80d679"
+    },
+    {
+      "from": "docs/technical/SIMULATION_ANALYSIS_DDD_REVIEW_2026-09-11.md",
+      "to": "docs/archive/2026-09-17/technical/SIMULATION_ANALYSIS_DDD_REVIEW_2026-09-11.md",
+      "original_sha256": "0f2d3f89475f6a8cb66af2e19d72703d6bd979f42cace0d80f63333c074cc117",
+      "archived_sha256": "ff2a1aab9dd3d8a3fe54a696c726642ef23f6f3b0ef65dda8f05b1c31b673d37"
+    },
+    {
+      "from": "docs/technical/V4_DESIGN_CONTEXT_AND_DECISIONS.md",
+      "to": "docs/archive/2026-09-17/technical/V4_DESIGN_CONTEXT_AND_DECISIONS.md",
+      "original_sha256": "ca52b42bb1684523bd7fb84422d46fc2df2d948a1e0f82634151195917c80742",
+      "archived_sha256": "0bea07f1da13cb9a04844fe67cd3dabeaf80a36c635ca141a00df4d9217a004b"
+    },
+    {
+      "from": "docs/technical/V4_DEVELOPMENT_PLAN.md",
+      "to": "docs/archive/2026-09-17/technical/V4_DEVELOPMENT_PLAN.md",
+      "original_sha256": "4ec019a84f997dbe0a969de9737a80ae5870a4c496314e635aa34600d9132189",
+      "archived_sha256": "d87652e3b1ca243c285be603a56a29d5e903ba727f3cb92313baf82d65318c44"
+    },
+    {
+      "from": "docs/technical/V4_PI_BASED_PLAN.md",
+      "to": "docs/archive/2026-09-17/technical/V4_PI_BASED_PLAN.md",
+      "original_sha256": "ddd59ce44d699beef3083f41000d808ffbf1f41a069990455ae7f95547bd3f14",
+      "archived_sha256": "76be91c5f2c9f0d08eae614c35391935c44632c933bb07b63153fef6665da8f4"
+    },
+    {
+      "from": "docs/technical/V4_PI_DRIVEN_ARCHITECTURE.md",
+      "to": "docs/archive/2026-09-17/technical/V4_PI_DRIVEN_ARCHITECTURE.md",
+      "original_sha256": "917ad3df62b31d441fd13d32617de23011a728ac5469d0d04efae90a69318f82",
+      "archived_sha256": "2c7abfdf25ebfbaeb7da053bea085c116b2f3260b2a5aad32666f81db7804040"
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "docs/archive/2026-09-17/root/IMPLEMENTATION.md",
+      "original_sha256": "10becf118325a494ea4e2ba70a8eef344fca3725af3e648f3edcd7281a458ba3",
+      "archived_sha256": "93e1c6244d85f75f187dfd0cfa458ccf8ff2fa81e7fd2cae0bc5d4e9360777bb"
+    },
+    {
+      "from": "PARALLEL_DEV_BOUNDARIES.md",
+      "to": "docs/archive/2026-09-17/root/PARALLEL_DEV_BOUNDARIES.md",
+      "original_sha256": "1438be15152d72f4d01141a899cf91da6e697ba1c82d42dfe84118b530843cfb",
+      "archived_sha256": "c5ccc0470f35a6fd942d08f52951e32eb308c65a042b993aa91b36eeaa41bdf6"
+    }
+  ],
+  "reference_files_updated": [
+    "docs/CR60_PI_UNIFIED_PRD.md",
+    "docs/CR60_PI_UNIFIED_RESEARCH_REPORT_2026-08-26.md",
+    "docs/GEN5_INTEGRATION_DESIGN.md",
+    "docs/HANDOFF_gen5_bsd_conditions.md",
+    "docs/production/00-surgery-module-map.md",
+    "docs/production/01-surgery-pipelines.md",
+    "docs/production/02-surgery-defects.md",
+    "docs/production/10-prd.md",
+    "docs/production/20-system-architecture.md",
+    "docs/production/30-scheme-design.md",
+    "docs/production/31-software-architecture.md",
+    "docs/production/HANDOFF_refactor_stage.md",
+    "docs/ros_debug/EXPLORATION_NOTES_2026-08-24.md",
+    "docs/ros_debug/ROS_DEBUG_DIAGNOSTIC_TOOL_FRAMEWORK.md",
+    "docs/technical/codegraph-design.md",
+    "docs/technical/CR60_PI_DDD_REQUIREMENTS_AND_ACCEPTANCE.md",
+    "docs/technical/CR60_PI_STANDALONE_RUN_GUIDE.md",
+    "docs/technical/CR60_PI_UNIFIED_ARBE_REUSE_ASSESSMENT.md",
+    "docs/technical/CR60_PI_UNIFIED_ARCHITECTURE_REVIEW_2026-08-30.md",
+    "docs/technical/CR60_PI_UNIFIED_DDD_GAP_REVIEW_2026-09-01.md",
+    "docs/technical/CR60_PI_UNIFIED_DECISIONS.md",
+    "docs/technical/CR60_PI_UNIFIED_DOCUMENT_INDEX.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-26_ATOMIC_TOOLS.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-27_FCTB_RUNTIME.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-28_RUNTIME_PLAN.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-30_ARBE_SOURCE_CUDA_READONLY.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-30_ARCHITECTURE_REVIEW.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-31_ANALYSIS_LEDGER_MVP.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-08-31_CODE_CONTEXT_PUBLIC_RUNTIME.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-01_DDD_GAP_REVIEW.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-01_THREE_PRODUCT_CAPABILITIES.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-03_PRODUCTIZATION.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_2026-09-09_M0_M4.md",
+    "docs/technical/CR60_PI_UNIFIED_HANDOFF_TEMPLATE.md",
+    "docs/technical/CR60_PI_UNIFIED_IMPLEMENTATION_PLAN.md",
+    "docs/technical/CR60_PI_UNIFIED_MODULE_DESIGN.md",
+    "docs/technical/CR60_PI_UNIFIED_S2B_MVP_DESIGN_2026-09-01.md",
+    "docs/technical/CR60_PI_UNIFIED_SOFTWARE_DESIGN.md",
+    "docs/technical/CR60_PI_UNIFIED_SPRINT_PLAN.md",
+    "docs/technical/CR60_PI_UNIFIED_SYSTEM_DESIGN.md",
+    "docs/technical/CR60_PI_UNIFIED_TODO_2026-09-03_PRODUCTIZATION.md",
+    "docs/technical/CR60_PI_UNIFIED_USER_WORKFLOW_QUESTIONNAIRE.md",
+    "docs/technical/data-flow-and-architecture-assessment.md",
+    "docs/technical/GEN6_AI_CURRENT_STATE.md",
+    "docs/technical/GEN6_AI_HANDOFF.md",
+    "docs/technical/GEN6_AI_PRODUCT_DISCOVERY_2026-09-16.md",
+    "docs/technical/GEN6_AI_SPRINT_PLAN.md",
+    "docs/technical/harness-design-research.md",
+    "docs/technical/POINT_CLOUD_PERCEPTION_DDD_PROPOSAL_2026-09-10.md",
+    "docs/technical/project-architecture-and-codegraph-plan.md",
+    "docs/technical/RADARANALYZE_OVERVIEW.md",
+    "docs/technical/RADAR_ANALYZE_DELIVERY_REVIEW_2026-09-09.md",
+    "docs/technical/SIMULATION_ANALYSIS_DDD_REVIEW_2026-09-11.md",
+    "docs/technical/V4_DESIGN_CONTEXT_AND_DECISIONS.md",
+    "docs/technical/V4_DEVELOPMENT_PLAN.md",
+    "docs/technical/V4_PI_BASED_PLAN.md",
+    "docs/technical/V4_PI_DRIVEN_ARCHITECTURE.md",
+    "README.md",
+    "AGENTS.md",
+    "IMPLEMENTATION.md",
+    "PARALLEL_DEV_BOUNDARIES.md",
+    "ai/AGENTS.md",
+    "ai/capability/AGENTS.md",
+    "ai/modules/AGENTS.md",
+    "tools/AGENTS.md"
+  ]
+}

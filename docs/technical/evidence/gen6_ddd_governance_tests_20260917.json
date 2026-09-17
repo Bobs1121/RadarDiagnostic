@@ -1,0 +1,24 @@
+{
+  "kind": "governance-regression",
+  "observed_at": "2026-09-17T02:05:35.732737+00:00",
+  "command": [
+    "python",
+    "-m",
+    "pytest",
+    "tests/test_ddd_governance.py",
+    "tests/test_release_acceptance.py",
+    "-q"
+  ],
+  "exit_code": 0,
+  "result": "9 passed in 304.21s (0:05:04)",
+  "scope": "document/archive/task validation and release gate regression; not Gen6 product acceptance",
+  "source_hashes": {
+    "tools/check_ddd.py": "5f604ae860d807d8731a803abd5d698ee3362e47fd85cdadec773bb5458c663e",
+    "tools/release_gate.py": "f60b31d60a1f0fe8ffd3d7ff880ad2ef6ac9a705e8fa9dc286c760df3aee0a94",
+    "tools/release_smoke.py": "6e8c495956d7f8cf3fe3c370df1f86b9f327722e30f79c1d7a922379a4f59498",
+    "tests/test_ddd_governance.py": "3442b4abf4c3bb5899f69cdff3f553bdcf1c85161a7b40bc5d9c0a22fc672296",
+    "tests/test_release_acceptance.py": "0a6aa4fcde97e7708ccb047a9eae2b47edbe28f417af02b2dce0543fc351ae4d"
+  },
+  "product_goal_started": false,
+  "remote_execution_performed": false
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "gen6-t01-acceptance-assets.v1",
+  "task": "T01",
+  "title": "建立真实验收资产、命令/步骤及人工基线",
+  "date": "2026-09-17",
+  "changes": {
+    "manifest": "docs/technical/release_acceptance.v1.json: 16/16 entries gained validation_plan (levels/inputs/criteria/commands-or-steps); 15 entries registered real runnable command; G6-AC13 (pure browser/UX) left command empty with documented reason and planned runner (T52); validation_plan_status updated to defined_in_T01_2026-09-17_*",
+    "acceptance_doc": "GEN6_AI_ACCEPTANCE.md §5.1 manual time-baseline plan registered; §6 updated to reflect T01 done",
+    "principle": "commands are necessary-not-sufficient; level acceptance still requires test_level+sha256 evidence from real runs; doc-check commands do not substitute runtime/UX/performance acceptance"
+  },
+  "command_verification": {
+    "method": "each registered command executed on current workspace, exit code and wall time recorded",
+    "results": [
+      {"ac": "G6-AC01", "exit": 0, "seconds": 15, "pytest": "52 passed"},
+      {"ac": "G6-AC02", "exit": 0, "seconds": 13, "pytest": "39 passed, 2 xfailed (pre-existing markers, not added this round)"},
+      {"ac": "G6-AC03", "exit": 0, "seconds": 6, "pytest": "3 passed"},
+      {"ac": "G6-AC04", "exit": 0, "seconds": 19, "pytest": "21 passed"},
+      {"ac": "G6-AC05", "exit": 0, "seconds": 26, "pytest": "7 passed"},
+      {"ac": "G6-AC06", "exit": 0, "seconds": 28, "pytest": "28 passed"},
+      {"ac": "G6-AC07", "exit": 0, "seconds": 25, "pytest": "11 passed"},
+      {"ac": "G6-AC08", "exit": 0, "seconds": 86, "pytest": "21 passed"},
+      {"ac": "G6-AC09", "exit": 0, "seconds": 12, "pytest": "1 passed"},
+      {"ac": "G6-AC10", "exit": 0, "seconds": 90, "pytest": "22 passed"},
+      {"ac": "G6-AC11", "exit": 0, "seconds": 15, "pytest": "10 passed"},
+      {"ac": "G6-AC12", "exit": 0, "seconds": 29, "pytest": "30 passed"},
+      {"ac": "G6-AC14", "exit": 0, "seconds": 19, "pytest": "16 passed"},
+      {"ac": "G6-AC15", "exit": 0, "seconds": 1, "doctor": "status ready, failures 0"},
+      {"ac": "G6-AC16", "exit": 0, "seconds": 17, "pytest": "38 passed"}
+    ],
+    "max_seconds": 90,
+    "gate_default_timeout_sec": 300,
+    "note": "all commands well under gate default timeout; no per-entry timeout_sec override needed"
+  },
+  "gate_checks": [
+    {
+      "command": "python tools/check_ddd.py",
+      "exit_code": 0,
+      "result": "documents_valid, 0 errors"
+    },
+    {
+      "command": "python tools/release_gate.py --plan-only --json",
+      "exit_code": 1,
+      "result": "blocked 0/16 (honest); command_missing only for G6-AC13 by design; no empty-command overclaim for other entries"
+    }
+  ],
+  "manual_baseline_plan": "GEN6_AI_ACCEPTANCE.md §5.1: 5 baseline steps with per-step timing, tool-switch/lookup/conversion counts, comprehension errors; ≥2 engineers × ≥2 typical cases (1 with alarm, 1 without/insufficient evidence); thresholds versioned after trial run; trigger: as soon as T22 browser journey is usable",
+  "limitations": [
+    "registered commands cover local unit/contract/integration preconditions only; required levels real-data/real-replay/GDB/Pi-product/browser/UX/performance/clean-install still need their real runs per planned_runtime_steps",
+    "no AC status upgraded this task; release gate remains blocked by design"
+  ]
+}

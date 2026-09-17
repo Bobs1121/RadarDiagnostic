@@ -1,0 +1,560 @@
+{
+  "variant_id": "gen6/byd_sc6h",
+  "requested_variant": "gen6/byd_sc6h",
+  "runs_requested": 10,
+  "total_elapsed_sec": 12.128071,
+  "source_code_dir": "D:\\BYD-SC6H-cr60light\\cr60_light",
+  "source_docs_dir": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs",
+  "source_docs_mode": "isolated_override",
+  "output_path": "docs\\technical\\evidence\\prewarm_timing_gen6_byd_sc6h_variant_bound_20260915.json",
+  "cache_hit_runs": 9,
+  "runs": [
+    {
+      "run_index": 1,
+      "elapsed_sec": 4.715849,
+      "cache_hit": false,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:34.728827",
+        "elapsed_sec": 0.584536,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 2,
+      "elapsed_sec": 0.631481,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:35.392348",
+        "elapsed_sec": 0.629937,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 3,
+      "elapsed_sec": 0.529275,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:35.921618",
+        "elapsed_sec": 0.527585,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 4,
+      "elapsed_sec": 0.646883,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:36.569014",
+        "elapsed_sec": 0.645406,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 5,
+      "elapsed_sec": 0.586802,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:37.155537",
+        "elapsed_sec": 0.585516,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 6,
+      "elapsed_sec": 0.54029,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:37.696518",
+        "elapsed_sec": 0.538982,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 7,
+      "elapsed_sec": 0.666486,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:38.361794",
+        "elapsed_sec": 0.664277,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 8,
+      "elapsed_sec": 0.557155,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:38.920073",
+        "elapsed_sec": 0.556286,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 9,
+      "elapsed_sec": 0.554292,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:39.474192",
+        "elapsed_sec": 0.553234,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    },
+    {
+      "run_index": 10,
+      "elapsed_sec": 0.576731,
+      "cache_hit": true,
+      "variable_chains_meta_exists": true,
+      "summary": {
+        "force": false,
+        "operations": {
+          "learn": {
+            "learned_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "learned_functions": [],
+            "constants_refreshed": false
+          },
+          "overview": {
+            "generated": [],
+            "skipped": [
+              "BSD",
+              "LCA",
+              "DOW",
+              "RCW",
+              "RCTA",
+              "RCTB",
+              "FCTA",
+              "FCTB"
+            ],
+            "failed": [],
+            "reason": "all_up_to_date"
+          },
+          "variable_chains": {
+            "alias_count": 0,
+            "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+            "rte_mapping_status": "explicit",
+            "meta_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs\\variable_chains.meta.json",
+            "meta_exists": true
+          }
+        },
+        "timestamp": "2026-09-15T01:02:40.050700",
+        "elapsed_sec": 0.575603,
+        "freshness": {
+          "updated": false,
+          "state_path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\freshness_state.json",
+          "published": [],
+          "errors": [
+            "manifest:'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\source_docs\\\\BSD.md' is not in the subpath of 'D:\\\\RamboStar\\\\idea\\\\radarAnalyze\\\\.workspaces\\\\gen6_byd_sc6h\\\\memory'"
+          ]
+        }
+      }
+    }
+  ],
+  "measurement_context": {
+    "profile": "isolated prewarm source_docs cache; offline CodeLearner/Router stubs; real trace_variable_chains implementation",
+    "variant_id": "gen6/byd_sc6h",
+    "source_root": "D:\\BYD-SC6H-cr60light\\cr60_light",
+    "source_docs_mode": "isolated_override",
+    "source_docs_dir": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\prewarm_benchmark_variant_bound_20260915\\source_docs",
+    "coem": "BYD_SC6H",
+    "rte_file": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+    "rte_selection_status": "explicit",
+    "rte_sources": [
+      {
+        "path": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+        "sha256": "2ca452a9165ad519c50b262f2dff92f1603dcf0b251354e7ee2693db54257a9d"
+      },
+      {
+        "path": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping_Tx.c",
+        "sha256": "a748c3cc8b3a25f07af4d9bd4c7bcb6dcd80c5cfe90eadfefc05122c91e1f9e3"
+      },
+      {
+        "path": "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping_TxSGU.c",
+        "sha256": "7ee98491deb7b460124cf1902ca0488b3a11c74cffc4351174a54be8db42f097"
+      }
+    ],
+    "rte_combined_hash_prefix16": "33d961d554990f76",
+    "scanned_variable_copy_file_hashes": {
+      "adas/beamform/perception/src/globalVariDef.c": "f2a000acbab5e494",
+      "adas/symmetry/perception/src/globalVariDef.c": "d0c632f53e6d3995"
+    },
+    "alias_count": 0,
+    "cache_meta_version": 4
+  },
+  "measurement_summary": {
+    "cold_run_sec": 4.715849,
+    "cold_run_count": 1,
+    "warm_run_count": 9,
+    "warm_p50_sec": 0.576731,
+    "warm_p95_sec": 0.666486,
+    "warm_p95_method": "nearest-rank",
+    "warm_min_sec": 0.529275,
+    "warm_max_sec": 0.666486,
+    "warm_sample_n": 9
+  },
+  "limitations": [
+    "prewarm-only timing; CodeLearner and LLM are stubbed by the offline measurement harness",
+    "first run measures an isolated source_docs cache miss but does not flush the operating-system file cache",
+    "does not measure bag/replay/parse/LLM/report stages, memory, or a second project; not a P4 acceptance result"
+  ]
+}

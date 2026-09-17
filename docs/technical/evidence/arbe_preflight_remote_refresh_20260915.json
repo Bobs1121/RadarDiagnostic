@@ -1,0 +1,452 @@
+{
+  "schema_version": "arbe-preflight.v1",
+  "status": "blocked",
+  "server": {
+    "host": "10.190.171.44",
+    "user": "hoz2wx",
+    "transport": "ssh"
+  },
+  "workspace": {
+    "arbe_root": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int",
+    "algo_source_root": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int/src/algo_source",
+    "outer": {
+      "head": "",
+      "status": "",
+      "status_ok": false,
+      "content_fingerprint": ""
+    },
+    "algo_source": {
+      "head": "",
+      "status": "",
+      "status_ok": false,
+      "content_fingerprint": ""
+    },
+    "submodule_status": ""
+  },
+  "configuration": {
+    "config_path": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int/src/arbe_phoenix_radar_driver-master/arbe_gui/Config/launch_config_4radars.yaml",
+    "visualization_launch_path": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int/src/arbe_phoenix_radar_driver-master/arbe_gui/launch/arbe_radar_vis.launch",
+    "resolved": {},
+    "raw_config_available": false,
+    "observation_status": "not_available",
+    "content_fingerprint": ""
+  },
+  "build": {
+    "para_define_path": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int/src/algo_source/adas/symmetry/perception/include/paraDefine.h",
+    "macros": {},
+    "macro_observation_status": "not_available",
+    "macro_presence": {
+      "HILMODEL": "unknown",
+      "BUILDMODEL": "unknown",
+      "PF_BUILD_FUNTEST_SGU_INJECTION": "unknown"
+    },
+    "binary_candidates": [],
+    "binary_count": 0,
+    "binary_observation_status": "not_available",
+    "binary_fingerprint": "",
+    "binary_identity_probe": ""
+  },
+  "runtime": {
+    "status": "unknown",
+    "observation_status": "not_available",
+    "ros_setup": "/opt/ros/noetic/setup.bash",
+    "ros_master_uri": "",
+    "processes": null,
+    "process_observation_status": "not_available",
+    "ros_nodes": null,
+    "ros_node_observation_status": "not_available",
+    "expected_process_pattern": "/radar<id>_visualization_engine/arbe_visualization_engine",
+    "bash_start_required": null
+  },
+  "gdb": {
+    "available": null,
+    "observation_status": "not_available",
+    "path": "",
+    "version": "",
+    "ptrace_scope": "unavailable",
+    "raw_probe": "",
+    "attach_mode": "existing_pid_after_bash_start",
+    "launch_under_gdb": "fallback_only"
+  },
+  "can_output": {
+    "observation_status": "not_available",
+    "source_scan_status": "not_available",
+    "source_scope": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int/src/algo_source",
+    "candidate_signal_tokens": [],
+    "write_mappings": [],
+    "transport_mappings": [],
+    "source_output_chain": {
+      "schema_version": "arbe-source-output-chain.v1",
+      "status": "not_available",
+      "assignment_probe": {
+        "ok": false,
+        "returncode": null,
+        "timed_out": false,
+        "blocked_by_probe": "can_chain"
+      },
+      "rows": [],
+      "assignment_count": 0,
+      "active_assignment_count": 0,
+      "policy": "Lexical source assignments explain the candidate producer path; they are not proof that this assignment executed at the selected frame.",
+      "observation_status": "not_available",
+      "blocked_by_probe": "can_chain"
+    },
+    "source_refs": [],
+    "runtime_observed": false,
+    "note": "Source candidates are not runtime CAN Tx evidence; GDB/bridge must observe execution."
+  },
+  "public_evidence": {
+    "objectlist_frame_contract": {
+      "status": "not_verified",
+      "association_mode": "strict",
+      "source_file": "",
+      "callback": null,
+      "objectlist_publish": null,
+      "objectlist_handler_call": null,
+      "warning_with_frame_publish": null,
+      "missing": [
+        "callback",
+        "objectlist_publish",
+        "objectlist_handler_call",
+        "warning_with_frame_publish"
+      ],
+      "preconditions": [
+        "capture must preserve per-topic message sequence",
+        "objectlist display must be enabled so wf_object_display_handler publishes the message",
+        "the same radar's objectlist stream must have exactly one publication between adjacent warning_status_with_frame messages"
+      ],
+      "basis": "required source publication markers were not all found",
+      "source_probe_status": "not_available"
+    },
+    "source_ref": {
+      "path": "/home/hoz2wx/CR60LIGHT/cr60_light_arbe_0909int/src/arbe_phoenix_radar_driver-master/arbe_gui/src/arbe_visualization_engine/visualization_node.cpp"
+    }
+  },
+  "probes": {
+    "ssh_connectivity": {
+      "name": "ssh_connectivity",
+      "ok": false,
+      "returncode": 124,
+      "timed_out": true,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 5.015,
+      "remote_probe_failure": "remote_probe_timed_out"
+    },
+    "outer_root": {
+      "name": "outer_root",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "outer_top_level": {
+      "name": "outer_git_top_level",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "outer_head": {
+      "name": "outer_git_head",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "outer_branch_status": {
+      "name": "outer_git_status",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "outer_content_fingerprint": {
+      "name": "outer_worktree_content_fingerprint",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "submodule_status": {
+      "name": "submodule_status",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "algo_root": {
+      "name": "algo_root",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "algo_head": {
+      "name": "algo_git_head",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "algo_branch_status": {
+      "name": "algo_git_status",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "algo_content_fingerprint": {
+      "name": "algo_worktree_content_fingerprint",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "config": {
+      "name": "launch_config",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "config_fingerprint": {
+      "name": "launch_config_fingerprint",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "vis_launch": {
+      "name": "visualization_launch",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "public_source_contract": {
+      "name": "public_runtime_source_contract",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "para_define": {
+      "name": "para_define",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "binary_candidates": {
+      "name": "binary_candidates",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "binary_identity": {
+      "name": "binary_identity",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "gdb": {
+      "name": "gdb_capability",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "processes": {
+      "name": "visualization_processes",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "ros_nodes": {
+      "name": "ros_visualization_nodes",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "process_executables": {
+      "name": "visualization_process_executables",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "can_chain": {
+      "name": "can_output_chain_scan",
+      "ok": false,
+      "returncode": null,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "",
+      "duration_sec": 0.0,
+      "skipped": true,
+      "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+      "blocked_by_probe": "ssh_connectivity"
+    },
+    "source_output_assignments": {
+      "name": "source_output_internal_assignments",
+      "ok": false,
+      "returncode": 0,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "no_write_mappings",
+      "duration_sec": 0.0
+    },
+    "source_output_functions": {
+      "name": "source_output_producer_functions",
+      "ok": false,
+      "returncode": 0,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "no_producer_functions",
+      "duration_sec": 0.0
+    }
+  },
+  "probe_execution": {
+    "mode": "ssh",
+    "status": "short_circuited",
+    "failed_probe": "ssh_connectivity",
+    "failure_reason": "remote_probe_timed_out",
+    "skipped_probe_count": 22
+  },
+  "blockers": [
+    "outer_root_unavailable",
+    "outer_top_level_unavailable",
+    "outer_head_unavailable",
+    "algo_root_unavailable",
+    "algo_head_unavailable",
+    "config_unavailable",
+    "para_define_unavailable",
+    "remote_probe_incomplete"
+  ],
+  "warnings": [
+    "build_macro_probe_unavailable",
+    "gdb_probe_unavailable",
+    "binary_probe_unavailable"
+  ],
+  "commands": [
+    {
+      "command": "ssh -o BatchMode=yes -o ConnectTimeout=5 -p 22 hoz2wx@10.190.171.44 'bash -lc '\"'\"'printf '\"'\"'\"'\"'\"'\"'\"'\"'arbe_preflight_ssh_ready\\n'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"''",
+      "returncode": 124,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": true,
+      "duration_sec": 5.015,
+      "ok": false
+    }
+  ]
+}

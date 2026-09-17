@@ -1,0 +1,77 @@
+{
+  "schema_version": "pi-source-context-post-guard-rpc.v1",
+  "generated_at": "2026-09-14T15:47:50.270729+00:00",
+  "question": "请查询 PostProcessMainTI 的 depth=1 调用链，最多返回 3 条。只报告当前源码静态结果。",
+  "module_result": {
+    "ok": false,
+    "message": "source_code_tool_evidence_missing",
+    "answer_mode": null,
+    "answer": "",
+    "tool_calls": [],
+    "pi_event_summary": {
+      "assistant_messages": [
+        {
+          "provider": "ollama",
+          "model": "qwen3.5:9b",
+          "api": "openai-completions",
+          "stop_reason": "stop",
+          "raw_stop_reason": "stop",
+          "usage": {
+            "input": 2557,
+            "output": 396,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 2953
+          },
+          "content_types": [
+            "text"
+          ]
+        }
+      ],
+      "tool_calls": [],
+      "tool_events": [],
+      "extension_error_count": 0,
+      "provider": "ollama",
+      "model": "qwen3.5:9b",
+      "thinking_level": "off",
+      "enabled_tools": [
+        "code-analyze"
+      ],
+      "tool_allowlist_mode": "explicit",
+      "load_context_files": false,
+      "discover_extensions": false,
+      "load_skills": false,
+      "extension_enabled": true,
+      "system_prompt_chars": 378,
+      "replace_system_prompt": true,
+      "user_prompt_chars": 57,
+      "context_prompt_chars": 514
+    },
+    "context_status": "ready",
+    "context_missing": [],
+    "diagnostics": []
+  },
+  "identity": {
+    "project_id": "BYD_SC6H",
+    "variant_id": "gen6/byd_sc6h",
+    "source_root": "D:\\BYD-SC6H-cr60light\\cr60_light",
+    "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+    "context_fingerprint": "4d81341c08ea4f1152f4271b37ed1f6debcac06bbfed02a42f1ef86e605d2ed5"
+  },
+  "artifacts": {
+    "code_context": {
+      "path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\code_context_current\\code-context.json",
+      "sha256": "3d485d7e3f6c300fdc80d61a20e9a7408362e4fdb6d491860ceab8fa2b899901"
+    },
+    "code_index": {
+      "path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\code_context_current\\code-index.json",
+      "sha256": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2",
+      "snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023"
+    }
+  },
+  "limits": [
+    "Only a successful bound source tool result is accepted for source_code output.",
+    "No runtime/build/GDB/CAN or selected-frame evidence.",
+    "The event summary is sanitized and has no raw event stream or reasoning."
+  ]
+}

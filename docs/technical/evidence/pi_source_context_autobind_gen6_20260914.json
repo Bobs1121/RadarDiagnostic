@@ -1,0 +1,86 @@
+{
+  "schema_version": "pi-source-context-binding-smoke.v1",
+  "generated_at": "2026-09-14T15:09:09.633825+00:00",
+  "evidence_level": "static_source_tool_boundary",
+  "identity": {
+    "project_id": "BYD_SC6H",
+    "variant_id": "gen6/byd_sc6h",
+    "source_root": "D:\\BYD-SC6H-cr60light\\cr60_light",
+    "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023"
+  },
+  "artifacts": {
+    "code_context": {
+      "path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\code_context_current\\code-context.json",
+      "sha256": "3d485d7e3f6c300fdc80d61a20e9a7408362e4fdb6d491860ceab8fa2b899901"
+    },
+    "code_index": {
+      "path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\code_context_current\\code-index.json",
+      "sha256": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2",
+      "schema_version": "code-index.v1",
+      "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023"
+    }
+  },
+  "checks": {
+    "pi_context_status": "ready",
+    "code_context_read": {
+      "status": "ok",
+      "section": "summary",
+      "summary": {
+        "files": 18,
+        "functions": 415,
+        "calls": 459,
+        "variables_read": 8305,
+        "variables_written": 1556,
+        "signals": 40,
+        "conditions": 3145,
+        "states": 0,
+        "parameters": 0,
+        "semantics": 0,
+        "edges": 10984,
+        "output_mappings": 40
+      }
+    },
+    "code_analyze": {
+      "status": "ok",
+      "backend": "source_code_index",
+      "kind": "call_chain",
+      "name": "PostProcessMainTI",
+      "source_context": {
+        "source_root": "D:\\BYD-SC6H-cr60light\\cr60_light",
+        "snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+        "parser": "codegraph_sqlite",
+        "diagnostics": []
+      },
+      "result_bounds": {
+        "limit": 3,
+        "total_count": 5,
+        "returned_count": 3,
+        "truncated": true
+      },
+      "rows": [
+        {
+          "caller": "PostProcessMainTI",
+          "callee": "DataProcInit",
+          "depth": 1,
+          "path": "PostProcessMainTI -> DataProcInit"
+        },
+        {
+          "caller": "PostProcessMainTI",
+          "callee": "ObjTrack",
+          "depth": 1,
+          "path": "PostProcessMainTI -> ObjTrack"
+        },
+        {
+          "caller": "PostProcessMainTI",
+          "callee": "OutputTrkObj",
+          "depth": 1,
+          "path": "PostProcessMainTI -> OutputTrkObj"
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Pi model was not invoked in this smoke artifact.",
+    "This establishes static source-index binding only; it does not establish runtime, build, GDB, CAN, or perception-level evidence."
+  ]
+}

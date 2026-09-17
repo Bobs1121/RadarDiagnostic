@@ -191,14 +191,17 @@ class Orchestrator:
 
 | 签名 | 行号 |
 |------|------|
-| `extract_signal_mapping(source_root, output_dir, rte_file=...) -> dict` | 131 |
-| `extract_output_signal_mapping(source_root, output_dir, rte_file=...) -> dict` | 221 |
-| `resolve_internal_to_can(var_name, mapping, chains=None) -> list[str]` | 267 |
-| `resolve_can_to_internal(can_signal, mapping) -> list[str]` | 333 |
-| `trace_variable_chains(source_root, output_dir, ...) -> dict` | 576 |
-| `load_variable_chains(output_dir) -> dict` | 694 |
+| `resolve_rte_mapping_file(source_root, rte_file=None, side="read") -> tuple[str | None, str]` | 40 |
+| `extract_signal_mapping(source_root, output_dir, rte_file=None) -> dict` | 346 |
+| `discover_output_signal_mapping_files(source_root, rte_file=None) -> list[Path]` | 522 |
+| `extract_output_signal_mapping(source_root, output_dir, rte_file=None) -> dict` | 539 |
+| `resolve_internal_to_can(var_name, mapping, chains=None) -> list[str]` | 548 |
+| `resolve_can_to_internal(can_signal, mapping) -> list[str]` | 649 |
+| `trace_variable_chains(source_root, output_dir, rte_file=None, extra_files=None, force=False, coem=None) -> dict` | 1044 |
+| `load_variable_chains(output_dir) -> dict` | 1265 |
 
-**不调用 AI**。纯正则解析 `RteComMapping.c` 建立 CAN ↔ 内部变量映射。
+**不调用 AI**。纯正则解析当前 variant 的 Rte mapping 建立 CAN ↔ 内部变量映射。`resolve_rte_mapping_file()` 只在显式路径存在或 auto-discovery 候选唯一时选用；多 COEM/路径缺失不套用 GWM 默认。
+无显式 RTE 文件时只自动选择唯一的 variant mapping；缺失或多 COEM 歧义输出 unavailable，不回退 GWM。`trace_variable_chains` 同时读取所选目录的 Tx companions，按解析出的 COEM 限定 customer-specific `globalVariDef` 文件；`.meta.json` version 4 绑定 `rte_file/rte_source_files/rte_hash/coem` 和扫描文件 hash。
 
 ### resolve_internal_to_can 优先级
 
@@ -211,9 +214,9 @@ class Orchestrator:
 
 ### 缓存
 
-- signal_mapping.json: SHA256 前 16 位
-- output_mapping.json: 同上
-- variable_chains.json: **无缓存**，每次重写
+- `signal_mapping.json`: schema 3 + source SHA256/相对路径
+- `output_mapping.json`: source SHA256/相对路径；选中映射不可用时写入空 unavailable cache，清除旧客户结果
+- `variable_chains.json`: source mappings 与 COEM-scoped chain files 增量缓存；meta version 4 对 RTE path、Tx companions、COEM 和 per-file SHA-256 做一致性检查
 
 ---
 
@@ -228,6 +231,10 @@ class Orchestrator:
 | `format_conditions(conditions) -> str` (static) | 288 |
 
 **AI 提取**: `router.complex(prompt, max_tokens=16384)`，输出 JSON 条件树。
+
+源码扫描域使用当前 `default_variant`/run identity 的 `source_domains`；legacy global source_domains 不能覆盖 variant。
+回填 external CAN mapping 和 variable chain 时，RTE mapping 通过 `resolve_variant_rte_mapping_file()` 绑定当前 variant；
+缺失或 COEM 歧义时保持 unavailable，不回退 GWM。
 
 ### 缓存失效
 
@@ -295,6 +302,7 @@ LLM 失败时 `_fallback_plan` 提供基础查询 (dist_y + side, ttc 等)。
 | `architecture` | 架构专家 | 左右雷达与输出合并 |
 
 按 `fail_type` 子集选专家: FP/FN/DELAY/STATE 各 3 人，OTHER 才 5 人全上。
+源码片段在有效 variant 下按其 `source_domains` 选择；deprecated top-level `source_domains` 不可覆盖当前 variant。只有无可解析 variant 的 legacy config 才使用内置静态路径，缺文件输出“源码不可用”，不跨 COEM 搜索。
 
 ### 3 轮迭代
 
@@ -424,6 +432,10 @@ ClassificationResult: `task_type`, `confidence`, `target_function`, `focus_param
 | `state_machine` | 状态编号/转换/双状态机交互 | states, transitions, entry_functions, dual_state_interaction |
 
 学习单元: 4 focus × 8 functions = 32 个 (func, focus) 槽位。源码 hash 跳过已学过且未变更的。
+
+若 `identity.variant_id` 未显式提供，adapter 和知识目录从 `default_variant` 解析；Gen6 的历史 focus basename
+只重定向到当前 variant `key_source_files/source_domains` 中已存在的同名文件。无 variant source candidate 时跳过该文件，
+不能把 legacy GWM 路径作为当前项目事实。
 
 输出: `memory/code_knowledge/{FUNC}.json`，`learning_state.json`，`source_docs/.overview_hashes.json`
 
@@ -747,20 +759,52 @@ local 失败时自动回退 remote (119-138)。
 参数或 `CR60_PI_PROVIDER`/`CR60_PI_MODEL` 指定；未指定 provider 时只读探测当前
 `pi --list-models`，不把某个机器的 provider 别名写死。
 
-Pi 的系统提示词要求每次任务先绑定 data、arbe/source、COEM/车型、branch/commit、
-binary/config 和 replay mode；identity fingerprint 冲突时禁止跨 artifact 合并。代码
+PiBridge 对本地生成的 capability extension 使用本次 `--approve`，仍保持
+`--no-builtin-tools`；可选 `thinking` 映射到 Pi 的 thinking level，未指定时保留用户配置。
+source_code 任务使用短源码专用 system prompt、显式绑定的 `code-context.v1` 和
+`--no-context-files --no-extensions --no-skills`，只显式加载生成的项目 capability extension，
+避免大尺寸 case/point-cloud 指令树及全局插件 schema 占用小模型预算；case_analysis
+仍加载项目指令并要求完整案件上下文。
+
+case_analysis 的系统提示词要求每次任务先绑定 data、arbe/source、COEM/车型、branch/commit、
+binary/config 和 replay mode；identity fingerprint 冲突时禁止跨 artifact 合并。source_code
+scope 允许 data.status=not_required，但必须绑定当前 code-context/source snapshot，且只陈述
+静态 source candidate，不作 compile/runtime/GDB/CAN 结论。代码
 解释必须从本次 `code-context`/`code-analyze`/`event-code-path` 动态获取真实
 entry/caller/callee/condition/parameter/output，并按调用关系与源码行号组织条件链；不得
 套用固定功能模板或固定条件顺序。当前 source 未发现的阶段只能标为未发现，不能补齐。
+直接调用目标、函数下游和“它调用了谁”映射为 callees；询问谁调用某函数时才用 callers。
+code-analyze 的函数名字段固定为 name，不要传 function_name。
+源码只读 Pi 工具以内联返回结构化结果，不传 output 文件路径。
 详细报警回答先给总结结论，再按实际链路呈现同帧值和条件结果；默认报警终点是 arbe
 报警灯对应的算法输出，CAN 只在用户明确要求时作为辅助证据。
+
+PiBridge 的 event_summary 仅暴露 provider/model、stop reason、token 计数、工具名/status
+和 artifact refs，不保存 assistant 正文或思考流。PiModule 遇到空最终答复必须返回
+empty_final_answer，除非 source_code call_chain 已有成功工具结果可做精确 tool_result_projection；
+该投影必须标记 ai_final_synthesis_status=not_available，只复述工具 paths/bounds/hash。
+不得仅因 agent_settled 就报告成功。
+
+source-only 一次性查询在 bridge 创建前自动创建本地 AnalysisRun；source context/index 完成校验后，
+将 project/variant/source snapshot/index hash 绑定到该 run。默认 Pi session ID 稳定派生为 pi-<run_id>，
+与 AnalysisRun ID 分开；显式 session_id 优先。工具 event status 从 top-level、result 或 result.details 读取，
+并在 ledger finalize 后把最终 run 状态写回 ModuleResult。
+PiBridge 还会将当前 AnalysisRun ID/ledger root 绑定到 child process；ledger read/update/step/claim、
+hypothesis/experiment/user-observation leaves 由 pi_tool_bridge 注入 run_id 与 ledger_root，并拒绝显式冲突。
+没有 active AnalysisRun 时 fail-closed；Pi 不需要猜测或复述内部 run ID 和路径。
+诊断 prompt 允许最多 3 个当前证据支持的候选，并要求 rank、支持/反证、缺口、required evidence 和 next experiment；
+没有机制证据时返回 0 个因果假设并计划最小区分实验，不为 Top-3 配额填充。root-cause 确认仍由用户或明确验收规则完成。
 
 `ai/capability/pi_tool_bridge.py` 是生成 extension 的唯一 JSON-in/JSON-out 后端：
 按 name 分派 leaf `BaseModule` adapter 或现有 `BaseTool`，默认不开放副作用；
 `--allow-execution` 只允许已批准的 supervisor 使用，生成的 Pi extension 不传此开关。
+Pi extension 的只读源码工具 schema 不暴露文件型 output 参数；Pi 收到的是 inline 结构化结果。
+source_code bridge 仍拒绝手工注入 output 路径，显式文件导出仅走独立 CLI。
+source_code allowlist 必须限于 code-context-read/code-analyze/event-code-path/code-gdb-plan；
+没有识别到专用工具时采用该只读 fallback，显式过滤后为空时 Pi 必须收到 no-tools，不得开放全量 extension。
 
 `engines/pi_context.py` / `ai/modules/pi_context.py` 生成
 `pi-orchestration-context.v1`。Pi prompt 只接收该上下文的紧凑只读摘要，完整数据
 通过 artifact refs 和后续 tool 查询；身份、source/binary fingerprint、freshness
 和 policy 不得被模型覆盖。正式用户故事、Given/When/Then 和追踪矩阵见
-`docs/technical/CR60_PI_DDD_REQUIREMENTS_AND_ACCEPTANCE.md`。
+`docs/technical/GEN6_AI_ACCEPTANCE.md`。

@@ -1,0 +1,151 @@
+{
+  "schema_version": "pi-cli-analysis-run-source-lookup-evidence.v1",
+  "recorded_at_utc": "2026-09-14T19:26:51Z",
+  "entrypoint": {
+    "command": "python cli.py pi",
+    "task_scope": "source_code",
+    "question": "使用 code-analyze 查询 PostProcessMainTI 的一层直接调用目标，最多返回 5 条，并给出函数名。",
+    "capability_allowlist": [
+      "code-analyze"
+    ],
+    "provider": "ollama",
+    "model": "qwen3.5:9b",
+    "thinking": "off",
+    "session_id_supplied": false,
+    "global_configuration_changed": false
+  },
+  "context": {
+    "status": "ready",
+    "data_status": "not_required",
+    "project_id": "BYD_SC6H",
+    "variant_id": "gen6/byd_sc6h",
+    "customer": "BYD",
+    "vehicle": "SC6H",
+    "coem": "BYD_SC6H",
+    "source_root": "D:\\BYD-SC6H-cr60light\\cr60_light",
+    "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+    "code_context_path": ".workspaces/gen6_byd_sc6h/memory/snapshots/code_context_current/code-context.json",
+    "code_context_sha256": "3d485d7e3f6c300fdc80d61a20e9a7408362e4fdb6d491860ceab8fa2b899901",
+    "code_index_path": ".workspaces/gen6_byd_sc6h/memory/snapshots/code_context_current/code-index.json",
+    "code_index_sha256": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2",
+    "context_fingerprint": "c931113c49d2f1017db9a2238aeee9efd96eb68e1c5fa5697d13d92c4d80b861",
+    "missing": [],
+    "conflicts": []
+  },
+  "pi_execution": {
+    "ok": true,
+    "status": "agent_settled",
+    "event_count": 362,
+    "session_id": "pi-run-20260914T192319-1be19e0f5d",
+    "enabled_tools": [
+      "code-analyze"
+    ],
+    "system_prompt_chars": 551,
+    "context_prompt_chars": 514,
+    "extension_error_count": 0,
+    "assistant_turns": [
+      {
+        "stop_reason": "toolUse",
+        "usage": {
+          "input": 859,
+          "output": 219,
+          "total": 1078
+        }
+      },
+      {
+        "stop_reason": "stop",
+        "usage": {
+          "input": 198,
+          "output": 239,
+          "cache_read": 1077,
+          "total": 1514
+        }
+      }
+    ],
+    "tool_calls": [
+      {
+        "id": "call_yd6sl4ta",
+        "name": "code-analyze",
+        "arguments": {
+          "kind": "callees",
+          "name": "PostProcessMainTI",
+          "max_depth": 1,
+          "max_results": 5
+        },
+        "output_argument_present": false,
+        "is_error": false,
+        "status": "ok"
+      }
+    ]
+  },
+  "analysis_run": {
+    "run_id": "run-20260914T192319-1be19e0f5d",
+    "status": "completed",
+    "path": "outputs/analysis_runs/run-20260914T192319-1be19e0f5d/analysis-run.json",
+    "steps": [
+      {
+        "stage": "tool-code-analyze",
+        "status": "completed"
+      },
+      {
+        "stage": "dialogue",
+        "status": "completed"
+      }
+    ],
+    "binding": {
+      "project_id": "BYD_SC6H",
+      "variant_id": "gen6/byd_sc6h",
+      "customer": "BYD",
+      "vehicle": "SC6H",
+      "coem": "BYD_SC6H",
+      "data_fingerprint": "62c8040a21c63d99382ba4c2d648c9b05cb6ef080bf3193ecf07573aa785835b",
+      "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+      "code_index_hash": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2"
+    }
+  },
+  "verified_result": {
+    "kind": "callees",
+    "backend": "source_code_index",
+    "function": "PostProcessMainTI",
+    "max_depth": 1,
+    "result_bounds": {
+      "limit": 5,
+      "total_count": 5,
+      "returned_count": 5,
+      "truncated": false
+    },
+    "call_targets": [
+      "DataProcInit",
+      "ObjTrack",
+      "OutputTrkObj",
+      "OtherAttributeCal",
+      "AdasFunc"
+    ],
+    "direct_index_recheck": {
+      "status": "ok",
+      "snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+      "result_matches_pi_tool": true
+    }
+  },
+  "preceding_failure": {
+    "run_id": "run-20260914T191243-aaa7f8ae8b",
+    "analysis_run_status": "partial",
+    "tool_call_count": 8,
+    "tool_results_is_error": true,
+    "model_supplied_output_values": [
+      "text",
+      "json"
+    ],
+    "cause": "The generated Pi schema exposed code-analyze.output as a filesystem path; the model treated it as a response format and the source-only bridge rejected the write request before module execution."
+  },
+  "safety_boundary": {
+    "pi_schema_omits_output_path_for": [
+      "code-analyze",
+      "event-code-path",
+      "code-gdb-plan"
+    ],
+    "source_only_bridge_rejects_output_path": true,
+    "module_cli_arguments_unchanged": true
+  },
+  "scope_limit": "仅验证当前 BYD_SC6H source-only Pi CLI、source-bound code-analyze、AnalysisRun 持久化与静态 index 一致性；不证明 selected-frame、runtime、build、GDB、CAN 或感知阶段执行。"
+}

@@ -1,0 +1,86 @@
+{
+  "schema_version": "prewarm-variant-measurement-evidence.v1",
+  "recorded_at_utc": "2026-09-14T21:31:10Z",
+  "variant_identity": {
+    "project_id": "reco_fw",
+    "variant_id": "gen6/reco_fw",
+    "customer": "reco",
+    "vehicle": "fw",
+    "coem": "reco_fw",
+    "configured_default_variant": "gen6/byd_sc6h",
+    "source_root": "D:\\pl-xpeng",
+    "source_branch": "release/CRGVXPFIII-2430-develop-aries4.1-cp23-for-bl01v06-for-m",
+    "source_git_head": "74a8f2cf470eb2bb97e5f0851c47a9999932aad2",
+    "configured_key_file_count": 13,
+    "configured_key_files_exist": true,
+    "source_write_commands_executed": false,
+    "external_git_status_observed_after": {
+      "dirty_entry_count": 6,
+      "baseline_observed": false
+    }
+  },
+  "isolated_artifacts": {
+    "workspace_root": ".workspaces/gen6_reco_fw",
+    "code_context_path": ".workspaces/gen6_reco_fw/memory/snapshots/code_context_current/code-context.json",
+    "code_context_sha256": "2073bc91290d17fab6368bfeb09f11a9cfcbe9a5e71854e9ce207f80a26967cd",
+    "code_index_path": ".workspaces/gen6_reco_fw/memory/snapshots/code_context_current/code-index.json",
+    "code_index_sha256": "3b6f95e0d357ed3d19694186731eb8f8d469c3ba9feafb626019d97188a1ba99",
+    "source_snapshot_hash": "8e1ddec8177485974fde5c648f80582b99d3003032d6855f3a5fbd17884050a2",
+    "code_context_index_binding_matches": true,
+    "indexed_file_count": 13,
+    "indexed_function_count": 59,
+    "capability_manifest_path": ".workspaces/gen6_reco_fw/memory/project-capability-manifest.v1.json",
+    "capability_manifest_sha256": "0792b98f5d60d089ceb5f03de942a13d0344526e2b43682aed4b1fe9ab676311",
+    "capability_manifest_fingerprint": "37c0e96cb17327baae95ae466a41b1dca79cc2aa3ea605c0f64d007aa0485439",
+    "capability_manifest_status": "partial",
+    "capability_manifest_freshness": "fresh"
+  },
+  "source_mapping": {
+    "variant_rte_resolution": "not_found",
+    "variable_chain_cache_version": 4,
+    "rte_mapping_status": "not_requested",
+    "rte_file": "",
+    "rte_hash": "",
+    "coem": "",
+    "alias_count": 0,
+    "scanned_gwm_paths": []
+  },
+  "direct_query_verification": {
+    "command": "python cli.py code-analyze --kind function --name checkDistortiveBlindness --max-results 3 --code-index-path .workspaces/gen6_reco_fw/memory/snapshots/code_context_current/code-index.json",
+    "status": "ok",
+    "backend": "source_code_index",
+    "source_snapshot_hash": "8e1ddec8177485974fde5c648f80582b99d3003032d6855f3a5fbd17884050a2",
+    "function": "checkDistortiveBlindness",
+    "source_file": "reco_fw/component/per/runnables/spp_bdm/src/per_sppBdmRunnable.cpp",
+    "line_start": 218,
+    "line_end": 245,
+    "source_hash": "59ad6e4c7e35a606"
+  },
+  "prewarm_measurement": {
+    "tool": "tools/measure_prewarm_timing.py",
+    "source_docs_mode": "isolated_override",
+    "source_docs_dir": ".workspaces/gen6_reco_fw/experiments/source_docs_preprwm_20260915",
+    "report_path": ".workspaces/gen6_reco_fw/experiments/prewarm_timing_20260915.json",
+    "report_sha256": "da226b5ee7f2092a3769d70353aa10570cc8fdb24d54d8a2642d2126b597e406",
+    "variable_chains_meta_path": ".workspaces/gen6_reco_fw/experiments/source_docs_preprwm_20260915/variable_chains.meta.json",
+    "variable_chains_meta_sha256": "2ead4e1cf4f4e59e84fe9937e13016a959351c621369077940d4a00ca2824e5a",
+    "runs_requested": 10,
+    "cold_runs": 1,
+    "warm_runs": 9,
+    "cold_elapsed_sec": 7.396263,
+    "warm_p50_nearest_rank_sec": 2.438595,
+    "warm_p95_nearest_rank_sec": 2.536051,
+    "total_elapsed_sec": 31.729537,
+    "llm_provider": "stubbed_offline",
+    "learned_count": 0
+  },
+  "capability_gaps": [
+    "recorded data not declared",
+    "Arbe preflight not supplied",
+    "public runtime snapshot not supplied",
+    "GDB preflight not supplied",
+    "diagnosis bundle/viewer not supplied",
+    "RTE mapping not found"
+  ],
+  "scope_limit": "This proves isolated static source context, capability-manifest freshness, and offline _run_prewarm cold/hot cache behavior for the configured gen6/reco_fw variant. It does not prove recorded-data processing, runtime/replay/build/GDB, the five new-project test classes, or full P4 latency/memory/token acceptance."
+}

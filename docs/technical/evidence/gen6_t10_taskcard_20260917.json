@@ -1,0 +1,35 @@
+{
+  "schema_version": "gen6-t10-taskcard.v1",
+  "task": "T10",
+  "title": "bag+问题到版本车型绑定",
+  "sprint": "S1",
+  "date": "2026-09-17",
+  "requirements": ["G6-R01", "G6-R03", "G6-R13"],
+  "acceptance": ["G6-AC01", "G6-AC10"],
+  "modules": ["M01", "M03", "M05"],
+  "user_visible_problem": "用户给出 bag+一句问题后，系统仍不会自动把材料/数据绑定到已配置项目的版本/车型/COEM/分支；身份缺口和冲突不产生业务语言的澄清问题，错版本不会被硬门拦截，Pi 在身份不明时也可能直接生成答案。",
+  "expected_behavior": {
+    "before": "pi 入口不消费 cr60-analysis-intake.v1；case.yaml 的 variant 匹配只对 legacy 解析器生效；run 绑定无 intake 引用；case_analysis 的 blocked context 不拦截模型调用",
+    "after": "pi 入口自动发现/接收 intake artifact（或调用 cr60-intake 解析材料），确定性解析到唯一 variant；版本/分支与项目期望不一致时 blocked 且不调用模型；缺失或多义身份以业务语言问题返回（只问影响结果的项）；绑定结果与 intake artifact 引用写入同一 AnalysisRun"
+  },
+  "producers_consumers": {
+    "producers": ["engines/arbe/intake.py (cr60-analysis-intake.v1)", "engines/arbe/intake_binding.py (新, cr60-intake-binding.v1)", "cli case-metadata matcher", "config.variants"],
+    "consumers": ["ai/modules/pi.py (入口接线+pre-model gate)", "engines/pi_context.py (intake identity 已有消费)", "engines/analysis_ledger.py (binding 冲突门已有)"]
+  },
+  "interface_changes": [
+    "新增 cr60-intake-binding.v1 契约（status/binding/version_gate/business_questions/provenance）",
+    "pi 入口新增可选输入 intake_path/material_paths/match_text；discover_case_artifacts 新增 intake 候选文件名",
+    "run binding 新增 intake_handoff_id/intake_binding_status 字段"
+  ],
+  "non_goals": [
+    "远端数据访问/传输（服务器不可达，real-data 验证待恢复）",
+    "T11 数据索引/四雷达事件；G7 intake 数据指纹与 case_dir 实际文件比对归 T11",
+    "batch 模式的逐行 intake（批量意图后续切片）"
+  ],
+  "verification": {
+    "unit": "tests/test_intake_binding.py：唯一/多义/零匹配、版本分支一致/错配/未声明、缺字段业务问题、fail-closed",
+    "integration": "AC01 registered command（test_cr60_intake/test_pi_context/test_config_gen）+ pi 入口接线测试；plan-only gate 仍诚实 blocked",
+    "real_data": "pending：待用户提供可用服务器/数据后按 validation_plan 补做"
+  },
+  "fallback": "绑定不可解析时返回结构化业务问题，不调用模型、不创建误导性结论；ledger/run 保持可恢复"
+}

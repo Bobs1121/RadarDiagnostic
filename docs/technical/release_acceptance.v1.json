@@ -1,0 +1,701 @@
+{
+  "schema_version": "release-acceptance.v1",
+  "release_id": "gen6-ai-first-release",
+  "baseline_version": "gen6-ddd.v1",
+  "scope": "M01-M12; Pi conversation + live workbench + L1/L2/L3 + recovery + independent delivery",
+  "historical_manifest": "docs/archive/2026-09-17/technical/release_acceptance.v1.json",
+  "validation_plan_note": "T01 2026-09-17: 每项登记 validation_plan（层级/输入/判据/命令或步骤）。本地可执行层级 command 必须真实可跑；real-data/real-replay/GDB/Pi-product/browser/UX/performance/clean-install 层级只能由对应真实运行证据覆盖，文档/契约命令不替代。command 通过不代表层级通过；层级证据须带 test_level+sha256。",
+  "entries": [
+    {
+      "id": "G6-AC01",
+      "phase": "G6",
+      "title": "单 bag+问题无需内部 artifact；正确身份自动复用，版本/COEM 冲突只问必要业务信息，错版本不进入 runtime",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "integration",
+        "Pi-product"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cr60_intake.py",
+        "tests/test_pi_context.py",
+        "tests/test_config_gen.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_runtime_pending",
+      "validation_plan": {
+        "inputs": [
+          "真实单 bag+一句问题（case.yaml/metadata.json 自动选 variant）",
+          "正确/错误版本材料各一组（版本/COEM/分支冲突样本）"
+        ],
+        "criteria": {
+          "integration": "pi-context/cr60-intake 对真实 case 目录产出绑定 artifact；无内部 JSON/索引由用户准备；身份冲突只产出业务语言冲突项；错版本被 blocked 且不进入 runtime 绑定",
+          "Pi-product": "python cli.py pi \"<业务问题>\" 在仅提供 bag+问题下完成首个可信回答，全程不向用户索要 frameID/PID/GDB 表达式"
+        },
+        "registered_local_command": "tests/test_cr60_intake.py + tests/test_pi_context.py + tests/test_config_gen.py（intake 解析/冲突 fail-closed、pi-context case_analysis 绑定、project_intake schema 派生契约）",
+        "planned_runtime_steps": [
+          "准备/指定含 case.yaml 的真实案例目录（T10 落地后执行）",
+          "python cli.py pi-context --task-scope case_analysis --case-dir <case> 确认绑定 artifact",
+          "python cli.py pi \"<问题>\" 记录会话证据（含 Pi-product 层级标注）"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T00",
+        "T01",
+        "T10",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC02",
+      "phase": "G6",
+      "title": "四雷达、多次报警、同 ID/复用；全局目录和深查范围明确；选择不同事件不串数据",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "unit/contract",
+        "integration",
+        "real-data"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_case_loader_workspace.py",
+        "tests/test_engine.py",
+        "tests/test_temporal_pattern_engine.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_realdata_pending",
+      "validation_plan": {
+        "inputs": [
+          "含 ≥2 雷达、≥2 次报警、同 ID 目标复用/帧 wrap 的真实 bag",
+          "无报警 bag（对照样本）"
+        ],
+        "criteria": {
+          "unit/contract": "窗口/事件抽取契约测试通过（同 ID 复用、wrap 不串扰、无报警返回空目录而非错误）",
+          "integration": "case_loader→window→event 目录→evidence-query 选择不同事件返回各自有界切片，event_id 隔离",
+          "real-data": "真实四雷达 bag 全局事件目录 + 任选两次事件深查，两次选择的数据帧/目标不交叉；无报警案例目录为空且缺口说明准确"
+        },
+        "registered_local_command": "tests/test_case_loader_workspace.py + tests/test_engine.py + tests/test_temporal_pattern_engine.py（装载/窗口/时序模式契约）",
+        "planned_runtime_steps": [
+          "T11 落地后对真实四雷达 bag 生成事件目录 artifact",
+          "evidence-query/alert-timeline 对两个不同事件分别有界查询并对比帧/目标重叠",
+          "无报警案例复跑目录与缺口检查"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T11",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC03",
+      "phase": "G6",
+      "title": "位置/单位/几何与独立参考一致；缺尺寸不造框；视频错位明确，场景/曲线/代码联动",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "real-data",
+        "browser/UX"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_diagnostic_report_geometry_prediction.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_browser_pending",
+      "validation_plan": {
+        "inputs": [
+          "带独立参考（已核验解码/GUI 截图/录制字段）的真实场景 bag",
+          "缺目标尺寸样本 + 视频时间错位样本"
+        ],
+        "criteria": {
+          "real-data": "报告位置/单位/几何与独立参考一致（记录参考限制）；缺尺寸时不渲染虚构框；视频错位显式标注不静默对齐",
+          "browser/UX": "真实浏览器中场景/曲线/代码三方联动：选事件→曲线/代码片段同步更新；刷新后选择保持"
+        },
+        "registered_local_command": "tests/test_diagnostic_report_geometry_prediction.py（几何/缺尺寸不造框契约）",
+        "planned_runtime_steps": [
+          "T21 落地后生成带媒体/曲线/代码联动的 workbench",
+          "T22 按浏览器操作脚本记录选择/加载/空/错误/刷新行为"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T11",
+        "T21",
+        "T22",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC04",
+      "phase": "G6",
+      "title": "Pi 按问题选择两模式；实际宏/阶段、reset/warmup/ACK 证据；目标级不能宣称前级重算",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "real-replay/GDB",
+        "Pi-product"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_replay_provider_mapping.py",
+        "tests/test_execution_binding.py",
+        "tests/test_arbe_remote_replay.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_replay_pending",
+      "validation_plan": {
+        "inputs": [
+          "同一问题在 local 与 remote_public 两模式下的真实回放（含 point_cloud 与 sgu_injection 策略样本）",
+          "reset/warmup/ACK 完整记录"
+        ],
+        "criteria": {
+          "real-replay/GDB": "sim-verify 两模式真实执行；artifact 记录实际宏/阶段、reset、warmup frames、completion ACK；目标级证据不宣称前级已重算",
+          "Pi-product": "Pi 对话按问题自动选择模式并引用回放证据，用户只提供业务问题"
+        },
+        "registered_local_command": "tests/test_replay_provider_mapping.py + tests/test_execution_binding.py + tests/test_arbe_remote_replay.py（两模式/绑定/远端回放会话契约）",
+        "planned_runtime_steps": [
+          "T31 在授权环境执行两模式真实回放并保留 session/trace/ACK 证据",
+          "T33 记录 Pi 真实选择模式的对话证据"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T31",
+        "T33",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC05",
+      "phase": "G6",
+      "title": "已知缺陷、正常/性能取舍、无报警/证据不足；真实模型按证据解释和裁决，不编造唯一根因",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "real-data",
+        "Pi-product"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_diagnosis_panel_module.py",
+        "tests/test_expert_panel_variant_sources.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_piproduct_pending",
+      "validation_plan": {
+        "inputs": [
+          "已知根因的历史案例（答案封存）",
+          "正常/性能取舍案例 + 无报警/证据不足案例"
+        ],
+        "criteria": {
+          "real-data": "真实模型输出对已知缺陷给出证据支持解释；正常/性能取舍案例交付技术解释并等待业务裁决；无报警/证据不足案例显式缺口而非编造根因；Top 候选 ≤3 且仅在区分有效时给出",
+          "Pi-product": "同一案例由 Pi 对话产出，引用可追溯证据（帧/变量/代码 ref），不虚构数据"
+        },
+        "registered_local_command": "tests/test_diagnosis_panel_module.py + tests/test_expert_panel_variant_sources.py（面板编排/variant 来源与不虚构约束的契约）",
+        "planned_runtime_steps": [
+          "T32/T33 落地后对封存答案案例跑真实 Pi 诊断并保留 transcript 与结论分级",
+          "对照人工判读记录观测/解释/根因支持/业务接受四个维度"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T32",
+        "T33",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC06",
+      "phase": "G6",
+      "title": "无授权拒绝，范围内不重复问，计划变化需复核；重复提交/重连不能重复副作用",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "unit/contract",
+        "integration",
+        "real-replay/GDB"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_execution_binding.py",
+        "tests/test_analysis_ledger.py",
+        "tests/test_arbe_formal_lifecycle.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_replay_pending",
+      "validation_plan": {
+        "inputs": [
+          "无授权/拒绝/批准/撤销样本动作集",
+          "重复提交同一 request_id、断连重连、计划变更三种场景"
+        ],
+        "criteria": {
+          "unit/contract": "binding/ledger/生命周期契约：缺 approval 拒绝、重复 request_id 返回已有 attempt、plan 变更触发复核",
+          "integration": "module_bridge 默认计划态；approval 后才执行；取消清理 own resources",
+          "real-replay/GDB": "真实回放 attempt 中重复提交/重连不产生第二次 replay；停止后状态与实际执行一致"
+        },
+        "registered_local_command": "tests/test_execution_binding.py + tests/test_analysis_ledger.py + tests/test_arbe_formal_lifecycle.py（授权/幂等/ownership 契约）",
+        "planned_runtime_steps": [
+          "T30 落地后构造 poll/cancel/reconcile 真实 attempt",
+          "重复提交与断连重连各一次并核对远端无重复副作用"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T12",
+        "T30",
+        "T33",
+        "T40",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC07",
+      "phase": "G6",
+      "title": "真实授权 diff→构建→回灌→同输入比较；预定义标准，相关功能行为检查，不以禁用功能当修复",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "real-replay/GDB",
+        "Pi-product"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_arbe_patch_plan.py",
+        "tests/test_arbe_build.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_replay_pending",
+      "validation_plan": {
+        "inputs": [
+          "授权的修改方案（diff+目的+影响+风险）",
+          "同 bag 基线回放与修改版回放",
+          "预定义验证指标与标准来源"
+        ],
+        "criteria": {
+          "real-replay/GDB": "隔离区 apply→真实 catkin_make→回灌→同输入对照；比较含 exact/derived/unbound 关系与不可比原因；报警消失不单凭数量宣称修复，相关功能行为检查通过",
+          "Pi-product": "Pi 对话串起方案→执行→比较并如实报告失败路径"
+        },
+        "registered_local_command": "tests/test_arbe_patch_plan.py + tests/test_arbe_build.py（补丁计划/构建会话契约）",
+        "planned_runtime_steps": [
+          "T40 生成验证标准与隔离 apply",
+          "T41 执行真实构建回灌与同 bag 对照，失败/恢复各记录一次"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T40",
+        "T41",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC08",
+      "phase": "G6",
+      "title": "关键失败注入均保留可用成果、准确缺口、下一步；错版本/未知值不伪装成功",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "unit/contract",
+        "integration"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_freshness.py",
+        "tests/test_knowledge_guard.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_matrix_pending",
+      "validation_plan": {
+        "inputs": [
+          "失败注入矩阵：identity_conflict/stale、unsupported/missing_evidence、transient_transport/model_unavailable、execution_unknown、budget/cancel、artifact_corrupt/disk_full、错版本、未知值"
+        ],
+        "criteria": {
+          "unit/contract": "freshness/knowledge_guard 契约：过期/失配知识 fail-closed、unknown/optimized_out/unbound 不升级 observed",
+          "integration": "每个注入场景 artifact 保留已完成成果、缺口分类与下一步，不吞错不半产物发布"
+        },
+        "registered_local_command": "tests/test_freshness.py + tests/test_knowledge_guard.py（fail-closed 契约）",
+        "planned_runtime_steps": [
+          "按模块设计 §7 失败传播表逐项执行注入并核对消费行为与重试策略（随 T11/T30/T31/T32/T51 的联调覆盖）"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T11",
+        "T30",
+        "T31",
+        "T32",
+        "T51",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC09",
+      "phase": "G6",
+      "title": "已就绪代表数据含近 10 GB；分析完成 ≤600 s；分段和端到端计时、完成率同时公开",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "performance"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_measure_prewarm_timing.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_e2e_pending",
+      "validation_plan": {
+        "inputs": [
+          "近 10 GB 代表性 bag（就绪环境、冷/热缓存各一轮）",
+          "样本数/重复次数/硬件与模型身份预先登记"
+        ],
+        "criteria": {
+          "performance": "就绪环境下 L1/L2 端到端 ≤600 s；分段（解析/检索/模型/回放）与端到端计时、完成率同时公开；不把首次有效结果等同完整调查，不把平均等同每案达标"
+        },
+        "registered_local_command": "tests/test_measure_prewarm_timing.py（计时工具契约；从 S1 起随真实数据累积计时记录，不等 S5）",
+        "planned_runtime_steps": [
+          "T50 对近上限数据执行分段/端到端计时（tools/measure_prewarm_timing.py + 管线计时 harness），冷/热缓存分别记录",
+          "修热点后重跑正确性回归（同 AC02 样本）"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T50",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC10",
+      "phase": "G6",
+      "title": "三层增量成果可见；追问/重启保留上下文；身份变化使相关结果 stale，历史可查看",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "integration",
+        "Pi-product",
+        "browser/UX"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_analysis_ledger.py",
+        "tests/test_analysis_workbench.py",
+        "tests/test_freshness.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_piproduct_browser_pending",
+      "validation_plan": {
+        "inputs": [
+          "同一 run 的三层产物（数据/代码/推理）",
+          "追问、进程重启、身份变更（分支/COEM/数据）场景"
+        ],
+        "criteria": {
+          "integration": "ledger/workbench 增量投影 revision/cursor 正确；身份变化后相关结果标 stale 且历史可查看",
+          "Pi-product": "追问与重启后 Pi 保留上下文继续分析",
+          "browser/UX": "真实浏览器三层增量可见，刷新/重连不丢选择"
+        },
+        "registered_local_command": "tests/test_analysis_ledger.py + tests/test_analysis_workbench.py + tests/test_freshness.py（增量/stale 契约）",
+        "planned_runtime_steps": [
+          "T20/T33 联调追问与重启保留上下文",
+          "T22 浏览器操作记录增量/刷新/恢复行为"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T10",
+        "T20",
+        "T33",
+        "T51",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC11",
+      "phase": "G6",
+      "title": "独立会话及产物隔离可证明；人工进程/dirty 不受影响；取消仅清理 own resources，GUI parity 不冒称",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "real-replay/GDB"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_project_isolation.py",
+        "tests/test_workspace_migration.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_replay_pending",
+      "validation_plan": {
+        "inputs": [
+          "正式 arbe 会话运行中的机器",
+          "独立分析会话与人工进程/dirty 并存场景",
+          "取消/清理动作"
+        ],
+        "criteria": {
+          "real-replay/GDB": "独立会话产物落在隔离 workspace 且身份可证明；正式会话 PID/进程组与人工 dirty 不受影响；取消仅清理 own resources；GUI 与隔离回放差异如实记录"
+        },
+        "registered_local_command": "tests/test_project_isolation.py + tests/test_workspace_migration.py（variant/workspace 隔离契约）",
+        "planned_runtime_steps": [
+          "T12/T30/T31 在授权环境运行隔离会话并记录与正式会话并存证据",
+          "取消实验核对远端资源清单前后差集"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T12",
+        "T30",
+        "T31",
+        "T41",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC12",
+      "phase": "G6",
+      "title": "可行动结论有真实表达式、同事件值、赋值/消费链；缺映射维持假设，修改前后对应同一证据链",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "real-data",
+        "real-replay/GDB",
+        "browser/UX"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_condition_trace.py",
+        "tests/test_event_code_path.py",
+        "tests/test_code_context.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_replay_browser_pending",
+      "validation_plan": {
+        "inputs": [
+          "真实事件 + 当前 source 条件表达式",
+          "GDB/runtime 同帧变量样本",
+          "修改前后两次分析的绑定产物"
+        ],
+        "criteria": {
+          "real-data": "条件/变量绑定到真实同事件值；缺映射保持 hypothesis 不升 observed",
+          "real-replay/GDB": "赋值/消费链有 source ref 与证据等级；GDB 缺失/扰动如实记录",
+          "browser/UX": "修改前后在同一证据链视图可对照"
+        },
+        "registered_local_command": "tests/test_condition_trace.py + tests/test_event_code_path.py + tests/test_code_context.py（条件求值/事件代码路径/上下文绑定契约）",
+        "planned_runtime_steps": [
+          "T32 真实同事件 GDB/runtime 变量取证",
+          "T40/T41 修改前后绑定对照"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T21",
+        "T32",
+        "T40",
+        "T41",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC13",
+      "phase": "G6",
+      "title": "全旅程对照人工任务，测重复输入/查找/换算/切应用、提问、决策耗时与理解错误，不仅测变量页",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "browser/UX"
+      ],
+      "command": [],
+      "validation_plan_status": "defined_in_T01_2026-09-17_manual_protocol_registered_runner_pending_T52",
+      "validation_plan": {
+        "inputs": [
+          "人工基线：≥2 名工程师 × ≥2 典型案例（1 有报警、1 无报警/证据不足），业务终点与工具流程一致",
+          "工具旅程：首次绑定→输入→等待→错误→追问→改焦点→裁决→授权→取消→恢复→导出"
+        ],
+        "criteria": {
+          "browser/UX": "人工与工具记录相同业务终点的耗时/工具切换/查找换算次数/理解错误；改善阈值试测后制定并版本化；未制定阈值不得标通过；记录覆盖旅程 UX01～11，不只测变量页"
+        },
+        "registered_local_command": null,
+        "no_command_reason": "纯 browser/UX 人工对照层级；诚实留空，不以文档检查命令冒充。真实 runner（浏览器操作脚本+计时记录模板）由 T52 与人工基线计划一起落地；届时必须填入非空 command 才可能 accepted",
+        "planned_runtime_steps": [
+          "按 §5 人工耗时基线计划执行人工对照并落盘 evidence",
+          "T52 落地旅程脚本与阈值版本化",
+          "填入真实 command 后重跑 gate"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T22",
+        "T33",
+        "T52",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC14",
+      "phase": "G6",
+      "title": "Pi 与浏览器共享 run，增量不丢选择；页面动作回流、重复点击/重连幂等；停止结果符合实际执行状态",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "integration",
+        "browser/UX"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_analysis_workbench.py",
+        "tests/test_analysis_ledger.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_browser_pending",
+      "validation_plan": {
+        "inputs": [
+          "同一 AnalysisRun 的 Pi 会话与浏览器工作页",
+          "动作样本：批准/取消/追问/选择/重复点击/断连重连"
+        ],
+        "criteria": {
+          "integration": "动作统一回流同一 run 的 ledger/Pi 入口；revision/cursor 增量正确；expected_revision 竞争被拒绝",
+          "browser/UX": "真实浏览器重复点击/重连幂等；停止结果与实际执行状态一致；选择不因增量丢失"
+        },
+        "registered_local_command": "tests/test_analysis_workbench.py + tests/test_analysis_ledger.py（共享 run/revision/幂等契约）",
+        "planned_runtime_steps": [
+          "T20 服务联调动作回流",
+          "T22 浏览器操作脚本记录重复/重连/停止行为"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T20",
+        "T21",
+        "T22",
+        "T33",
+        "T52",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC15",
+      "phase": "G6",
+      "title": "干净机器按指南首次绑定→首个可信结果；升级保留配置/案件，回退可用，不强迫用户修内部路径",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "clean-install"
+      ],
+      "command": [
+        "python",
+        "tools/doctor.py",
+        "--json",
+        "--no-catalog"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_cleanmachine_pending",
+      "validation_plan": {
+        "inputs": [
+          "干净机器/干净 venv（无既有 workspace、无模型配置缓存）",
+          "升级前的旧版本配置与案件",
+          "回退演练"
+        ],
+        "criteria": {
+          "clean-install": "按公开指南完成 project-init 首次绑定并产出首个可信结果，用户不修内部路径；升级后配置/案件可读；回退可用；doctor 在干净 venv 冷启动通过"
+        },
+        "registered_local_command": "tools/doctor.py --json --no-catalog（本机依赖/入口/锁定一致性体检；干净机器全量体检含 catalog 冷启动在 T60 执行）",
+        "planned_runtime_steps": [
+          "T60 干净机器/venv 按 doctor --catalog-timeout-sec 冷启动 + project-init + 首案例",
+          "升级/回退演练并记录配置保留证据"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T00",
+        "T01",
+        "T60",
+        "T61"
+      ]
+    },
+    {
+      "id": "G6-AC16",
+      "phase": "G6",
+      "title": "磁盘满、模型失联、SSH 断开、过期知识、取消/崩溃可解释恢复；导出冻结报告可打开且不误含 secrets/全仓源码",
+      "required_for_release": true,
+      "status": "specified",
+      "required_test_levels": [
+        "integration",
+        "browser/UX"
+      ],
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_runtime_evidence.py",
+        "tests/test_runtime_evidence_contract.py",
+        "tests/test_knowledge_guard.py",
+        "-q"
+      ],
+      "validation_plan_status": "defined_in_T01_2026-09-17_local_registered_faultmatrix_pending",
+      "validation_plan": {
+        "inputs": [
+          "故障注入：磁盘满、模型失联、SSH 断开、过期知识、取消/崩溃",
+          "导出冻结报告（含运行时证据与无 secrets 声明）"
+        ],
+        "criteria": {
+          "integration": "每类故障有可解释恢复路径：保留阶段产物、准确缺口、恢复入口；关键授权状态不丢；半产物不发布",
+          "browser/UX": "导出报告在浏览器/本地可打开，内容不含 secrets 与全仓源码"
+        },
+        "registered_local_command": "tests/test_runtime_evidence.py + tests/test_runtime_evidence_contract.py + tests/test_knowledge_guard.py（证据身份/契约/过期知识 fail-closed）",
+        "planned_runtime_steps": [
+          "T30/T51/T60 联调中执行故障矩阵并保留恢复证据",
+          "T52 导出冻结报告打开性与内容检查"
+        ]
+      },
+      "evidence": [],
+      "related_tasks": [
+        "T01",
+        "T12",
+        "T30",
+        "T51",
+        "T52",
+        "T60",
+        "T61"
+      ]
+    }
+  ]
+}

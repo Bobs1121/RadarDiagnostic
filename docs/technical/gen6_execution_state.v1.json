@@ -1,0 +1,534 @@
+{
+  "schema_version": "gen6-execution-state.v1",
+  "updated_at": "2026-09-17",
+  "goal_started": true,
+  "current_task": "T10",
+  "next_task": null,
+  "current_sprint": "S0",
+  "permissions": {
+    "local_development": "authorized_by_user_request_2026-09-17",
+    "remote_execution": "not_authorized_this_round",
+    "git_push_merge": "not_authorized"
+  },
+  "baseline": {
+    "branch_observed": "codex/ros-debug-autonomous",
+    "head_observed": "2a2e87efa87223625bb4e556f8d788f1c6181b4f",
+    "dirty": true,
+    "dirty_entries": 292,
+    "dirty_fingerprint_sha256_prefix": "e75d6eef4c815aae971c024af1b69815",
+    "ownership_audit": "completed at T00; existing dirty changes are prior work, not owned by current goal; no stash/reset/clean performed"
+  },
+  "tasks": [
+    {
+      "id": "T00",
+      "sprint": "S0",
+      "title": "核对 Git/dirty、模块现状、环境和所有权",
+      "depends_on": [],
+      "modules": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08",
+        "M09",
+        "M10",
+        "M11",
+        "M12"
+      ],
+      "acceptance": [
+        "G6-AC01",
+        "G6-AC15"
+      ],
+      "status": "done",
+      "owner": "opencode-2026-09-17",
+      "evidence": [
+        "docs/technical/evidence/gen6_t00_baseline_audit_20260917.json"
+      ],
+      "blockers": [],
+      "last_outcome": "branch codex/ros-debug-autonomous @2a2e87e, 292 dirty (94M/51D/147U, fingerprint e75d6eef...), archive-move deletions confirmed; 41/41 module landing points present; check_ddd 0 errors; capabilities CLI exit 0 with 68 capabilities; doctor ready (python 3.12.10, 0 failures, 0 lock mismatches); release gate plan-only honestly blocked 0/16; remote unverified and not authorized; no code changes made"
+    },
+    {
+      "id": "T01",
+      "sprint": "S0",
+      "title": "建立真实验收资产、命令/步骤及人工基线",
+      "depends_on": [
+        "T00"
+      ],
+      "modules": [
+        "M01",
+        "M04",
+        "M12"
+      ],
+      "acceptance": [
+        "G6-AC01",
+        "G6-AC02",
+        "G6-AC03",
+        "G6-AC04",
+        "G6-AC05",
+        "G6-AC06",
+        "G6-AC07",
+        "G6-AC08",
+        "G6-AC09",
+        "G6-AC10",
+        "G6-AC11",
+        "G6-AC12",
+        "G6-AC13",
+        "G6-AC14",
+        "G6-AC15",
+        "G6-AC16"
+      ],
+      "status": "done",
+      "owner": "opencode-2026-09-17",
+      "evidence": [
+        "docs/technical/evidence/gen6_t01_acceptance_assets_20260917.json"
+      ],
+      "blockers": [],
+      "last_outcome": "16/16 AC validation plans registered in release_acceptance.v1.json (levels/inputs/criteria/commands-or-steps); 15 real runnable commands verified (all exit 0, max 90s < 300s gate timeout); G6-AC13 pure browser/UX honestly left command-empty until T52 runner; manual time-baseline plan added to GEN6_AI_ACCEPTANCE.md §5.1; plan-only gate still honestly blocked 0/16 with command_missing only for AC13; governance test stale assumption fixed (evidenceless-done check now state-independent)"
+    },
+    {
+      "id": "T10",
+      "sprint": "S1",
+      "title": "bag+问题到版本车型绑定",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "modules": [
+        "M01",
+        "M03",
+        "M05"
+      ],
+      "acceptance": [
+        "G6-AC01",
+        "G6-AC10"
+      ],
+      "status": "verifying",
+      "owner": "opencode-2026-09-17",
+      "evidence": [
+        "docs/technical/evidence/gen6_t10_taskcard_20260917.json",
+        "docs/technical/evidence/gen6_t10_intake_binding_20260917.json"
+      ],
+      "blockers": [
+        "real-data/Pi-product 层级验证待用户服务器（10.190.171.44）网络恢复或提供新地址/数据"
+      ],
+      "last_outcome": "本地切片完成并验证：新增 cr60-intake-binding.v1 引擎+契约+Pi pre-model gate（21 项新测试、AC01 命令 52 passed、消费方回归 100 passed、治理 30 passed）；错版本 blocked、歧义/缺身份业务语言澄清、单项目自动复用；run 绑定 intake 引用。real-data 验证待服务器恢复"
+    },
+    {
+      "id": "T11",
+      "sprint": "S1",
+      "title": "四雷达事件及数据索引",
+      "depends_on": [
+        "T10"
+      ],
+      "modules": [
+        "M02",
+        "M05"
+      ],
+      "acceptance": [
+        "G6-AC02",
+        "G6-AC03",
+        "G6-AC08"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T12",
+      "sprint": "S1",
+      "title": "授权和隔离 attempt 基础",
+      "depends_on": [
+        "T10"
+      ],
+      "modules": [
+        "M05",
+        "M06",
+        "M07"
+      ],
+      "acceptance": [
+        "G6-AC06",
+        "G6-AC11",
+        "G6-AC16"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T20",
+      "sprint": "S2",
+      "title": "实时服务与用户动作回流",
+      "depends_on": [
+        "T11",
+        "T12"
+      ],
+      "modules": [
+        "M04",
+        "M05",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC10",
+        "G6-AC14"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T21",
+      "sprint": "S2",
+      "title": "场景代码曲线媒体联合视图",
+      "depends_on": [
+        "T20"
+      ],
+      "modules": [
+        "M02",
+        "M03",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC03",
+        "G6-AC12",
+        "G6-AC14"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T22",
+      "sprint": "S2",
+      "title": "真实浏览器状态交互验证",
+      "depends_on": [
+        "T21"
+      ],
+      "modules": [
+        "M05",
+        "M06",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC03",
+        "G6-AC13",
+        "G6-AC14"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T30",
+      "sprint": "S3",
+      "title": "持久执行取消恢复与预算",
+      "depends_on": [
+        "T12"
+      ],
+      "modules": [
+        "M05",
+        "M06",
+        "M07"
+      ],
+      "acceptance": [
+        "G6-AC06",
+        "G6-AC08",
+        "G6-AC11",
+        "G6-AC16"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T31",
+      "sprint": "S3",
+      "title": "两种真实仿真及执行证明",
+      "depends_on": [
+        "T30",
+        "T11"
+      ],
+      "modules": [
+        "M07",
+        "M08"
+      ],
+      "acceptance": [
+        "G6-AC04",
+        "G6-AC08",
+        "G6-AC11"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T32",
+      "sprint": "S3",
+      "title": "GDB变量和因果证据",
+      "depends_on": [
+        "T31",
+        "T21"
+      ],
+      "modules": [
+        "M03",
+        "M08",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC05",
+        "G6-AC08",
+        "G6-AC12"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T33",
+      "sprint": "S3",
+      "title": "真实Pi自主L2闭环",
+      "depends_on": [
+        "T32",
+        "T22"
+      ],
+      "modules": [
+        "M04",
+        "M05",
+        "M06",
+        "M08",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC04",
+        "G6-AC05",
+        "G6-AC06",
+        "G6-AC10",
+        "G6-AC13",
+        "G6-AC14"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T40",
+      "sprint": "S4",
+      "title": "验证标准与隔离修改",
+      "depends_on": [
+        "T33"
+      ],
+      "modules": [
+        "M06",
+        "M09"
+      ],
+      "acceptance": [
+        "G6-AC06",
+        "G6-AC07",
+        "G6-AC12"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T41",
+      "sprint": "S4",
+      "title": "构建回灌比较与回退",
+      "depends_on": [
+        "T40"
+      ],
+      "modules": [
+        "M07",
+        "M08",
+        "M09",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC07",
+        "G6-AC11",
+        "G6-AC12"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T50",
+      "sprint": "S5",
+      "title": "性能目标与准确性对照",
+      "depends_on": [
+        "T33"
+      ],
+      "modules": [
+        "M02",
+        "M04",
+        "M07",
+        "M10"
+      ],
+      "acceptance": [
+        "G6-AC09"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T51",
+      "sprint": "S5",
+      "title": "新鲜知识反馈与隔离",
+      "depends_on": [
+        "T33"
+      ],
+      "modules": [
+        "M01",
+        "M04",
+        "M05",
+        "M11"
+      ],
+      "acceptance": [
+        "G6-AC08",
+        "G6-AC10",
+        "G6-AC16"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T52",
+      "sprint": "S5",
+      "title": "完整用户旅程省时验证",
+      "depends_on": [
+        "T41",
+        "T22",
+        "T50",
+        "T51"
+      ],
+      "modules": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08",
+        "M09",
+        "M10",
+        "M11",
+        "M12"
+      ],
+      "acceptance": [
+        "G6-AC13",
+        "G6-AC14",
+        "G6-AC16"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T60",
+      "sprint": "S6",
+      "title": "独立安装启动升级回退",
+      "depends_on": [
+        "T20",
+        "T30"
+      ],
+      "modules": [
+        "M01",
+        "M10",
+        "M11",
+        "M12"
+      ],
+      "acceptance": [
+        "G6-AC15",
+        "G6-AC16"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    },
+    {
+      "id": "T61",
+      "sprint": "S6",
+      "title": "全部模块发布验收",
+      "depends_on": [
+        "T41",
+        "T50",
+        "T51",
+        "T52",
+        "T60"
+      ],
+      "modules": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08",
+        "M09",
+        "M10",
+        "M11",
+        "M12"
+      ],
+      "acceptance": [
+        "G6-AC01",
+        "G6-AC02",
+        "G6-AC03",
+        "G6-AC04",
+        "G6-AC05",
+        "G6-AC06",
+        "G6-AC07",
+        "G6-AC08",
+        "G6-AC09",
+        "G6-AC10",
+        "G6-AC11",
+        "G6-AC12",
+        "G6-AC13",
+        "G6-AC14",
+        "G6-AC15",
+        "G6-AC16"
+      ],
+      "status": "todo",
+      "owner": null,
+      "evidence": [],
+      "blockers": [],
+      "last_outcome": null
+    }
+  ]
+}

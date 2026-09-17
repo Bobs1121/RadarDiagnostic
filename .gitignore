@@ -83,3 +83,6 @@ pi-orchestration-context.v1
 reports/
 memory/**/*.db-shm
 memory/**/*.db-wal
+
+# Runtime analysis outputs
+output/

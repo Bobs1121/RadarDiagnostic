@@ -9,17 +9,18 @@
 | 文件 | 编号 | 定位 | CLI 子命令 | AI 调用 |
 |------|------|------|-----------|---------|
 | `agent_loop.py` | PR5 | 离线 Agent/ReAct 执行核心包装 | `agent-loop` | 无 |
+| `pi.py` | V4 | 主入口 Pi 调度；交互会话保留有界感知能力 starter，业务症状如目标漏检/消失也路由到点云能力 | `pi` | Pi RPC |
 | `project_init.py` | PR6-F | 最小输入项目接入 | `project-init` | 无 |
-| `signal_bridge.py` | M2 | CAN ↔ 内部变量/输出信号映射 | `signal-bridge` | 无 |
+| `signal_bridge.py` | M2 | CAN ↔ 当前 variant 的内部变量/输出信号映射 | `signal-bridge` | 只读 source/mapping cache；RTE 缺失或多 COEM 歧义时不套用 GWM |
 | `diagnosis_panel.py` | M6 | 独立诊断面板（分类+专家） | `diagnosis-panel` | simple × 1 + 可选 complex × 多次 |
 | `code_review.py` | M7 | 离线 code review 骨架 | `code-review` | 无 |
 | `data_diagnostics.py` | M4 | 车辆数据探针（无代码假设） | `data-explore` | 无 |
 | `bsd_data_bridge.py` | M9 | BSD 信号匹配 + 条件交叉验证 | `bsd-data-bridge` | 无 |
 | `signal_audit.py` | M10 | BLF 关键链路信号抽取 + 契约审计（枚举合法性 + UI 模式回传契约） | `signal-audit` | 无 |
-| `arbe_preflight.py` | CR60 | 只读探测 arbe/source/config/binary/GDB/进程/CAN Tx 候选，可显式绑定 ROS master | `arbe-preflight` | 无 |
+| `arbe_preflight.py` | CR60 | 只读探测 arbe/source/config/binary/GDB/进程/CAN Tx 候选，可显式绑定 ROS master；SSH 探测失败时短路后续远端请求，并把未观测状态标为 `unknown/not_available` | `arbe-preflight` | 无 |
 | `cr60_intake.py` | CR60 | 材料优先的数据/软件/车型/COEM/分支绑定，冲突和缺口 fail-closed | `cr60-intake` | 无 |
 | `cr60_precheck.py` | CR60 | 将已确认 intake/数据目录交给独立 harness 做 Sprint1 预检查和 HTML 产出 | `cr60-precheck` | 无 |
-| `public_topic_plan.py` | CR60 | 规划不依赖 GDB 的 ROS/bag 公共逐帧证据通道 | `public-topic-plan` | 无 |
+| `public_topic_plan.py` | CR60 | 规划不依赖 GDB 的 ROS/bag 公共逐帧证据通道，并绑定输入 preflight server/workspace identity 供 runtime sample role 校验 | `public-topic-plan` | 无 |
 | `public_evidence_audit.py` | CR60 | 审计 bundle 已有的逐帧自车/目标/warning 证据和 GDB 缺口 | `public-evidence-audit` | 无 |
 | `code_gdb_plan.py` | CR60 | 基于当前 code-index 解析真实函数位置并生成通用 GDB 指令 | `code-gdb-plan` | 无 |
 | `gdb_service.py` | CR60 | 通用 headless GDB batch 服务，独立于功能和断点；执行后归一化 observations | `gdb-service` | 需审批 |
@@ -35,16 +36,21 @@
 | `arbe_patch_plan.py` | CR60 | 只读执行可配置仿真适配检查、hash/diff 和 action gate，不应用补丁 | `arbe-patch-plan` | 无 |
 | `cr60_data_prep_verify.py` | CR60 | 只读验证 Linux 数据源/目标文件、大小和 SHA-256，不执行传输 | `cr60-data-prep-verify` | 无 |
 | `cr60_data_transfer.py` | CR60 | 审批后通过 SSH 调用已配置上游传输脚本，不复制脚本逻辑 | `cr60-data-transfer` | 需审批 |
-| `ros_topic_inventory.py` | CR60 | 只读获取 ROS topic/type/publisher/subscriber，验证公共逐帧证据链 | `ros-topic-inventory` | 无 |
+| `ros_topic_inventory.py` | CR60 | 只读获取 ROS topic/type/publisher/subscriber；可用同一 `arbe-preflight.v1` 自动绑定 server/workspace hash；可选当前 `rosmsg show` 字段目录和带时间/hash/截断状态的单消息采样 | `ros-topic-inventory` | 无 |
 | `pi_context.py` | CR60 | 将 intake/preflight/project/data/runtime/policy 绑定为 PiRunContext | `pi-context` | 无 |
 | `project_capability.py` | CR60 | 将当前显式 artifact 投影为 Gen6 能力/缺口/freshness 清单，供 Pi shortlist | `project-capability-manifest` | 无 |
 | `analysis_ledger.py` | V4 S1A | AnalysisRun create/read/update、Step begin/complete、Claim append | `analysis-run-*` / `analysis-step-record` / `analysis-claim-append` | 本地 artifact 写入 |
-| `analysis_collaboration.py` | V4 S2B | Hypothesis 状态历史、DebugExperiment 计划/结果、用户手工观察回填 | `analysis-hypothesis-record` / `debug-experiment-record` / `analysis-user-observation` | 本地 artifact 写入 |
+| `analysis_collaboration.py` | V4 S2B | Hypothesis 状态历史、DebugExperiment 计划/结果、用户手工观察及 confirmed/rejected/irrelevant feedback 回填 | `analysis-hypothesis-record` / `debug-experiment-record` / `analysis-user-observation` | 本地 artifact 写入 |
+| `feedback_review.py` | V4 S2B | 只读汇总当前 AnalysisRun 用户反馈并检查 variant/source/data binding；不发布 knowledge | `feedback-review` | `feedback-review.v1` |
+| `feedback_knowledge_plan.py` | V4 S2B | 校验 feedback-review 与候选 pattern 的显式发布条件，生成 write-free knowledge publish plan | `feedback-knowledge-plan` | `feedback-knowledge-plan.v1` |
+| `feedback_knowledge_publish.py` | V4 S2B | 受批准的 variant-scoped knowledge write leaf；不接受未 ready 的 plan | `feedback-knowledge-publish` | `feedback-knowledge-publication.v1` |
+| `analysis_workbench.py` | V4 S2B | 只读投影现有 AnalysisRun 的 steps/hypotheses/experiments/user feedback，生成 JSON/HTML | `analysis-workbench` | `analysis-workbench.v1` |
 | `code_context.py` | V4 S1B-prep | 一次性当前源码快照、CodeGraph 导出和有界查询 | `code-context-refresh` / `code-context-read` | 本地 source/index/db 产物 |
 | `event_code_path.py` | V4 S1B | 事件到当前源码的五层导航、runtime gap 和通用 GDB 计划 | `event-code-path` | `event-code-path.v1`（可选 JSON） |
-| `public_runtime.py` | V4 S2A-prep | arbe 公共 warning/radar_info/objectlist 行归一化和帧关联质量 | `public-runtime-normalize` | `runtime-snapshot-with-frame.v1` |
-| `evidence_query.py` | V4 S1C | 从已有 bundle/viewer/runtime artifact 按事件/帧/真实字段做有界查询 | `evidence-query` | 无 |
-| `diagnostic_report.py` | V4 S1C | 将静态/runtime/code/AI artifact 投影为详细诊断报告 | `diagnosis-report` | 无（AI 结果由输入传入） |
+| `public_runtime.py` | V4 S2A-prep | arbe 公共 runtime 行归一化；可将 hash-bound ROS 单消息样本投影成含采集 provenance 的 snapshot | `public-runtime-normalize` | `runtime-snapshot-with-frame.v1` |
+| `point_cloud_read.py` | CR60 perception | 对已有 perception-report 有界查询 summary/stages/lineage/timeline/scene/run/source/gaps；支持带 hash 校验的 callback_key 精确切片 | `point-cloud-read` | 只读，不解析 bag/启动 ROS |
+| `evidence_query.py` | V4 S1C | 从 bundle/viewer/runtime evidence 或 `runtime-snapshot-with-frame.v1` 按事件/帧/真实字段做有界查询；runtime snapshot 行保留 unbound 状态 | `evidence-query` | 无 |
+| `diagnostic_report.py` | V4 S1C | 将静态/runtime/code/AI artifact 或 `runtime-snapshot-with-frame.v1` 投影为详细诊断报告，保持 unbound snapshot 为独立 partial layer | `diagnosis-report` | 无（AI 结果由输入传入） |
 | `condition_trace.py` | V4 S1D | 基于当前 source 条件和同帧 field facts 生成可审计求值 trace | `condition-trace` | 无 |
 | `memory_recall.py` | V4 S1D | 读取当前项目/variant 的历史记忆和相似案例，不写入、不替代当前证据 | `memory-recall` | 无 |
 | `alert_timeline.py` | V4 S1E | 将 raw/replay/public/GDB/CAN 报警按证据层和播放帧投影比较 | `alert-timeline` | 无 |
@@ -57,7 +63,7 @@
 
 > V4 不新增平行的 `CapabilityModule` 协议。确定性逻辑放在 Engine，Pi/Agent 契约使用
 > `BaseTool`，需要独立 CLI/API 时使用 `BaseModule`；catalog 自动生成 Pi
-> `registerTool`。用户编排统一由 Pi 完成，完整设计见 `docs/technical/V4_PI_DRIVEN_ARCHITECTURE.md`。
+> `registerTool`。用户编排统一由 Pi 完成，完整设计见 `docs/technical/GEN6_AI_SYSTEM_DESIGN.md`。
 
 | 能力 | name | 独立 CLI | 职责边界 | 复用资产 |
 |------|------|----------|----------|----------|
@@ -118,7 +124,11 @@ GDB，也不会把静态条件判定为最终根因。
 | `code-context-read` | 从已生成 context 读取限定 section（functions/calls/variables/signals/conditions/parameters 等），不重新扫描源码 |
 
 `code-context-refresh` 的 generic index 不内置 FCTA/FCTB、ROI 或固定文件路径；可选的
-`function_keywords` 只用于当前项目的模块绑定。源码在构建期间变化会阻止发布，已有 context
+`function_keywords` 只用于当前项目的模块绑定。`output_mapping_rte_file` 可显式指定 Tx mapping；
+未提供该 path 且未提供 `source_identity.coem` 时 mapping 为 `unavailable`，不默认借用 legacy GWM。
+其余情况按 COEM 查找 active mapping，并把全部 Tx companion 文件放进 source manifest。已知 COEM
+但 mapping 缺失时输出 `unavailable`，不得回退到另一 COEM；mapping
+内容变化会改变 snapshot hash 并触发重建。源码在构建期间变化会阻止发布，已有 context
 绑定到不同 `source_root` 时不覆盖。`code-analyze` 与 `code-gdb-plan` 可以直接消费其
 `code-index.json`，因此一次代码处理后，Pi 后续分析只需按 section/函数查询。默认不调用
 LLM；未来语义 enrichment 必须另存并绑定相同 `snapshot_hash`。
@@ -212,7 +222,16 @@ provider 不解析 HTML，也不复制 harness 的 bag/parser/viewer；它只把
 `SshCommandRunner` 的只读命令；不发布、不暂停、不调用 `rosbag play`。输出
 `ros-topic-inventory.v1`，每个 topic 记录类型、publisher、subscriber、数量和
 `data_observable`。topic 有 subscriber 但没有 publisher 时仍可记录其注册类型，但
-`data_observable=false`，不能当作存在数据。
+`data_observable=false`，不能当作存在数据。`sample_once` 为每个 topic 独立记录客户端 UTC
+观察时刻、stdout SHA-256/字符数及 `stdout_truncated`，截断样本不能被下游当成完整 ObjectList。
+传入 `preflight_path` 时，模块按 `arbe-preflight.v1.server` 解析/校验 server/user/port，并在
+`runtime_binding` 中保存该 preflight 文件 hash、workspace、binary/config fingerprint 和 preflight 状态；
+缺少有效 identity 时标记 `preflight_partial/not_bound`，不能被 normalizer 升格为有身份的 runtime evidence。
+可选 `inspect_message_schemas=true` 会在已解析出当前消息类型后调用对应 workspace 的
+`rosmsg show <package/Type>`，记录完整定义的 SHA-256、字符数、最多 512 条字段路径和截断标志；
+不把完整 message definition 倒进 Pi prompt，默认也不开启。类型无效或 rosmsg 不可用时仅记录
+`blocked/failed/empty`；字段目录超出 512 项或定义超过处理上限时标记 `partial` 并给 diagnostics，
+不复制另一项目的固定字段表。
 它特别用于识别 `wfObjectMsg`、`warning_status_with_frame`、`wfAutosarData`、live
 XCP topic 之间的消息类型/发布者差异，不能把“有 subscriber”误判为“有数据发布”。
 
@@ -430,14 +449,15 @@ bsd_data_bridge.py
 | 项 | 值 |
 |----|----|
 | class | `CodeAnalyzeModule(BaseModule)`（`ai/modules/code_analyze.py`） |
-| CLI | `code-analyze --kind {function\|callers\|callees\|call_chain\|signals_of\|vars_read\|vars_written\|conditions\|calib\|stats} --name F --max-depth N` |
+| CLI | `code-analyze --kind {function\|callers\|callees\|call_chain\|signals_of\|vars_read\|vars_written\|conditions\|calib\|stats} --name F --max-depth N --max-results N`；列表默认返回 200 项，可显式设为 1～5000 |
 | KINDS | `function`（节点）、`callers`/`callees`（调用者/被调用者名）、`call_chain`（递归调用链）、`signals_of`、`vars_read`/`vars_written`、`calib`（category 过滤）、`stats`（图统计） |
 | 依赖 | codegraph.db（`resolve_db` 解析或 `--db-path`） |
 
 ### 行为
 
 - 每个 kind 直接映射到 `CodeGraph` 查询；结果经 `_to_jsonable`（dataclass→dict）序列化。
-- `callers`/`callees` 取 `caller_name`/`callee_name` 去重、最多 50 条。
+- 所有列表结果统一按 `max_results` 截断，默认 200、范围 1～5000；`result_bounds` 精确报告 `limit/total_count/returned_count/truncated`，截断时 message 同时显示 `returned/total`。函数定义、统计等非列表结果不添加 bounds。
+- `callers`/`callees` 取 `caller_name`/`callee_name` 去重，随后统一应用 `max_results`，不在更早阶段静默裁为 50 条。
 - `calib` 的 `--name` 作为 category 过滤（可空）。
 - Graph 不可用（无 db）时返回 `ModuleResult.fail`，不抛异常。
 
@@ -520,6 +540,100 @@ server_host、remote_bag_path、remote_capture_base，并把结果交给 `public
 objectlist→warning_status_with_frame 是同周期发布顺序时才能选用；默认 `strict`。
 5. local replay 的结构化结果为 `arbe-replay-result.v1`；trace warning 位只有在当前
 runtime schema/显式输入提供映射时才显示功能名，否则保持 `wN`。
+6. `remote_public` 的 `execute=true` 必须提供 `execution_binding`（或
+`--execution-binding` 指向其 JSON 文件）；该 binding 在 capture 前重新比对当前
+data/source/binary/config/session identity，缺失或漂移时返回 `status=blocked`，不启动 SSH。
+
+### arbe-execution-binding
+
+`ExecutionBindingModule` 是上述 binding 的 Pi/CLI 生产者：它只消费已生成的 plan 和
+preflight/source identity，默认返回 `approval_required`，用户确认后才生成
+`arbe-execution-binding.v1`。它不连接 SSH、不执行 replay；缺少身份字段时返回
+`blocked`，生成的 binding 可直接交给 `sim-verify`。
+
+### point-cloud-plan / point-cloud-analyze
+
+`point-cloud-plan` 只生成 `point-cloud-replay-plan.v1`，校验当前 preflight 的
+`HILMODEL`、source/binary/data/config/session identity、输入 contract、server target 和
+150–200 帧 warm-up profile；缺少输入 contract、明确无注入证据或窗口不足时为 `blocked`，
+不执行远端操作。可传 `input_capture_path`，模块会先按内容读取 JSON/JSONL/CSV/ROS1 BAG artifact，
+构造 input audit/contract；topic inventory 提供时会自动选择合法的输入和 PointCloud2/
+MarkerArray/objectlist 输出 topic，避免用户填写实现 token。
+当提供 `remote_capture_base` 等显式 profile 时，它同时生成可被
+`arbe-execution-binding` 解包的 `execution_plan`；这仍不代表已启动真实感知 runtime。
+`point-cloud-analyze` 消费已采集的 point rows/stage evidence/lineage，生成
+`perception-analysis.v1` 和 `perception-report.v1` JSON/HTML。缺少点迹或阶段 evidence 时
+返回 `blocked/partial` 和 gap，不能把 objectlist 或 target injection 伪装成完整 perception replay。
+仅有 `object_rows` 时 `input_boundary=target_only`；source-proven 空 PointCloud2 message 标为 `empty_public_pointcloud_observation`，占位空数组不算已观测输入。HTML 显示 payload audit diagnostics；如有当前
+source/code context，静态 stage candidates 与 `not_evaluable` 条件仍可见，和完整感知 replay 的 blocked 状态分开。
+HTML 首屏用中文状态/阶段标签并将完整输入、运行、比较和 lineage JSON 放入折叠详情。源码地图把 stage-map 的声明/实现/调用 token 候选与 CodeIndex 的函数定义分栏显示；函数定义只在 source root、manifest file set 和每文件 SHA-256 相同后进入报告，匹配状态和两个独立 snapshot hash 可审计。所有定义仍是静态候选，不能提升成 runtime hit。
+它同时输出逐雷达字段完整度、message schema/转换和显式 target usage，保留 NaN/Infinity 的
+`raw_literal`；可接入 `perception-run.v1` 的 run/attempt/reset/完成帧账本，以及只按显式
+frame/identity 依据生成的 `perception-comparison.v1`。没有匹配依据时比较为
+`not_available`，禁止按时间近邻或数组下标配对。`point-cloud-batch` 对 manifest 中每条
+capture 隔离执行该分析，生成 `perception-batch-index.v1`，单条坏输入只进入该条 failure
+reason，不阻断其他报告。默认最多内嵌 200 个点迹/lineage row；大型结果在未传 `output_dir` 时
+自动创建唯一的 `outputs/point_cloud_analysis/run-*`，写出报告和带 hash 的 JSONL 附件，并通过
+`ModuleResult.artifacts` 返回位置；小型纯内存分析仍不写文件。
+持久化报告目录附带 `perception-report-README.md`，说明如何用仅绑定 localhost 的 Python 静态服务
+离线打开 HTML 和相邻证据附件。
+当输入提供明确 `selected_frame` 时，报告还投影 `perception-scene.v1` 和
+`perception-timeline.v1`；未提供时不选择最近帧，保持 `not_available`。scene point 保留精确
+`point_key/cluster_id/track_id/radar_id`；cluster centroid 只对相同 callback 的 exact `cluster_id`
+成员求均值并标 `derived`。HTML 可切换 points/clusters、点击点/簇/track/output 查看同帧属性，且
+track/output 不会在未证明坐标变换时叠加到点云坐标；超密点用精确 point/cluster 列表选择。stage
+表另投影与同一 selected_frame 精确匹配的 runtime/derived 行，缺少逐帧 evidence 时显示 `not_available`。
+可选的 `warmup_runs` 会生成 `perception-warmup-analysis.v1`；缺少独立 output signature
+或 attempts 未完成时标为 `warmup_sensitive/not_available`。
+传入 `condition-trace.v1` 时，报告保留源码位置、求值状态和 missing tokens；`not_evaluable`
+只进入缺口和 code-flow，不会被转成条件失败。
+可传入最多三个 `hypotheses` 和对应 `experiments`；它们以 `candidate_only` 进入报告，
+不会创建 observed claim 或 confirmed root cause。
+报告同时生成 `perception-capability-manifest.v1`，声明当前输入、静态 stage、runtime stage、
+unsupported 和 freshness；没有 runtime proof 时保持 partial。`freshness.status=verified` 还要求 ready
+plan、completed run、data/source/binary/config/session identity 跨上下文/plan/run 完全匹配，并确认
+runtime workspace aligned；只提供若干 hash 字符串不能提升为 verified。`analysis.status=ready` 必须与此
+capability manifest 同为 ready。
+raw `PERInfoOutStruct.dotTrans` 另需 source layout 与确切 recording 的兼容性证据；缺录制版本或
+input/artifact hash 冲突时可以保留解码行做 partial 静态分析，但不能生成 execution-ready plan。
+`perception-run.v1` 的 completed 记录也必须携带对应 `plan_hash`、run/attempt id、observed/completed
+frames 与 reset/warm-up 完成事实；provider 缺 ACK 时不得在分析模块内补造。
+`point-cloud-validate` 可独立读取已有 `perception-report.v1`，只做同一组不变量校验，
+不重新解析输入、不启动 ROS。
+
+`point-cloud-read` 是报告的有界 Pi 读取器：对 `perception-report.v1` 返回 summary、stage rows、
+lineage、选中 callback scene、run/reset/warm-up、source contract 或 gaps。summary 使用 lineage
+保存的全量计数；超限节点/边写入 callback-contiguous 的 `perception-lineage.jsonl`，旁边的
+`perception-lineage-index.v1.json` 索引 byte range、callback 计数和分块 SHA-256。callback 查询按完整
+key seek 精确切片并校验 index/block hash、大小、行数和 record-type 计数；未传 `callback_key` 时，
+lineage 默认取报告 `scene.selected_frame`。结果带 callback 全量 canonical `relation_counts`、原始 `raw_relation_counts`、带 from/to node kind 的
+`relation_summaries`、relation inclusion `relation_scopes`、关键 ID `field_counts`
+和唯一值数量 `field_summaries`，避免从有界边/节点样本手算关系或 field cardinality；节点输出只投影源码/数据定位所需字段，不把 raw message payload
+送入 Pi；`limit/offset` 对各 node/edge 列表分页，`node_counts/edge_count` 始终为精确全量值。source-bound
+callback key 是 capture-local，不能当作原始算法 frameID 或 warmup frame counter。
+附件缺失或失配时返回 `partial`，不将内嵌前缀冒充完整切片。该工具不会重新分析、执行 ROS，也不把
+`derived` callback/lineage 提升为 `observed`。
+Public PointCloud2/ObjectList lineage 带 `relation_scopes` 和 `track_population`：点→簇边严格按
+`cluster_id > 0` 生成；track nodes 镜像捕获到的 ObjectList 行；candidate/mature 内部航迹集合仍是
+`not_available`。`cluster_supports_track` 的 raw rows 可能重复，canonical 关系按唯一 `(from,to)` pair 计数。
+`perception-timeline.v1` 的 `public_uid_recurrences` 仅记录 source-proven 同 capture、同 radar、相邻
+ObjectList callback 的 UID 重现，并标为 `derived`；它不证明物理目标身份或内部 tracker 生命周期，缺帧后
+重现不自动连接。
+
+`sim-verify` 的 `strategy=point_cloud` 仅允许消费 `status=ready` 的
+`point-cloud-replay-plan.v1`；远端执行仍需独立 execution binding/approval。现有 local
+warning-trace provider 不会被误当作点云感知 provider，点云 local 调用明确返回
+`blocked`，远端公共 capture 的成功也只证明回放/采集成功，不能单独证明 stage trace。
+执行前会重新检查当前 runtime processes 与 plan workspace 的 alignment；即使旧 plan 是
+`ready`，workspace 漂移、source/config 内容哈希冲突或 host/port 不匹配也会在 provider
+调用前 `blocked`。Pi 的 `_select_pi_tools()` 在普通交互会话保留有界 point-cloud starter，
+并将目标未检出/消失/跟踪丢失等业务症状路由到点云能力，不要求用户输入实现关键词；batch
+能力仍由批量意图加载。
+point-cloud 公共回放成功并拉取本地 capture JSON 后，`sim-verify` 的 `analysis_handoff.analysis_inputs`
+包含 capture path、source context、point-cloud plan、执行时重新验证的 execution binding 和
+`perception-run.v1` sidecar path。`point-cloud-analyze` 可直接消费 inline handoff 或 handoff path，
+无需用户重新拼接这些 artifact；run 的 `plan_hash` 必须匹配计划。该链路仅提高工具间 handoff
+完整度，缺 producer reset/warm-up/completion ACK 时分析仍为 `partial`，不升级为闭环结论。
 
 ---
 
@@ -755,8 +869,15 @@ session 输出路径，fallback 会生成不同的 isolated 输出路径，不�
 文件：`ai/modules/pi_context.py`；确定性实现：`engines/pi_context.py`。
 
 `PiContextModule(name="pi-context")` 把显式的 `intake`、`preflight`、数据目录、
-variant/project、replay/radar、freshness 和 policy 组装为
+variant/project、replay/radar、freshness、policy 和可选 `code-context.v1` 组装为
 `pi-orchestration-context.v1`。它不是 LLM 摘要器，也不从路径名称猜测身份。
+
+`task_scope=case_analysis` 是默认值，案件诊断仍要求 intake/case/bundle 提供数据绑定；
+缺失时保持 `blocked`。显式或由 Pi 保守识别的 `task_scope=source_code` 支持静态代码查询：
+录制数据标为 `data.status=not_required`，source context 必须来自有效的
+`code-context.v1`，项目/variant/snapshot hash 保留 provenance。source snapshot 缺失、
+无效或与其它显式 source identity 冲突时仍 fail-closed。未定位到当前 code-context artifact 时
+PiModule 会在调用模型前停止，禁止回退到未绑定的默认 CodeGraph。
 
 公开输入：
 
@@ -764,6 +885,8 @@ variant/project、replay/radar、freshness 和 policy 组装为
 |---|---|
 | `intake` / `intake_path` | `cr60-analysis-intake.v1` 内联对象或 JSON artifact |
 | `preflight` / `preflight_path` | `arbe-preflight.v1` 内联对象或 JSON artifact |
+| `task_scope` | `case_analysis`（默认）或 `source_code`；后者仅免除案件数据，不免除 source identity/provenance |
+| `code_context` / `code_context_path` | `code-context.v1` 静态 source identity/snapshot；用于 source-only 查询 |
 | `case_dir` | 没有 intake 时的数据目录指针 |
 | `project_id` / `variant_id` | 只有显式提供才写入身份 |
 | `replay_strategy` / `radar_id` | 运行策略/雷达选择，来源标记为 explicit |
@@ -773,9 +896,10 @@ variant/project、replay/radar、freshness 和 policy 组装为
 | `capability_manifest` / `capability_manifest_path` | 当前 Gen6 capability categories、unsupported、freshness 和 fingerprint；只嵌入有界摘要 |
 | `output` | 可选的 context JSON 输出路径 |
 
-输出至少包含 `schema_version/status/run_id/context_fingerprint/project/data/source/build/runtime/policy/`
+输出包含 `task_scope`，并至少包含 `schema_version/status/run_id/context_fingerprint/project/data/source/build/runtime/policy/`
 `artifacts/freshness/missing/conflicts/diagnostics`。source 或身份不完整时输出
-`partial`，缺少 case、artifact 无法读取或 intake 已 blocked 时输出 `blocked`；
+`partial`；case-analysis 缺少 case、artifact 无法读取或 intake 已 blocked 时输出 `blocked`；
+source-code scope 不要求录制数据，但 source context 不完整时仍为 `partial` 或 `blocked`；
 不以默认值替代缺口。
 
 当没有 `intake`/`case_dir` 时，若调用方提供了 `diagnosis_bundle.v1`，模块可以从
@@ -814,7 +938,10 @@ source-consistency 放入 unsupported；这比把冲突留给下游更安全。
 文件：`ai/modules/code_context.py`；确定性实现：`engines/code_context.py`。
 
 `code-context-refresh` 接受显式 `source_root`，用内容 SHA-256 形成当前源码快照，复用
-`CodeGraphBuilder`，产出 `code-context.v1`、`code-index.v1` 和隔离的 CodeGraph DB。
+`CodeGraphBuilder`，产出 `code-context.v1`、`code-index.v1` 和隔离的 CodeGraph DB。可选
+`--output-mapping-rte-file` 接受 source-root 内的 RTE mapping 路径；否则可由
+`source_identity.coem` 选择 `coem/<COEM>/.../RteComMapping_Tx.c` 或 COEM-only root 内对应路径。
+被选中目录中的 `RteComMapping_Tx*.c` 都纳入 snapshot；已知 COEM 但未找到路径时输出 unavailable，
 同一 source/identity 且 hash 未变化时直接复用；不允许把已绑定另一 source root 或项目身份
 的输出目录覆盖。`--no-git-probe` 适用于由远程 source mirror 提供 git identity 的场景。
 `code-context-read` 只从 index 读取有界 section，不重新扫源代码。
@@ -831,14 +958,21 @@ source-consistency 放入 unsupported；这比把冲突留给下游更安全。
 
 文件：`ai/modules/public_runtime.py`；确定性实现：`engines/arbe/public_runtime.py`。
 
-输入是 collector 采集的 warning/radar_info/objectlist 行或 capture JSON，输出
+输入是 collector 采集的 warning/radar_info/objectlist 行、capture JSON 或
+`ros-topic-inventory.v1` artifact，输出
 `runtime-snapshot-with-frame.v1`，并可按外部 source-derived warning mapping 计算 0→非零
 上升沿。默认 strict：只有消息自带 frame 或明确 callback 才关联对象；当前 arbe `wfObjectMsg` 只有
 publish timestamp 时，行进入 `unbound_objects`。若当前 source 已证明同周期发布顺序且 capture
 保存消息序号，调用方可显式选择 `publication_order`，对象标记为 derived `publication_correlated`。
 Pi/SimVerify 的 `auto` 模式会读取 `arbe-preflight.v1.public_evidence.objectlist_frame_contract`，
 只有 `status=source_verified` 才自动选择该模式，否则退回 strict；不按时间戳猜同帧。
-当前远程公共 capture 由既有 `sim-verify` 调度；该模块本身不订阅 ROS、不播放 bag。
+当 capture 是 ROS inventory 时，adapter 核验 inventory/sample hash、时间和截断标志，可按可选
+`public-topic-plan.v1` 绑定 channel role（仅当计划记录的 preflight server/workspace 与本次 preflight 一致），
+并且只在当前消息 schema 完整且唯一声明一个对象数组字段时
+展开 ObjectList 行。采样分 topic 顺序执行，metadata 标出 `cross_topic_frame_association=not_asserted`；
+没有共同 `message_seq` 时，即使 preflight 证明 publication order，对象仍为 `unbound`。
+快照记录 `capture_metadata.identity_binding=not_bound`，在挂接进 runtime evidence 前仍需绑定 AnalysisRun/data/source/binary/config/session。
+当前远程公共 capture 由既有 `sim-verify` 调度；normalize 模块本身不订阅 ROS、不播放 bag。
 对当前 arbe 的 `wfSObj`，调用方可按 source 证据选择 `object_validity_policy=arbe_wf_sobj`，
 将 GUI 明确跳过的 `ID<0` 占位行放入 `ignored_objects`；默认 preserve，不静默删除原始行。
 
@@ -854,6 +988,18 @@ Pi/SimVerify 的 `auto` 模式会读取 `arbe-preflight.v1.public_evidence.objec
 字段；需要完整冻结事件时才传 `include_details=true`。`diagnosis-report` 默认写出完整 JSON/
 Markdown/HTML，但通过 `response_mode=summary` 给 Pi 返回小摘要和 `details_ref`，避免报告正文
 再次进入模型上下文。
+
+`evidence-query` 也可仅以 `runtime_snapshot_path` 读取已生成的
+`runtime-snapshot-with-frame.v1`；字段 token 必须存在于该 topic 当前 message-definition 的
+`object_field_catalog`，否则返回 `not_available`。没有精确 frame 的 ObjectList 可按 radar 做 bounded
+属性查询，但行保持 `association_status=unbound` 和 `event_association_status=not_available`；提供
+`frame_id` 时这类行被排除并报告 gap，不按时间或事件身份猜测。snapshot 的 `identity_binding=not_bound`
+使结果保持 `partial`，不能替代 AnalysisRun/runtime-evidence identity validation。
+
+`diagnosis-report` 可额外接收 `runtime_snapshot_path`，复用相同 bounded snapshot projection，把 unbound
+ObjectList 行放入独立 `runtime_snapshot_rows`/evidence layer，overview 标记 snapshot status/count，
+不把它们塞进 selected event、alert timeline 或 condition trace；`identity_binding=not_bound` 和 event
+association gap 原样保留。仍要求 bundle/viewer 作为事件上下文，不能仅用 snapshot 生成已绑定诊断结论。
 
 `diagnosis-report` 的 `output_endpoint`/`can_data_status` 是跨功能的业务口径输入：默认
 `auto`/`algorithm` 以 arbe 可视化工具报警灯对应的算法输出作为端点；只有用户明确要求
@@ -891,10 +1037,77 @@ source/code-context 和 runtime token 提供对应分支。
 `PiModule.discover_case_artifacts()` 会优先读取 case 目录内的 artifact；当 sibling harness 按
 `batch-index.json` 将 `cases/<case_id>` 与 `data/<case_id>` 分开输出时，按 manifest 的显式
 `case_id`/`data_id` 解析 viewer-model、viewer report、runtime schema 和 bundle companion，
-并把它们作为 artifact refs 提供给 Pi，不从文件名猜车型或功能。`_select_pi_tools()` 只按
+并把它们作为 artifact refs 提供给 Pi，不从文件名猜车型或功能。候选清单包含 intake
+artifact（`cr60-analysis-intake.json` 等）。`_select_pi_tools()` 只按
 用户意图选择当前 live catalog 中的有限工具 allowlist，解决某些 provider 面对全量 catalog
 不稳定选工具的问题；它不改变 Pi 的规划权，也不绑定 FCTA/FCTB。用户可通过 `tools` 显式
 覆盖 allowlist。
+
+### T10 身份绑定门（case_analysis pre-model gate）
+
+存在数据/材料输入（`case_dir`/`--material`/`--intake`）且 scope 为 `case_analysis` 时，
+`PiModule._resolve_case_identity_binding()` 在构造 bridge、调用模型前运行：消费显式或
+发现的 `cr60-analysis-intake.v1`（无 intake 时可用 `--material`+`--match-text` 经
+in-process `cr60-intake` 现场解析材料），叠加 case 元数据 variant 匹配（复用
+`cli._resolve_variant_from_case_metadata`，多命中转为业务确认项），调用
+`engines.arbe.intake_binding.bind_intake_identity` 产出 `cr60-intake-binding.v1`。
+`status=resolved` 时把 `variant_id` 注入 kwargs 供 context builder 与 run 绑定使用；
+`needs_confirmation/blocked` 时**在调用模型前**返回 `ModuleResult.fail`，携带
+`business_questions`（业务语言、`blocking` 标记）、`version_gate`、`intake_ref` 与
+`next_action`，AnalysisRun 保留 partial 供回答后恢复。batch 模式与 `source_code`
+scope 不经过该门（batch 逐行 intake 属后续切片；source_code 无数据需求）。绑定结果
+以 `intake_handoff_id`/`intake_binding_status` 写入 run binding，intake artifact 以
+`kind=intake` 记入 artifact refs；ledger 冲突门保证恢复时不串用其他项目身份。
+纯对话（无 case_dir/material/intake）不触发绑定，不改变既有无数据对话行为。
+
+无 case/batch 且意图仅为查源码时，`PiModule` 使用 `task_scope=source_code`：
+没有显式 `code_context_path` 时，按 `config.load_config()` 的有效 variant 自动调用
+`CodeContextRefreshModule`，从配置的 source root/key source files 建立或复用
+`.workspaces/<variant>/memory/snapshots/code_context_current`；写入不触碰其他 variant 的
+CodeGraph/缓存。`PiRunContext` 必须同时核验 `code-context.v1` 与 companion `code-index.v1`
+的 schema、source root、snapshot hash，并核对 `code-context.v1.artifacts.code_index_sha256`，
+记录 context/index 两个 artifact 的路径与文件 SHA-256。被改动的 index 会触发 refresh rebuild，
+不能从同目录直接复用。PiBridge 仅将这份 context/index 的路径/hash、source root/snapshot 和
+project/variant identity 放入该次子进程环境；
+`pi_tool_bridge` 在调用 `code-analyze` / `code-gdb-plan` 时复核 hash/identity、自动注入 index path，
+并拒绝 inline index、冲突路径或 `db_path` 覆盖；调用 `code-context-read` / `event-code-path` 时
+自动注入并核验绑定 context，event path 保留 context 中的 variant/source provenance。
+source_code 的 Pi tool bridge 会拒绝这些静态代码工具的 `output` 写文件参数；需导出文件时改用明确的独立 CLI/output 流程。
+code-analyze/event-code-path/code-gdb-plan 的 Pi input_schema 不声明文件型 output 参数；
+通用 Pi extension generator 原样序列化这些安全 schema，源码只读工具以内联方式返回结构化结果。
+source_code bridge 仍拒绝手工注入 output 路径；各 module 原有 CLI 参数不变。
+无 case 的源码查询会在构造 bridge 前创建本地 AnalysisRun，并把 task_scope=source_code 写入 goal；
+自动生成当前 code context 后，再将 project/variant/source snapshot/code-index hash 绑定到同一 run。
+默认 Pi session ID 为 pi-<AnalysisRun ID>，与 ledger run_id 分离且可稳定恢复；显式 session_id 优先。
+源码 refresh/reuse 会把 `code_index_refresh_attempt_count` 和对应的 build/cache-hit/failure/unknown
+计数及有效耗时增量写入同一 AnalysisRun。`code-analyze` tool step 记录 backend、结果 limit/total/returned/
+truncated；run 汇总区分 source index query success/failure、返回与总行数、legacy CodeGraph query 和
+unclassified backend。指标写入失败只记日志，不阻断 Pi 查询。
+event step 解析 top-level、result 和 result.details 中的工具状态；最终 ModuleResult 的 analysis_run_status
+取 ledger finalize 后的状态，而不是调用前缓存的 running 值。
+PiBridge 另外将 active AnalysisRun ID 与 ledger root 绑定到 child process；analysis-run-read/update、
+analysis-step-record、analysis-claim-append、analysis-hypothesis-record、debug-experiment-record 和
+analysis-user-observation 由 pi_tool_bridge 自动注入这两个字段，显式跨 run/path 参数会 fail-closed。
+没有绑定 run 时 ledger tools 返回缺口；run_id/ledger_root 的 Pi schema 可省略，但各独立 CLI 仍要求 run_id。
+意图选择覆盖下游/上游/直接调用目标和函数等业务表述；code-analyze kind 的 caller/callee 方向及 name 字段
+在 schema 和源码 prompt 中明确。source_code scope 只传递只读源码 allowlist；空 allowlist 通过 Pi 的 no-tools 开关 fail-closed。
+录制数据标为 `not_required`；不把缺少 bag 当成代码查询阻塞。
+显式 `code_context_path` 仍按提供 artifact 校验。该 scope 使用短的源码专用
+system prompt 和绑定的紧凑 PiRunContext；关闭 AGENTS/CLAUDE、skills 和其它 extension 的自动发现，
+只显式加载生成的 radar capability extension，并继续要求所有结论来自注册工具；
+输出是静态 source candidate，不能声称 compile/runtime/GDB/CAN hit。其它 diagnosis/runtime
+问题仍使用全量 PiRunContext 和项目指令文件。
+
+`cli.py pi` 支持 `--task-scope`、`--thinking` 和显式 `--tools` allowlist；
+留空 thinking 时沿用用户 Pi 配置。PiBridge 对本地生成 capability extension 使用本次
+`--approve`，保持 `--no-builtin-tools`，不打开 shell。
+PiBridge 返回的 event_summary 只包括模型/provider、stop reason、token usage、工具状态和
+artifact refs，不保存原始 RPC 流或 thinking。`source_code` scope 必须至少有一个绑定静态代码
+tool execution 返回 `status=ok`，否则丢弃最终文本、写入 `source_code_tool_evidence_missing`，并把
+AnalysisRun 标为 partial；不能把模型记忆或答案当成当前源码证据。PiModule 不能把 agent_settled 且 answer 为空
+直接算作成功：有成功 source_code call_chain 结果时只投影工具原文路径/bounds/hash，
+标记 answer_mode=tool_result_projection 和 ai_final_synthesis_status=not_available；
+其它空答复返回 empty_final_answer，并保留已完成的工具产物。
 
 `analysis-run-update` 还可在恢复时增量写入 `binding` 和 `artifact_refs`；已存在的 source/data/
 binary 字段发生冲突会返回 `conflict`，Pi 不应忽略该结果继续生成代码或 runtime 结论。

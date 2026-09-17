@@ -50,7 +50,7 @@
 | `UInt8MultiArray` | `warning_bytes`, `radar_id`, `BSD_L`...`FCTB_R`, `any_warning_active` (需 ≥16 字节) |
 | `egoCarInfo` | Header + `_EGO_FIELDS` + `trc_0..3_*` (每组 9 字段) |
 | `wfObjectMsg` | Header + objects 数组 (ID, obj_class, distX/Y, velAbsX/Y, fTTC, 8 个 warningFlag) |
-| `wfAutosarData` | Header + `outputData` → objects (36B struct) + debug (144B 尾部) |
+| `wfAutosarData` | Header + `outputData` → objects (36B struct) + debug (144B 尾部)；同时按显式 layout profile 产出 `point_rows` (`PERInfoOutStruct.dotTrans`)、`output_rows` 和 `message_schema.layout_profile`，未绑定 active source 时保留 layout warning |
 
 ### 模块级常量
 

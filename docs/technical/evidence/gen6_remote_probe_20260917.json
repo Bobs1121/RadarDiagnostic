@@ -1,0 +1,42 @@
+{
+  "schema_version": "gen6-remote-probe.v1",
+  "date": "2026-09-17",
+  "task_context": "T10 前环境事实核验（用户报告服务器'似乎有点问题'）",
+  "authorization": "read-only network probes only; no SSH login, no remote execution, no state change",
+  "target": {
+    "historical_host": "10.190.171.44",
+    "historical_user": "hoz2wx",
+    "role": "arbe 可视化工具运行的 Linux 服务器；真实案例数据存放处"
+  },
+  "probes": [
+    {
+      "probe": "TCP connect 10.190.171.44:22",
+      "method": "TcpClient ConnectAsync 5000ms timeout",
+      "result": "not reachable (timeout/refused after 5000ms)"
+    },
+    {
+      "probe": "ICMP ping 10.190.171.44 x2 (3000ms)",
+      "result": "Reply from 10.190.167.85: Destination host unreachable (x2)",
+      "interpretation": "unreachable 消息由本机网络栈自己发出（10.190.167.85 即本机），表示本机路径上无路由/ARP 解析到目标，而非目标主机主动拒绝"
+    },
+    {
+      "probe": "ICMP ping 10.190.167.85 (self check)",
+      "result": "reply <1ms TTL=128; 本机内网栈正常",
+      "local_network": {
+        "local_ip_10_subnet": "10.190.167.85",
+        "gateway": "10.190.160.1",
+        "other_interfaces": ["172.23.48.1", "172.23.64.1"]
+      }
+    }
+  ],
+  "conclusion": "10.190.171.44 当前从本机网络层面不可达（无路由/ARP 解析），TCP 22 不可连。与 GEN6_AI_CURRENT_STATE.md 记录的 2026-09-15 preflight remote_probe_timed_out 一致；本轮未做 SSH 登录与任何远端操作。",
+  "impact": {
+    "T10_real_data": "真实 bag 数据在服务器上，当前不可达 → T10 的 real-data/integration 真实验证部分 blocked，待网络/服务器恢复后补做",
+    "T10_local": "不依赖服务器：intake/绑定入口的本地实现与 fixture 验证可继续（T12 同理）",
+    "T31_env": "远端环境类任务全部依赖恢复后的连通性与当时授权"
+  },
+  "open_questions_for_user": [
+    "服务器是临时不可达（会恢复）还是 IP/主机已变更？若变更需提供新地址/用户名",
+    "恢复后是否授权只读 SSH 探测（preflight 级）以确认 workspace/数据现状"
+  ]
+}

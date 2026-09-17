@@ -29,12 +29,18 @@
 
 ## knowledge_guard.py
 
-- `KnowledgeFreshnessGuard.decision(category)` 在 variant 模式 fail closed；freshness 缺失、不可用或签名不匹配时禁止读取
+- `KnowledgeFreshnessGuard.decision(category)` 在 variant 模式 fail closed；freshness 缺失、不可用、manifest 缺失、scope 未发布或签名不匹配时禁止读取
 - `runtime_knowledge_decision()` 仅为无 variant 身份的 legacy 模式保留兼容放行
 - scope 支持 `conditions:RCTA` / `source_docs:RCTA` / `code_knowledge:RCTA`，同一项目不同功能独立更新
 - `publish_knowledge_categories()` 原子写入 variant memory 下的 `knowledge_manifest.json`；只调用成功的能力模块可以发布
 - manifest 记录当前输入签名而非复制知识内容；commit/hash、DBC、需求或 identity 变化会自动使命中失效
 - Dream 发布前比较每个 scope 刷新前后的输入签名；运行期间输入发生变化的 scope 不发布
+
+## diagnosis_bundle.py 结论发布门
+
+- 静态 evidence chain 与 `code_localization` 只能升级为 `candidate_root_causes`。
+- `confirmed_root_cause` 必须携带 `metadata.confirmation_gate`，其中 `identity_verified=true`、非空 `evidence_refs`，并至少有 `runtime_verified`、`replay_verified` 或 `user_confirmed` 之一。
+- 无参数的旧 `upgrade_to_confirmed()` 调用保持安全 no-op；模型输出的源码路径不能单独发布 confirmed。
 
 ## workspace.py 关键 API
 

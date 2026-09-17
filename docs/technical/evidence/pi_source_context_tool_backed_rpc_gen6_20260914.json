@@ -1,0 +1,157 @@
+{
+  "schema_version": "pi-source-context-tool-backed-rpc.v1",
+  "generated_at": "2026-09-14T15:49:16.871846+00:00",
+  "implementation_stage": "before_source_tool_evidence_gate; subsequent no-tool turns are now suppressed",
+  "result_validity": "verified_bound_tool_result",
+  "execution": {
+    "entry": "PiModule.run -> PiBridge (--mode rpc) -> generated registerTool -> ai.capability.pi_tool_bridge",
+    "ok": true,
+    "message": "pi: agent_settled",
+    "question": "请查询 PostProcessMainTI 的 depth=1 调用链，最多返回 3 条。只报告当前源码静态结果。",
+    "provider": "ollama",
+    "model": "qwen3.5:9b",
+    "thinking": "off",
+    "context_status": "ready",
+    "tool_calls": [
+      {
+        "name": "code-analyze",
+        "event_type": "tool_execution_end",
+        "status": "ok"
+      }
+    ],
+    "tool_result": {
+      "backend": "source_code_index",
+      "kind": "call_chain",
+      "name": "PostProcessMainTI",
+      "max_depth": 1,
+      "result_bounds": {
+        "limit": 3,
+        "total_count": 5,
+        "returned_count": 3,
+        "truncated": true
+      },
+      "source_context": {
+        "source_root": "D:\\\\BYD-SC6H-cr60light\\\\cr60_light",
+        "snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023"
+      },
+      "rows": [
+        {
+          "caller": "PostProcessMainTI",
+          "callee": "DataProcInit",
+          "depth": 1,
+          "path": "PostProcessMainTI -> DataProcInit"
+        },
+        {
+          "caller": "PostProcessMainTI",
+          "callee": "ObjTrack",
+          "depth": 1,
+          "path": "PostProcessMainTI -> ObjTrack"
+        },
+        {
+          "caller": "PostProcessMainTI",
+          "callee": "OutputTrkObj",
+          "depth": 1,
+          "path": "PostProcessMainTI -> OutputTrkObj"
+        }
+      ]
+    },
+    "assistant_final_text": "## PostProcessMainTI depth=1 调用链（静态源码查询）\n\n| 层级 | 被调用函数 (Caller → Callee) | 路径 |\n|------|-------------------------------|------|\n| Depth 1 | PostProcessMainTI → **DataProcInit** | PostProcessMainTI -> DataProcInit |\n| Depth 1 | PostProcessMainTI → **ObjTrack** | PostProcessMainTI -> ObjTrack |\n| Depth 1 | PostProcessMainTI → **OutputTrkObj** | PostProcessMainTI -> OutputTrkObj |\n\n---\n\n### 查询统计\n- **限制**: 3 条结果  \n- **实际匹配**: 5 条调用链（已截断）  \n- **返回**: 前 3 条  \n- **状态**: \truncated: true  \n- **源码快照**: 0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023\n\n---\n\n**注**: 以上结果均为**静态候选调用关系**，未进行运行时/构建/GDB/CAN 等推断。",
+    "pi_event_summary": {
+      "assistant_messages": [
+        {
+          "provider": "ollama",
+          "model": "qwen3.5:9b",
+          "api": "openai-completions",
+          "stop_reason": "toolUse",
+          "raw_stop_reason": "tool_calls",
+          "usage": {
+            "input": 1297,
+            "output": 167,
+            "cacheRead": 270,
+            "cacheWrite": 0,
+            "totalTokens": 1734
+          },
+          "content_types": [
+            "toolCall"
+          ]
+        },
+        {
+          "provider": "ollama",
+          "model": "qwen3.5:9b",
+          "api": "openai-completions",
+          "stop_reason": "stop",
+          "raw_stop_reason": "stop",
+          "usage": {
+            "input": 269,
+            "output": 340,
+            "cacheRead": 1733,
+            "cacheWrite": 0,
+            "totalTokens": 2342
+          },
+          "content_types": [
+            "text"
+          ]
+        }
+      ],
+      "tool_calls": [
+        {
+          "id": "call_p38gs3ve",
+          "name": "code-analyze"
+        }
+      ],
+      "tool_events": [
+        {
+          "event_type": "tool_execution_start",
+          "name": "code-analyze",
+          "tool_call_id": "call_p38gs3ve",
+          "status": ""
+        },
+        {
+          "event_type": "tool_execution_end",
+          "name": "code-analyze",
+          "tool_call_id": "call_p38gs3ve",
+          "status": "ok"
+        }
+      ],
+      "extension_error_count": 0,
+      "provider": "ollama",
+      "model": "qwen3.5:9b",
+      "thinking_level": "off",
+      "enabled_tools": [
+        "code-analyze"
+      ],
+      "tool_allowlist_mode": "explicit",
+      "load_context_files": false,
+      "discover_extensions": false,
+      "load_skills": false,
+      "extension_enabled": true,
+      "system_prompt_chars": 378,
+      "replace_system_prompt": true,
+      "user_prompt_chars": 57,
+      "context_prompt_chars": 514
+    }
+  },
+  "identity": {
+    "project_id": "BYD_SC6H",
+    "variant_id": "gen6/byd_sc6h",
+    "source_root": "D:\\\\BYD-SC6H-cr60light\\\\cr60_light",
+    "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023"
+  },
+  "artifacts": {
+    "code_context": {
+      "path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\code_context_current\\code-context.json",
+      "sha256": "3d485d7e3f6c300fdc80d61a20e9a7408362e4fdb6d491860ceab8fa2b899901"
+    },
+    "code_index": {
+      "path": "D:\\RamboStar\\idea\\radarAnalyze\\.workspaces\\gen6_byd_sc6h\\memory\\snapshots\\code_context_current\\code-index.json",
+      "sha256": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2",
+      "schema_version": "code-index.v1",
+      "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023"
+    }
+  },
+  "limits": [
+    "This is a local model/tool static source lookup only.",
+    "No case data, selected-frame, runtime, build, GDB, CAN, or perception-stage evidence.",
+    "No raw event stream or model reasoning is stored."
+  ]
+}

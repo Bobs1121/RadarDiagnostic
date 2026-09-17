@@ -1,0 +1,1267 @@
+{
+  "schema_version": "release-acceptance.v1",
+  "release_id": "radarAnalyze-local-internal-mvp",
+  "baseline_version": "ddd-requirements.v2.3",
+  "scope": "算法工程师本地/内网：数据分析、仿真验证、证据报告",
+  "entries": [
+    {
+      "id": "M0-AC-001",
+      "phase": "M0",
+      "title": "需求、设计、实现、验收具有唯一机器可读入口",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M0"
+      ],
+      "evidence": [
+        {
+          "path": "docs/archive/2026-09-17/technical/CR60_PI_DDD_REQUIREMENTS_AND_ACCEPTANCE.md"
+        },
+        {
+          "path": "docs/archive/2026-09-17/technical/RADAR_ANALYZE_DELIVERY_REVIEW_2026-09-09.md"
+        }
+      ]
+    },
+    {
+      "id": "M1-AC-001",
+      "phase": "M1",
+      "title": "variant 知识没有 manifest 或签名时 fail-closed",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M1"
+      ],
+      "evidence": [
+        {
+          "path": "core/knowledge_guard.py"
+        }
+      ]
+    },
+    {
+      "id": "M1-AC-002",
+      "phase": "M1",
+      "title": "静态证据和源码路径不能单独发布 confirmed root cause",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M1"
+      ],
+      "evidence": [
+        {
+          "path": "core/diagnosis_bundle.py"
+        }
+      ]
+    },
+    {
+      "id": "M2-AC-001",
+      "phase": "M2",
+      "title": "仿真执行计划绑定 data/source/binary/config/session identity",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M2"
+      ],
+      "evidence": [
+        {
+          "path": "engines/arbe/execution_binding.py"
+        },
+        {
+          "path": "ai/modules/execution_binding.py"
+        },
+        {
+          "path": "engines/arbe/remote_replay.py"
+        }
+      ]
+    },
+    {
+      "id": "M2-AC-002",
+      "phase": "M2",
+      "title": "调查账本能保存阶段产物并保留失败状态",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M2"
+      ],
+      "evidence": [
+        {
+          "path": "engines/analysis_ledger.py"
+        },
+        {
+          "path": "tools/release_smoke.py"
+        }
+      ]
+    },
+    {
+      "id": "M3-AC-001",
+      "phase": "M3",
+      "title": "本机依赖、入口和能力目录可以体检",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M3"
+      ],
+      "evidence": [
+        {
+          "path": "tools/doctor.py"
+        },
+        {
+          "path": "requirements.lock"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-001",
+      "phase": "M4",
+      "title": "variant 隔离与能力适配保持可回归",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M4"
+      ],
+      "evidence": [
+        {
+          "path": "core/workspace.py"
+        },
+        {
+          "path": "docs/technical/evidence/reco_fw_variant_context_isolation_20260915.json"
+        },
+        {
+          "path": ".workspaces/gen6_reco_fw/memory/snapshots/code_context_current/code-context.json"
+        },
+        {
+          "path": ".workspaces/gen6_reco_fw/memory/snapshots/code_context_current/code-index.json"
+        },
+        {
+          "path": ".workspaces/gen6_reco_fw/memory/project-capability-manifest.v1.json"
+        },
+        {
+          "path": "docs/technical/evidence/prewarm_timing_gen6_reco_fw_variant_bound_20260915.json"
+        },
+        {
+          "path": ".workspaces/gen6_reco_fw/experiments/prewarm_timing_20260915.json"
+        },
+        {
+          "path": ".workspaces/gen6_reco_fw/experiments/source_docs_preprwm_20260915/variable_chains.meta.json"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-002",
+      "phase": "M4",
+      "title": "当前 ROS message definition 和有界样本可生成可查询的 provenance-bound ObjectList snapshot",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_ros_inventory.py",
+        "tests/test_public_runtime.py",
+        "tests/test_public_evidence.py",
+        "tests/test_evidence_query_runtime_join.py",
+        "tests/test_pi_tool_bridge.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/arbe/ros_inventory.py"
+        },
+        {
+          "path": "engines/arbe/__init__.py"
+        },
+        {
+          "path": "engines/arbe/public_runtime.py"
+        },
+        {
+          "path": "engines/arbe/public_evidence.py"
+        },
+        {
+          "path": "ai/modules/public_topic_plan.py"
+        },
+        {
+          "path": "ai/modules/ros_topic_inventory.py"
+        },
+        {
+          "path": "ai/modules/public_runtime.py"
+        },
+        {
+          "path": "engines/evidence_query.py"
+        },
+        {
+          "path": "ai/modules/evidence_query.py"
+        },
+        {
+          "path": "engines/diagnostic_report.py"
+        },
+        {
+          "path": "ai/modules/diagnostic_report.py"
+        },
+        {
+          "path": "tests/test_diagnostic_report_identity.py"
+        },
+        {
+          "path": "ai/modules/pi.py"
+        },
+        {
+          "path": "ai/pi_bridge.py"
+        },
+        {
+          "path": ".pi/extensions/radar-capabilities.ts"
+        },
+        {
+          "path": "contracts/ros-topic-inventory.v1.schema.json"
+        },
+        {
+          "path": "contracts/runtime-snapshot-with-frame.v1.schema.json"
+        },
+        {
+          "path": "contracts/public-topic-plan.v1.schema.json"
+        },
+        {
+          "path": "contracts/evidence-query.v1.schema.json"
+        },
+        {
+          "path": "tests/test_ros_inventory.py"
+        },
+        {
+          "path": "tests/test_public_runtime.py"
+        },
+        {
+          "path": "tests/test_public_evidence.py"
+        },
+        {
+          "path": "tests/test_evidence_query_runtime_join.py"
+        },
+        {
+          "path": "tests/test_pi_tool_bridge.py"
+        },
+        {
+          "path": "engines/AGENTS.md"
+        },
+        {
+          "path": "ai/modules/AGENTS.md"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-003",
+      "phase": "M4",
+      "title": "User feedback remains provenance-bound and separate from runtime evidence",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_analysis_ledger.py::test_user_feedback_kinds_are_provenance_bound_and_not_knowledge_or_runtime",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/analysis_ledger.py"
+        },
+        {
+          "path": "ai/modules/analysis_collaboration.py"
+        },
+        {
+          "path": "contracts/user-observation.v1.schema.json"
+        },
+        {
+          "path": "tests/test_analysis_ledger.py"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-004",
+      "phase": "M4",
+      "title": "User feedback review is binding-aware and does not publish knowledge implicitly",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_feedback_review.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/feedback_review.py"
+        },
+        {
+          "path": "ai/modules/feedback_review.py"
+        },
+        {
+          "path": "contracts/feedback-review.v1.schema.json"
+        },
+        {
+          "path": "tests/test_feedback_review.py"
+        },
+        {
+          "path": "engines/analysis_ledger.py"
+        },
+        {
+          "path": "contracts/user-observation.v1.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-005",
+      "phase": "M4",
+      "title": "Feedback-driven knowledge publication is explicit, binding-aware and write-free at planning stage",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_feedback_review.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/feedback_review.py"
+        },
+        {
+          "path": "ai/modules/feedback_knowledge_plan.py"
+        },
+        {
+          "path": "contracts/feedback-knowledge-plan.v1.schema.json"
+        },
+        {
+          "path": "tests/test_feedback_review.py"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-006",
+      "phase": "M4",
+      "title": "Approved feedback knowledge publication is variant-scoped and explicit",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_feedback_review.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/feedback_review.py"
+        },
+        {
+          "path": "ai/modules/feedback_knowledge_publish.py"
+        },
+        {
+          "path": "contracts/feedback-knowledge-publication.v1.schema.json"
+        },
+        {
+          "path": "tests/test_feedback_review.py"
+        },
+        {
+          "path": "core/diagnosis_bundle.py"
+        }
+      ]
+    },
+    {
+      "id": "M4-AC-007",
+      "phase": "M4",
+      "title": "AnalysisRun Workbench is a read-only projection of ledger, feedback and hypotheses",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_analysis_workbench.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/analysis_workbench.py"
+        },
+        {
+          "path": "ai/modules/analysis_workbench.py"
+        },
+        {
+          "path": "contracts/analysis-workbench.v1.schema.json"
+        },
+        {
+          "path": "tests/test_analysis_workbench.py"
+        },
+        {
+          "path": "engines/analysis_ledger.py"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-01",
+      "phase": "M4",
+      "title": "点云输入/阶段/lineage/run/comparison/scene/timeline 契约和报告投影可回归",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_point_cloud_perception.py",
+        "tests/test_lgu_output_decoder.py",
+        "tests/test_diagnostic_report_identity.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "ai/modules/point_cloud.py"
+        },
+        {
+          "path": "ai/modules/point_cloud_plan.py"
+        },
+        {
+          "path": "ai/modules/point_cloud_batch.py"
+        },
+        {
+          "path": "ai/modules/point_cloud_validate.py"
+        },
+        {
+          "path": "contracts/perception-report.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-input-audit.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-input-contract.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-scene.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-timeline.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-warmup-analysis.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-injection-audit.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-hypothesis-set.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-capability-manifest.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-artifact-audit.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-validation.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-code-flow.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-run.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-comparison.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-batch-index.v1.schema.json"
+        },
+        {
+          "path": "outputs/point_cloud_plan_current_20260910.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_current_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_plan_current_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_topic_scan_20260911.json"
+        },
+        {
+          "path": "outputs/lgu_point_capture_current_20260911.json"
+        },
+        {
+          "path": "tools/decode_lgu_output.py"
+        },
+        {
+          "path": "tests/test_lgu_output_decoder.py"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_current_20260911/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_current_20260911/perception-report.html"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_current_20260911/perception-points.jsonl"
+        },
+        {
+          "path": "outputs/point_cloud_plan_decoded_current_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_execution_binding_current_20260911.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_runtime_workspace_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_plan_runtime_workspace_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_execution_binding_runtime_workspace_20260911.json"
+        },
+        {
+          "path": "outputs/ros_inventory_point_cloud_runtime_20260911.json"
+        },
+        {
+          "path": "outputs/ros_inventory_point_cloud_stages_runtime_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v15.json"
+        },
+        {
+          "path": "docs/archive/2026-09-17/technical/POINT_CLOUD_PERCEPTION_DDD_PROPOSAL_2026-09-10.md"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-02",
+      "phase": "M4",
+      "title": "Target-only or GUI-downsampled data remains bounded to static/ADAS analysis with the unsupported full-perception path explicit",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_target_only_static_report_20260913/perception-report.json"
+        },
+        {
+          "path": "outputs/target_only_static_browser_verification_20260913.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-03",
+      "phase": "M4",
+      "title": "Approved version-bound replay proves HILMODEL build identity, stage entry, completed frames and no injection override",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "ai/modules/point_cloud_plan.py"
+        },
+        {
+          "path": "ai/modules/execution_binding.py"
+        },
+        {
+          "path": "ai/modules/pi.py"
+        },
+        {
+          "path": "ai/modules/sim_verify.py"
+        },
+        {
+          "path": "ai/modules/point_cloud.py"
+        },
+        {
+          "path": "tests/test_pi_tool_bridge.py"
+        },
+        {
+          "path": "tests/test_replay_provider_mapping.py"
+        },
+        {
+          "path": "engines/arbe/preflight.py"
+        },
+        {
+          "path": "contracts/arbe-preflight.v1.schema.json"
+        },
+        {
+          "path": "outputs/point_cloud_plan_source_bound_20260911.json"
+        },
+        {
+          "path": "outputs/sim_verify_point_cloud_remote_normalized_20260911.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p2_refresh_20260913.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p3_refresh_20260913.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p4_refresh_20260913.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p6_refresh_20260914.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p7_refresh_20260914.json"
+        },
+        {
+          "path": "tests/test_lgu_output_decoder.py"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v2/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v3/perception-report.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-04",
+      "phase": "M4",
+      "title": "Reset, warm-up, completion and failed-attempt state are visible and only completed frames enter comparison",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "contracts/perception-run.v1.schema.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "outputs/sim_verify_point_cloud_remote_normalized_20260911.json"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-06",
+      "phase": "M4",
+      "title": "Cross-frame identity distinguishes reuse/split/merge/missing target without carrying identity across unsupported frames",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "contracts/perception-lineage.v1.schema.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v13.json"
+        },
+        {
+          "path": "contracts/perception-timeline.v1.schema.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v14.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_20260913_v5.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v15.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_20260913_v6.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-07",
+      "phase": "M4",
+      "title": "Current source and selected-frame evidence produce falsifiable candidate hypotheses with gaps separated from observations",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "ai/pi_bridge.py"
+        },
+        {
+          "path": "ai/modules/pi.py"
+        },
+        {
+          "path": "ai/modules/pi_context.py"
+        },
+        {
+          "path": "engines/pi_context.py"
+        },
+        {
+          "path": "contracts/pi-orchestration-context.v1.schema.json"
+        },
+        {
+          "path": "tests/test_pi_context.py"
+        },
+        {
+          "path": "tests/test_pi_tool_bridge.py"
+        },
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "engines/code_context.py"
+        },
+        {
+          "path": "ai/modules/code_context.py"
+        },
+        {
+          "path": "tests/test_code_context.py"
+        },
+        {
+          "path": "outputs/code_context_byd_sc6h_crossrepo_static_20260914/code-context.json"
+        },
+        {
+          "path": "outputs/code_context_byd_sc6h_crossrepo_static_20260914/code-index.json"
+        },
+        {
+          "path": "outputs/code_context_byd_sc6h_crossrepo_static_20260914/output_mapping.json"
+        },
+        {
+          "path": "tests/test_code_analyze.py"
+        },
+        {
+          "path": "outputs/code_chain_gen6_pipeline_entry_20260914.json"
+        },
+        {
+          "path": "outputs/code_chain_gen6_fcta_path_20260914.json"
+        },
+        {
+          "path": "outputs/code_chain_gen6_postprocess_bounded_20260914.json"
+        },
+        {
+          "path": "outputs/pi_local_code_analyze_gen6_20260914.json"
+        },
+        {
+          "path": "outputs/pi_local_tool_trace_gen6_20260914.json"
+        },
+        {
+          "path": "outputs/code_gdb_plan_gen6_static_20260914.json"
+        },
+        {
+          "path": "outputs/perception_stage_map_byd_sc6h_static_20260914.json"
+        },
+        {
+          "path": "outputs/gen6_static_code_flow_20260914/perception-report.json"
+        },
+        {
+          "path": "outputs/gen6_static_code_flow_20260914/perception-report.html"
+        },
+        {
+          "path": "outputs/offline_browser_verification_gen6_static_code_flow_20260914.json"
+        },
+        {
+          "path": "output/playwright/gen6_static_code_flow_20260914.png"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v13.json"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/pi_module_bridge_code_analyze_gen6_live_profile_20260914.json"
+        },
+        {
+          "path": "outputs/pi_module_bridge_tool_trace_gen6_live_profile_20260914.json"
+        },
+        {
+          "path": "outputs/pi_cli_code_analyze_gen6_20260914.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_cli_source_lookup_gen6_20260915.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_cli_analysis_run_source_lookup_gen6_20260915.json"
+        },
+        {
+          "path": "outputs/analysis_runs/run-20260914T192319-1be19e0f5d/analysis-run.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_cli_natural_source_lookup_gen6_20260915.json"
+        },
+        {
+          "path": "outputs/analysis_runs/run-20260914T200129-ee848e5e8e/analysis-run.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_source_index_run_metrics_gen6_20260915.json"
+        },
+        {
+          "path": "outputs/analysis_runs/run-20260914T215459-af69d53325/analysis-run.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-08",
+      "phase": "M4",
+      "title": "Unknown macros, unsupported expressions and identity conflicts limit conclusions without treating unknown as false",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "core/knowledge_guard.py"
+        },
+        {
+          "path": "ai/modules/point_cloud_plan.py"
+        },
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "engines/code_context.py"
+        },
+        {
+          "path": "engines/signal_mapper.py"
+        },
+        {
+          "path": "config.py"
+        },
+        {
+          "path": "tests/test_config_local.py"
+        },
+        {
+          "path": "ai/condition_extractor.py"
+        },
+        {
+          "path": "ai/expert_panel.py"
+        },
+        {
+          "path": "tests/test_expert_panel_variant_sources.py"
+        },
+        {
+          "path": "tests/test_phase15_prewarm.py"
+        },
+        {
+          "path": "tests/test_signal_mapper_tx.py"
+        },
+        {
+          "path": "tests/test_code_context.py"
+        },
+        {
+          "path": "outputs/code_context_byd_sc6h_crossrepo_static_20260914/code-context.json"
+        },
+        {
+          "path": "outputs/code_context_byd_sc6h_crossrepo_static_20260914/code-index.json"
+        },
+        {
+          "path": "tests/test_knowledge_guard.py"
+        },
+        {
+          "path": "tests/test_pi_context.py"
+        },
+        {
+          "path": "tests/test_pi_tool_bridge.py"
+        },
+        {
+          "path": "docs/technical/evidence/pi_source_context_autobind_gen6_20260914.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_source_context_unverified_text_probe_gen6_20260914.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_source_context_tool_backed_rpc_gen6_20260914.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_source_context_post_guard_rpc_gen6_20260914.json"
+        },
+        {
+          "path": "docs/technical/evidence/pi_source_context_post_guard_conditions_rpc_gen6_20260914.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p2_refresh_20260913.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p5_refresh_20260914.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p6_refresh_20260914.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p7_refresh_20260914.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p9_refresh_20260914.json"
+        },
+        {
+          "path": "docs/technical/evidence/arbe_preflight_remote_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p11_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p12_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p13_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p14_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p15_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p16_refresh_20260915.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p14_refresh_20260915.json"
+        },
+        {
+          "path": "docs/technical/evidence/prewarm_timing_gen6_byd_sc6h_invalid_gwm_rte_20260915.json"
+        },
+        {
+          "path": "docs/technical/evidence/prewarm_timing_gen6_byd_sc6h_variant_bound_20260915.json"
+        },
+        {
+          "path": "outputs/perception_stage_map_byd_sc6h_static_20260914.json"
+        },
+        {
+          "path": "outputs/gen6_static_code_flow_20260914/perception-report.json"
+        },
+        {
+          "path": "outputs/gen6_static_code_flow_20260914/perception-report.html"
+        },
+        {
+          "path": "outputs/offline_browser_verification_gen6_static_code_flow_20260914.json"
+        },
+        {
+          "path": "output/playwright/gen6_static_code_flow_20260914.png"
+        },
+        {
+          "path": "tests/test_lgu_output_decoder.py"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v2/perception-report.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_identity_audit_20260914.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v3/perception-report.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_identity_audit_20260914_v3.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-11",
+      "phase": "M4",
+      "title": "Recorded/replay comparison requires explicit frame/identity matching and reports the first observable divergence",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "contracts/perception-comparison.v1.schema.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-12",
+      "phase": "M4",
+      "title": "Unlabelled comparisons report consistency/stability only; accuracy metrics require trusted ground truth",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "contracts/perception-comparison.v1.schema.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v13.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-05",
+      "phase": "M4",
+      "title": "同 callback 点/簇/轨迹/输出 lineage 可有界查询且缺失显式",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_point_cloud_perception.py",
+        "tests/test_pi_tool_bridge.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "ai/modules/point_cloud_read.py"
+        },
+        {
+          "path": "engines/point_cloud_replay.py"
+        },
+        {
+          "path": "contracts/perception-lineage.v1.schema.json"
+        },
+        {
+          "path": "contracts/perception-lineage-index.v1.schema.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-lineage.jsonl"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-lineage-index.v1.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_analysis_runtime_20260913_final_report_v6.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_hypothesis_review_runtime_20260913_v13.json"
+        },
+        {
+          "path": "outputs/arbe_preflight_p2_refresh_20260913.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "tests/test_lgu_output_decoder.py"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914/perception-report.json"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-09",
+      "phase": "M4",
+      "title": "同 selected frame 的场景、lineage 查询与离线报告保持证据分层",
+      "required_for_release": false,
+      "status": "accepted",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_point_cloud_perception.py",
+        "tests/test_pi_tool_bridge.py",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "ai/modules/point_cloud.py"
+        },
+        {
+          "path": "ai/modules/point_cloud_read.py"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report.html"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-report-README.md"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-lineage.jsonl"
+        },
+        {
+          "path": "outputs/point_cloud_remote_report_source_bound_20260912_inline200_indexed/perception-lineage-index.v1.json"
+        },
+        {
+          "path": "outputs/pi_point_cloud_analysis_runtime_20260913_final_report_v6.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_20260913.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_20260913_v4.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_20260913_v5.json"
+        },
+        {
+          "path": "outputs/offline_browser_verification_20260913_v6.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v2/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v2/perception-report.html"
+        },
+        {
+          "path": "outputs/offline_browser_verification_identity_audit_20260914.json"
+        },
+        {
+          "path": "output/playwright/point_cloud_identity_audit_20260914.png"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v3/perception-report.json"
+        },
+        {
+          "path": "outputs/point_cloud_lgu_report_identity_audit_20260914_v3/perception-report.html"
+        },
+        {
+          "path": "outputs/offline_browser_verification_identity_audit_20260914_v3.json"
+        },
+        {
+          "path": "output/playwright/point_cloud_identity_audit_20260914_v3.png"
+        }
+      ]
+    },
+    {
+      "id": "PC-AC-10",
+      "phase": "M4",
+      "title": "点云批次逐条隔离并保留坏输入失败原因",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_point_cloud_perception.py::test_point_cloud_batch_keeps_good_bad_and_empty_cases",
+        "-q"
+      ],
+      "evidence": [
+        {
+          "path": "ai/modules/point_cloud_batch.py"
+        },
+        {
+          "path": "contracts/perception-batch-index.v1.schema.json"
+        },
+        {
+          "path": "tests/test_point_cloud_perception.py"
+        }
+      ]
+    },
+    {
+      "id": "M3-AC-EXTERNAL-001",
+      "phase": "M3",
+      "title": "另一台干净机器安装并完成首个样例",
+      "required_for_release": false,
+      "status": "partially-verified",
+      "command": [],
+      "evidence": [
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "outputs/doctor_clean_m3_20260910.json"
+        }
+      ]
+    },
+    {
+      "id": "M2-AC-REMOTE-001",
+      "phase": "M2",
+      "title": "真实远端公共回放、SSH 中断和复取在受测环境闭环",
+      "required_for_release": true,
+      "status": "accepted",
+      "command": [
+        "python",
+        "tools/release_smoke.py",
+        "--phase",
+        "M2"
+      ],
+      "evidence": [
+        {
+          "path": "outputs/arbe_preflight_execute_20260910.json"
+        },
+        {
+          "path": "outputs/remote_public_plan_execute_20260910.json"
+        },
+        {
+          "path": "outputs/remote_execution_binding_approved_20260910.json"
+        },
+        {
+          "path": "outputs/remote_public_execute_20260910.json"
+        },
+        {
+          "path": "outputs/remote_public_capture_execute_20260910.json"
+        },
+        {
+          "path": "outputs/remote_public_interrupt_evidence_20260910.json"
+        }
+      ]
+    }
+  ],
+  "archive_migration": {
+    "date": "2026-09-17",
+    "scope": "path relocation only; not new verification",
+    "original": "docs/archive/2026-09-17/technical/release_acceptance.original.v1.json"
+  }
+}

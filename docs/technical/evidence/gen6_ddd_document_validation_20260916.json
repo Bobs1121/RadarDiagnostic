@@ -1,0 +1,62 @@
+{
+  "kind": "documentation-validation",
+  "timestamp_utc": "2026-09-16T07:11:33.607784+00:00",
+  "scope": "Gen6 DDD documentation only; not product runtime acceptance",
+  "documents": [
+    {
+      "path": "docs/technical/GEN6_AI_DOCUMENT_INDEX.md",
+      "sha256": "9b8b9e6133075042b5841f8bd880f80b8ee27ab525ec62b9e435bedbb5ffd193",
+      "lines": 55
+    },
+    {
+      "path": "docs/technical/GEN6_AI_PRODUCT_DISCOVERY_2026-09-16.md",
+      "sha256": "5223af763face65f0a5b338e807d9cd4e7c3a7d1482cc08df444a41578ad16ec",
+      "lines": 172
+    },
+    {
+      "path": "docs/technical/GEN6_AI_PRODUCT_BASELINE_2026-09-16.md",
+      "sha256": "6f366f7b16d21f26c8a579ec825f4a34b968beed281d717609bb8ebde9a789a4",
+      "lines": 202
+    },
+    {
+      "path": "docs/technical/GEN6_AI_CURRENT_STATE.md",
+      "sha256": "f1ee8c952adcc510e201d777e318b5626efc4c6848fcba03f112efad2189990a",
+      "lines": 75
+    },
+    {
+      "path": "docs/technical/GEN6_AI_EXPERIENCE_DESIGN.md",
+      "sha256": "080624587f0671c2901236ad5796d0ba54a7ba011a25d78416af231be7407676",
+      "lines": 78
+    },
+    {
+      "path": "docs/technical/GEN6_AI_SYSTEM_DESIGN.md",
+      "sha256": "711b409f1ac2a3a2455d0f3804d271f46da0228cbe608718886d172f702489ed",
+      "lines": 105
+    },
+    {
+      "path": "docs/technical/GEN6_AI_MODULE_DESIGN.md",
+      "sha256": "5ceeca0fe690e8095aa876216ac3f890020f8d6be6a614c43e09e446a9b398fd",
+      "lines": 77
+    },
+    {
+      "path": "docs/technical/GEN6_AI_DEVELOPMENT_PLAN_2026-09-16.md",
+      "sha256": "fd51eddcb81a1d55aabeb311171027aab45f6529d482a84ae7714f92c6ece3de",
+      "lines": 95
+    },
+    {
+      "path": "docs/technical/GEN6_AI_ACCEPTANCE.md",
+      "sha256": "14eb941ab4b677e1400138931c02864569149441eb9c56c73e5c29559406f6b0",
+      "lines": 68
+    }
+  ],
+  "checks": {
+    "links": "passed",
+    "fences": "passed",
+    "all_26_requirements_mapped": "passed",
+    "acceptance_01_to_16": "passed",
+    "legacy_navigation": "passed"
+  },
+  "capability_catalog_smoke": "exit_code_0_observed_in_session",
+  "runtime_tests": "not_run",
+  "remote_checks": "not_run"
+}

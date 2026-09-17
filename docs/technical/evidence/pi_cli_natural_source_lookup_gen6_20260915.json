@@ -1,0 +1,139 @@
+{
+  "schema_version": "pi-cli-natural-source-lookup-evidence.v1",
+  "recorded_at_utc": "2026-09-14T20:02:50Z",
+  "entrypoint": {
+    "command": "python cli.py pi",
+    "question": "PostProcessMainTI 的直接下游函数有哪些？",
+    "explicit_task_scope": false,
+    "explicit_tool_allowlist": false,
+    "provider": "ollama",
+    "model": "qwen3.5:9b",
+    "thinking": "off",
+    "global_configuration_changed": false
+  },
+  "resolved_scope": {
+    "task_scope": "source_code",
+    "inferred_from_question": true,
+    "auto_selected_tools": [
+      "code-context-read",
+      "code-analyze",
+      "event-code-path",
+      "code-gdb-plan"
+    ],
+    "tools_are_source_read_only": true
+  },
+  "context": {
+    "status": "ready",
+    "data_status": "not_required",
+    "project_id": "BYD_SC6H",
+    "variant_id": "gen6/byd_sc6h",
+    "customer": "BYD",
+    "vehicle": "SC6H",
+    "coem": "BYD_SC6H",
+    "source_root": "D:\\BYD-SC6H-cr60light\\cr60_light",
+    "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+    "code_context_path": ".workspaces/gen6_byd_sc6h/memory/snapshots/code_context_current/code-context.json",
+    "code_context_sha256": "3d485d7e3f6c300fdc80d61a20e9a7408362e4fdb6d491860ceab8fa2b899901",
+    "code_index_path": ".workspaces/gen6_byd_sc6h/memory/snapshots/code_context_current/code-index.json",
+    "code_index_sha256": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2",
+    "context_fingerprint": "345f4bfda1533e6b9b588ec890cfe7ffca9ad5632ad94cf2c48d18f4e157d4b8",
+    "missing": [],
+    "conflicts": []
+  },
+  "pi_execution": {
+    "ok": true,
+    "status": "agent_settled",
+    "event_count": 300,
+    "session_id": "pi-run-20260914T200129-ee848e5e8e",
+    "system_prompt_chars": 600,
+    "context_prompt_chars": 514,
+    "enabled_tools": [
+      "code-context-read",
+      "code-analyze",
+      "event-code-path",
+      "code-gdb-plan"
+    ],
+    "extension_error_count": 0,
+    "assistant_turns": [
+      {
+        "stop_reason": "toolUse",
+        "usage": {
+          "input": 1375,
+          "output": 182,
+          "total": 1557
+        }
+      },
+      {
+        "stop_reason": "stop",
+        "usage": {
+          "input": 200,
+          "output": 197,
+          "cache_read": 1556,
+          "total": 1953
+        }
+      }
+    ],
+    "tool_calls": [
+      {
+        "id": "call_ekxw4ydf",
+        "name": "code-analyze",
+        "arguments": {
+          "kind": "callees",
+          "name": "PostProcessMainTI"
+        },
+        "output_argument_present": false,
+        "is_error": false,
+        "status": "ok"
+      }
+    ]
+  },
+  "analysis_run": {
+    "run_id": "run-20260914T200129-ee848e5e8e",
+    "status": "completed",
+    "path": "outputs/analysis_runs/run-20260914T200129-ee848e5e8e/analysis-run.json",
+    "steps": [
+      {
+        "stage": "tool-code-analyze",
+        "status": "completed"
+      },
+      {
+        "stage": "dialogue",
+        "status": "completed"
+      }
+    ],
+    "binding": {
+      "project_id": "BYD_SC6H",
+      "variant_id": "gen6/byd_sc6h",
+      "customer": "BYD",
+      "vehicle": "SC6H",
+      "coem": "BYD_SC6H",
+      "data_fingerprint": "62c8040a21c63d99382ba4c2d648c9b05cb6ef080bf3193ecf07573aa785835b",
+      "source_snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+      "code_index_hash": "ff54d28cbf309aa81a7b48a0c9b243f56379c99617a463c96306a2c5aa80dee2"
+    }
+  },
+  "verified_result": {
+    "kind": "callees",
+    "backend": "source_code_index",
+    "function": "PostProcessMainTI",
+    "result_bounds": {
+      "limit": 200,
+      "total_count": 5,
+      "returned_count": 5,
+      "truncated": false
+    },
+    "call_targets": [
+      "DataProcInit",
+      "ObjTrack",
+      "OutputTrkObj",
+      "OtherAttributeCal",
+      "AdasFunc"
+    ],
+    "direct_index_recheck": {
+      "status": "ok",
+      "snapshot_hash": "0cf8c9c1a59030b36604c76cd2d7a7757a9989e87212841d1e245c7e8848c023",
+      "result_matches_pi_tool": true
+    }
+  },
+  "scope_limit": "仅验证无 case 的自然语言 source-only Pi CLI、自动能力 allowlist、AnalysisRun 持久化及静态 index 一致性；不证明 selected-frame、runtime、build、GDB、CAN 或感知阶段执行。"
+}

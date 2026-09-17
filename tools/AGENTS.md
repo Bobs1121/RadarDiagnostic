@@ -2,11 +2,16 @@
 
 | 文件 | 用途 |
 |------|------|
+| `check_ddd.py` | 检查唯一 GEN6 文档链接、archive hash、任务 DAG、M01～M12/G6-AC 覆盖及状态证据；documents_valid 不是产品验收；支持 `--root`/`--output` |
 | `render_report_from_md.py` | 从已有 `report.md` 渲染 HTML 报告 |
 | `run_tpe_smoke.py` | 对真实案例运行无 LLM 的 TPE 冒烟 |
 | `run_agent_loop_smoke.py` | PR5：用内存 FrameStore / requirement set / fake CodeGraph 组合真实 AgentLoop tools，输出 JSON 并以 exit code 表示 smoke 是否完成 |
-| `measure_prewarm_timing.py` | Phase 16.1：重复调用 `_run_prewarm()`，输出 prewarm 缓存命中计时 JSON |
+| `measure_prewarm_timing.py` | Phase 16.1：重复调用 `_run_prewarm()`，输出 prewarm 缓存命中计时 JSON；把 active variant 的 `key_source_files` 绑定给 RTE variable-chain scan；可用 `--source-docs-dir` 隔离首建/复用测量，默认仍用 variant cache |
 | `run_harness_gate.py` | Phase 16.4：运行 Harness 聚合回归 gate，生成 JSON 并用 exit code 表示是否阻塞 |
+| `doctor.py` | 本地/内网交付前体检：Python、锁定依赖、入口文件和 Pi capability catalog；只读；`--catalog-timeout-sec` 支持 clean venv 冷启动 |
+| `release_gate.py` | 默认读取当前 G6 `docs/technical/release_acceptance.v1.json`；required 项必须有命令/证据，G6 须覆盖 required_test_levels 的 hash-bound evidence；plan-only 保持 blocked |
+| `release_smoke.py` | 历史 M0–M4 局部契约检查；M0 明确读取归档清单，不宣称当前 G6 通过；无远程副作用，不嵌套 pytest |
+| `decode_lgu_output.py` | 只读从 `wfAutosarData.outputData` 解码源码绑定的 `PERInfoOutStruct.dotTrans/objTrans`，并提供标准 `PointCloud2` 字段解码，生成 point/output artifact；使用显式固定前缀和混合 signed/unsigned `dotOutStrunct` profile。source header 已验证不代表录制布局已兼容；只有当前 source hash、精确 BAG SHA-256、录制版本和带 hash 的兼容性证据一致时才标 `layout_verified`，否则点记录带 warning、BAG 结果 partial；不启动 ROS、不修改远端 workspace。ROS1 BAG adapter 在 `engines.point_cloud_replay` 中惰性调用该 decoder |
 
 ## arbe 资产（V4 · sim-verify / arbe-replay 输入参考）
 

@@ -65,6 +65,14 @@ fallback JSON schema: `{ "dim": int, "records": [ { "id", "vector", "symptom", "
 
 ## memory_system.py — MemorySystem
 
+### Atomic persistence helpers
+
+`atomic_write_text(path, content, encoding="utf-8")` stages to a unique same-directory temp file before
+`os.replace`, so concurrent writers do not share one `.tmp` pathname. `PermissionError` at replace is retried
+for at most 6 attempts with exponential delays starting at 20 ms; other errors fail immediately. The original
+file remains intact on failure and only the writer's temp file is cleaned up. `atomic_write_json()` delegates
+to this helper. Tests cover permanent failure, transient Windows-style lock denial, and concurrent writers.
+
 ### 构造与路径约定
 
 `__init__(self, project_root: Path, memory_dir=None, config=None)` — 近期开口
@@ -221,7 +229,7 @@ memory:
 - 不使用 CONSOLIDATION_PROMPT
 
 **Phase 1 — Orient (定向)** (288-290)
-- `_refresh_variable_chains()`: 刷新 `variable_chains.json`
+- `_refresh_variable_chains()`: 使用当前 variant 的 `key_source_files` 选 RTE mapping，再刷新 `variable_chains.json`；COEM global copies 有 scope，缺失/歧义不回退 GWM
 - `_gather_all_memory_context()`: 拼接 L1 + 各 L2 + patterns 摘要 + source_docs/*.md 前 500 字 + signal_mapping 抽样 + 最近 5 个 L5 case memory + L6 摘要
 
 **Phase 2 — Gather (收集)** (292-293)
