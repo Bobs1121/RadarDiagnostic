@@ -290,6 +290,7 @@ class AutoDream:
                 result = trace_variable_chains(
                     Path(source_code),
                     resolve_source_docs_dir(self.config, self.project_root),
+                    rte_file=self._resolve_rte_file(),
                 )
                 return {
                     "ok": True,
@@ -504,17 +505,21 @@ class AutoDream:
         except Exception as exc:
             return {"ok": False, "error": str(exc)[:200]}
 
-    def _resolve_rte_file(self) -> str:
-        """Resolve the variant's RteComMapping file (Rx side) for mapping."""
+    def _resolve_rte_file(self) -> str | None:
+        """Resolve the active variant's RTE map without a GWM fallback."""
         try:
-            key_files = (self.config or {}).get("paths", {}).get("key_source_files") or []
-            for rel in key_files:
-                leaf = str(rel).replace("\\", "/")
-                if "/RteComMapping" in leaf or leaf.startswith("RteComMapping"):
-                    return str(rel)
+            from config import resolve_variant_rte_mapping_file
+
+            source_root = (self.config or {}).get("paths", {}).get("source_code")
+            rte_file, status = resolve_variant_rte_mapping_file(
+                self.config or {}, source_root
+            )
+            if status == "variant_unavailable":
+                return None
+            return rte_file
         except Exception:
             pass
-        return r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
+        return None
 
     def _gather_all_memory_context(self) -> str:
         """Gather current state of all memory layers."""

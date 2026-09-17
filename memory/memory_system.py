@@ -37,6 +37,7 @@ import datetime
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional, Any
 
@@ -44,24 +45,38 @@ from typing import Optional, Any
 # ── Atomic write helpers (Phase 15 / 2.2.1) ──────────────────────────
 #
 # Concurrent diagnosis + auto_dream writers must not corrupt each other.
-# ``atomic_write_text`` / ``atomic_write_json`` write to ``<path>.tmp`` first,
-# then ``os.replace`` (atomic on POSIX, best-effort atomic on Windows) to the
-# final path. A crash mid-write leaves the original file untouched and a
-# stale ``.tmp`` that subsequent reads will simply ignore.
+# ``atomic_write_text`` / ``atomic_write_json`` write through a unique temp
+# file in the destination directory, then ``os.replace`` to the final path.
+# Unique temp names let concurrent writers avoid clobbering each other's
+# staging file. Windows may temporarily deny replacement while readers or
+# scanners hold the destination, so PermissionError receives a bounded retry.
+_ATOMIC_REPLACE_MAX_ATTEMPTS = 6
+_ATOMIC_REPLACE_BASE_DELAY_SEC = 0.02
 
 def atomic_write_text(path: Path, content: str, encoding: str = "utf-8") -> None:
     """Atomically write ``content`` to ``path``.
 
-    Writes via ``path.with_suffix(path.suffix + '.tmp')`` then ``os.replace``.
+    Writes to a unique sibling temp file then ``os.replace``.
     The parent directory is created if missing. Existing files are never
     truncated to zero before the rename — readers will always see either the
-    old content or the new content, never partial bytes.
+    old content or the new content, never partial bytes. Transient
+    ``PermissionError`` from the destination rename is retried with bounded
+    exponential backoff; unrelated errors fail immediately.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    tmp: Path | None = None
     try:
-        with open(tmp, "w", encoding=encoding, newline="") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding=encoding,
+            newline="",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            tmp = Path(f.name)
             f.write(content)
             f.flush()
             try:
@@ -69,11 +84,19 @@ def atomic_write_text(path: Path, content: str, encoding: str = "utf-8") -> None
             except OSError:
                 # fsync not supported on this platform; skip silently.
                 pass
-        os.replace(tmp, path)
+        for attempt in range(_ATOMIC_REPLACE_MAX_ATTEMPTS):
+            try:
+                os.replace(tmp, path)
+                tmp = None
+                break
+            except PermissionError:
+                if attempt + 1 >= _ATOMIC_REPLACE_MAX_ATTEMPTS:
+                    raise
+                time.sleep(_ATOMIC_REPLACE_BASE_DELAY_SEC * (2 ** attempt))
     except Exception:
-        # Leave any .tmp behind for forensics; do NOT remove the original.
+        # Remove only our unique staging file; never touch the original.
         try:
-            if tmp.exists():
+            if tmp is not None and tmp.exists():
                 tmp.unlink()
         except OSError:
             pass

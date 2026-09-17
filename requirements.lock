@@ -1,0 +1,21 @@
+# Validated direct dependency baseline for the radarAnalyze local/internal MVP.
+# Generated from the environment used by M0-M4 acceptance on 2026-09-09.
+# This pins direct requirements; transitive dependencies should be captured
+# separately when an offline wheelhouse is prepared.
+pyyaml==6.0.3
+python-dotenv==1.2.2
+rich==14.3.4
+python-can==4.6.1
+cantools==41.4.3
+rosbags==0.11.3
+asteval==1.0.9
+tree-sitter==0.21.3
+tree-sitter-c==0.21.4
+asammdf==8.8.16
+openai==3.5.0
+pydantic==2.12.5
+lancedb==0.30.0
+langgraph==1.2.4
+plotly==6.8.0
+markdown==3.10.2
+pytest==9.0.3

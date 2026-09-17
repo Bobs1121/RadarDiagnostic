@@ -513,6 +513,53 @@ class BagParser:
         radar_id = TOPIC_RADAR_ID.get(topic, 0)
         fields["radar_id"] = radar_id
 
+        # Keep post-detection dotTrans as an explicit perception input layer.
+        # The decoder is source-profile aware and marks the bundled layout
+        # unverified until the caller binds the active C snapshot.
+        try:
+            from tools.decode_lgu_output import (
+                DOT_LAYOUT_PROFILE,
+                decode_dot_buffer,
+                decode_object_buffer,
+            )
+            fields["message_schema"] = {
+                "type": "arbe_msgs/wfAutosarData",
+                "payload": "PERInfoOutStruct.dotTrans",
+                "layout_profile": dict(DOT_LAYOUT_PROFILE),
+            }
+            try:
+                fields["point_rows"] = decode_dot_buffer(
+                    output_data,
+                    frame_id=wfa_frame_id,
+                    lgu_num=lgu_num,
+                    radar_id=radar_id,
+                    topic=topic,
+                    source_message_seq=fields.get("seq"),
+                    layout_profile=DOT_LAYOUT_PROFILE,
+                )
+            except (TypeError, ValueError, struct.error):
+                fields["point_rows"] = []
+                fields["message_schema"]["point_decode_status"] = "failed"
+            try:
+                fields["output_rows"] = decode_object_buffer(
+                    output_data,
+                    frame_id=wfa_frame_id,
+                    sgu_num=sgu_num,
+                    radar_id=radar_id,
+                    topic=topic,
+                )
+            except (TypeError, ValueError, struct.error):
+                fields["output_rows"] = []
+                fields["message_schema"]["object_decode_status"] = "failed"
+        except ImportError:
+            fields["point_rows"] = []
+            fields["output_rows"] = []
+            fields["message_schema"] = {
+                "type": "arbe_msgs/wfAutosarData",
+                "payload": "PERInfoOutStruct.dotTrans",
+                "status": "decoder_not_available",
+            }
+
         # Parse objects from outputData
         objs = self._parse_wfa_objects(output_data, sgu_num)
         if objs:

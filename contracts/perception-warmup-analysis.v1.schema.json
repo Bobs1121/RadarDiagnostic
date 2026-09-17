@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-warmup-analysis.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "required_range", "runs", "metrics", "diagnostics", "conclusion_level"],
+  "properties": {
+    "schema_version": {"const": "perception-warmup-analysis.v1"},
+    "status": {"enum": ["stable", "warmup_sensitive", "not_available"]},
+    "required_range": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+    "runs": {"type": "array", "items": {"type": "object"}},
+    "metrics": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "conclusion_level": {"const": "facts_only"},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

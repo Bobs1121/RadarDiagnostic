@@ -8,7 +8,18 @@ warning trace csv / KPI）+ RemoteArbeReplayProvider（SSH 骨架，接口就绪
 from __future__ import annotations
 
 from .remote_replay import RemoteArbeReplayProvider
-from .public_runtime import detect_warning_rising_edges, normalize_public_runtime
+from .execution_binding import (
+    REQUIRED_IDENTITY_FIELDS,
+    SCHEMA_VERSION as EXECUTION_BINDING_SCHEMA,
+    build_execution_binding,
+    derive_execution_identity,
+    verify_execution_binding,
+)
+from .public_runtime import (
+    detect_warning_rising_edges,
+    normalize_public_runtime,
+    runtime_capture_from_topic_inventory,
+)
 from .build import build_catkin_make_command, run_catkin_make
 from .cuda import build_cuda_resolve_command, parse_cuda_resolve_output, resolve_cuda
 from .source import (
@@ -39,7 +50,13 @@ from .preflight import (
 )
 from .intake import build_intake
 from .public_evidence import audit_public_bundle, build_public_topic_plan
-from .ros_inventory import RosTopicInventory, build_inventory_command, parse_inventory_output
+from .ros_inventory import (
+    RosTopicInventory,
+    build_inventory_command,
+    build_message_definition_command,
+    parse_inventory_output,
+    parse_message_definition,
+)
 from .replay_provider import (
     ArbeReplayProvider,
     JobStatus,
@@ -53,6 +70,11 @@ __all__ = [
     "ArbeReplayProvider",
     "LocalArbeReplayProvider",
     "RemoteArbeReplayProvider",
+    "EXECUTION_BINDING_SCHEMA",
+    "REQUIRED_IDENTITY_FIELDS",
+    "build_execution_binding",
+    "derive_execution_identity",
+    "verify_execution_binding",
     "build_catkin_make_command",
     "run_catkin_make",
     "build_cuda_resolve_command",
@@ -80,9 +102,12 @@ __all__ = [
     "build_intake",
     "audit_public_bundle",
     "build_public_topic_plan",
+    "runtime_capture_from_topic_inventory",
     "RosTopicInventory",
     "build_inventory_command",
+    "build_message_definition_command",
     "parse_inventory_output",
+    "parse_message_definition",
     "TraceEvent",
     "parse_warning_trace_csv",
     "JobStatus",

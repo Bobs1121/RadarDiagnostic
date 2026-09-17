@@ -14,6 +14,7 @@ Run with::
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from engines.signal_mapper import (  # noqa: E402
+    extract_output_signal_mapping,
     _parse_rte_com_mapping,
     _parse_rte_write_mapping,
     get_output_signals_for_function,
@@ -104,6 +106,25 @@ class TestWriteMappingParsing:
             "(AdasStM.Frontleft_FCTA == 1) ? 1u:0u"
         assert by_signal["FCTBBrkReq_S"]["expression"] == "l_temp_u8_FCTB"
         assert by_signal["FCTA_FCTB_Status_S"]["expression"] == "AdasStM.FCTS_Status"
+
+    def test_explicit_missing_mapping_does_not_scan_another_coem(self, tmp_path: Path):
+        source_root = tmp_path / "source"
+        other_tx = source_root / "coem" / "BYD_SC6H" / "components" / "AswIf" / "ASW_ComMapping" / "RteComMapping_Tx.c"
+        other_tx.parent.mkdir(parents=True)
+        other_tx.write_text(_TX_SAMPLE, encoding="utf-8")
+        docs_dir = tmp_path / "docs"
+
+        result = extract_output_signal_mapping(
+            source_root,
+            docs_dir,
+            rte_file=r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c",
+        )
+
+        assert result["selection_status"] == "explicit_not_found"
+        assert result["mappings"] == []
+        assert result["signal_to_expr"] == {}
+        cached = json.loads((docs_dir / "output_mapping.json").read_text(encoding="utf-8"))
+        assert cached["source_files"] == []
 
 
 class TestVariantTruthOutputSignals:

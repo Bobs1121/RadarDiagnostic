@@ -67,6 +67,7 @@ class HarnessResult:
         if self.l0_result is None:
             self.overall_score = 0.0
             self.passed = False
+            self.errors.append("L0 structural evaluation is missing")
             return
 
         # L0 gate: 结构不合格直接 FAIL
@@ -76,10 +77,25 @@ class HarnessResult:
             self.errors.append(f"L0 结构分 {self.l0_result.score:.2f} < 0.90，不满足评估前提")
             return
 
-        # 收集各层分数（缺失层按 0 处理，但不一定 FAIL）
+        # A release gate must not turn an absent evaluator into a passing
+        # result through the weighted average.  Keep the score for diagnosis,
+        # but make the result fail until every required layer ran.
+        missing_layers = [
+            name for name, value in (
+                ("L1", self.l1_result),
+                ("L2", self.l2_result),
+            ) if value is None
+        ]
+        if missing_layers:
+            self.overall_score = 0.0
+            self.passed = False
+            self.errors.append("missing evaluation layer(s): " + ", ".join(missing_layers))
+            return
+
+        # 收集各层分数
         l0 = self.l0_result.score
-        l1 = self.l1_result.score if self.l1_result else 0.0
-        l2 = self.l2_result.score if self.l2_result else 0.0
+        l1 = self.l1_result.score
+        l2 = self.l2_result.score
 
         # 加权平均
         self.overall_score = l0 * L0_WEIGHT + l1 * L1_WEIGHT + l2 * L2_WEIGHT

@@ -34,6 +34,8 @@ KINDS: tuple[str, ...] = (
     "conditions",    # 源码条件
     "stats",         # 索引统计
 )
+DEFAULT_MAX_RESULTS = 200
+MAX_RESULTS_LIMIT = 5000
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -50,26 +52,52 @@ def _to_jsonable(obj: Any) -> Any:
 
 class CodeAnalyzeModule(BaseModule):
     name = "code-analyze"
-    description = "代码分析：调用链 / 依赖 / 语义（基于 CodeGraph）"
+    description = "代码分析：kind=callers 查询谁调用 name；kind=callees 查询 name 调用谁；kind=call_chain 查询 name 向下调用链"
     tags = ["code", "analyze", "source-bound", "atomic"]
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
-            "kind": {"type": "string", "enum": list(KINDS)},
-            "name": {"type": "string"},
+            "kind": {
+                "type": "string",
+                "enum": list(KINDS),
+                "description": "callers=谁调用目标函数；callees=目标函数调用谁；call_chain=从目标函数向下的调用链",
+            },
+            "name": {
+                "type": "string",
+                "description": "目标函数名；参数名固定为 name，不要使用 function_name",
+            },
             "signal": {"type": "string"},
             "max_depth": {"type": "integer"},
+            "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_RESULTS_LIMIT,
+                "default": DEFAULT_MAX_RESULTS,
+                "description": "每次列表查询的最大返回行数；若截断会返回 result_bounds 元数据",
+            },
             "db_path": {"type": "string"},
             "source_root": {"type": "string"},
             "code_index_path": {"type": "string"},
             "code_index": {"type": "object"},
-            "output": {"type": "string"},
         },
         "additionalProperties": False,
     }
     output_schema: dict[str, Any] = {
         "type": "object",
         "required": ["kind", "backend", "source_context", "data"],
+        "properties": {
+            "result_bounds": {
+                "type": "object",
+                "required": ["limit", "total_count", "returned_count", "truncated"],
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "total_count": {"type": "integer"},
+                    "returned_count": {"type": "integer"},
+                    "truncated": {"type": "boolean"},
+                },
+                "additionalProperties": False,
+            },
+        },
     }
 
     def __init__(
@@ -116,11 +144,24 @@ class CodeAnalyzeModule(BaseModule):
         name: str = "",
         signal: str = "",
         max_depth: int = 5,
+        max_results: int = DEFAULT_MAX_RESULTS,
         code_index_path: str = "",
         code_index: Mapping[str, Any] | None = None,
         output: str = "",
         **_: Any,
     ) -> ModuleResult:
+        try:
+            max_results = int(max_results)
+        except (TypeError, ValueError):
+            return ModuleResult.fail(
+                f"max_results must be an integer between 1 and {MAX_RESULTS_LIMIT}",
+                module=self.name,
+            )
+        if not 1 <= max_results <= MAX_RESULTS_LIMIT:
+            return ModuleResult.fail(
+                f"max_results must be between 1 and {MAX_RESULTS_LIMIT}",
+                module=self.name,
+            )
         if kind not in KINDS:
             return ModuleResult.fail(f"kind 需 ∈ {KINDS}", module=self.name)
 
@@ -144,13 +185,17 @@ class CodeAnalyzeModule(BaseModule):
                 )
             if data is None:
                 return ModuleResult.fail(f"未找到: {name or signal}", module=self.name)
+            data, result_bounds = self._limit_list_result(data, max_results)
+            message = self._result_message(f"code-analyze {kind}: source-index done", result_bounds)
+            result_metadata = {"result_bounds": result_bounds} if result_bounds is not None else {}
             result = ModuleResult.success(
-                message=f"code-analyze {kind}: source-index done",
+                message=message,
                 module=self.name,
                 kind=kind,
                 backend="source_code_index",
                 source_context=self._source_context(index),
                 data=_to_jsonable(data),
+                **result_metadata,
             )
             return self._write_output(result, output)
 
@@ -175,15 +220,41 @@ class CodeAnalyzeModule(BaseModule):
 
         if data is None:
             return ModuleResult.fail(f"未找到: {name or signal}", module=self.name)
+        data, result_bounds = self._limit_list_result(data, max_results)
+        message = self._result_message(f"code-analyze {kind}: done", result_bounds)
+        result_metadata = {"result_bounds": result_bounds} if result_bounds is not None else {}
         result = ModuleResult.success(
-            message=f"code-analyze {kind}: done",
+            message=message,
             module=self.name,
             backend="codegraph_db",
             source_context={"source_root": self.source_root},
             kind=kind,
             data=_to_jsonable(data),
+            **result_metadata,
         )
         return self._write_output(result, output)
+
+    @staticmethod
+    def _limit_list_result(data: Any, limit: int) -> tuple[Any, dict[str, Any] | None]:
+        if not isinstance(data, (list, tuple)):
+            return data, None
+        total_count = len(data)
+        rows = list(data[:limit])
+        bounds = {
+            "limit": limit,
+            "total_count": total_count,
+            "returned_count": len(rows),
+            "truncated": total_count > len(rows),
+        }
+        return rows, bounds
+
+    @staticmethod
+    def _result_message(message: str, bounds: dict[str, Any] | None) -> str:
+        if not bounds or not bounds["truncated"]:
+            return message
+        return (
+            f"{message} ({bounds['returned_count']}/{bounds['total_count']} rows; truncated)"
+        )
 
     @staticmethod
     def _write_output(result: ModuleResult, output: str) -> ModuleResult:
@@ -404,7 +475,7 @@ class CodeAnalyzeModule(BaseModule):
                 v = getattr(row, key, None) or getattr(row, "name", None)
             if v and v not in out:
                 out.append(str(v))
-        return out[:50]
+        return out
 
     @classmethod
     def register_cli(cls, subparsers):
@@ -413,6 +484,12 @@ class CodeAnalyzeModule(BaseModule):
         p.add_argument("--name", default="", help="函数名")
         p.add_argument("--signal", default="", help="信号名")
         p.add_argument("--max-depth", type=int, default=5)
+        p.add_argument(
+            "--max-results",
+            type=int,
+            default=DEFAULT_MAX_RESULTS,
+            help=f"每次列表查询最多返回多少行（1-{MAX_RESULTS_LIMIT}；默认 {DEFAULT_MAX_RESULTS}）",
+        )
         p.add_argument("--db-path", default="", help="codegraph.db 路径")
         p.add_argument("--source-root", default="", help="代码根")
         p.add_argument("--code-index-path", default="", help="当前 source snapshot 的 code_index.json")

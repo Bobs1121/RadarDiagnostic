@@ -98,8 +98,24 @@ def _fingerprint(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _same_path(left: Any, right: Any) -> bool:
+    try:
+        return Path(str(left)).expanduser().resolve() == Path(str(right)).expanduser().resolve()
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return False
+
+
 def build_pi_orchestration_context(
     *,
+    task_scope: str = "case_analysis",
     intake: Mapping[str, Any] | None = None,
     intake_path: str = "",
     preflight: Mapping[str, Any] | None = None,
@@ -123,8 +139,16 @@ def build_pi_orchestration_context(
     runtime_debug_plan_path: str = "",
     capability_manifest: Mapping[str, Any] | None = None,
     capability_manifest_path: str = "",
+    code_context: Mapping[str, Any] | None = None,
+    code_context_path: str = "",
 ) -> dict[str, Any]:
     """Build a fail-closed ``pi-orchestration-context.v1`` payload."""
+    requested_scope = str(task_scope or "case_analysis").strip().lower()
+    scope_error = None
+    if requested_scope not in {"case_analysis", "source_code"}:
+        scope_error = "task_scope_unsupported"
+        requested_scope = "case_analysis"
+    task_scope = requested_scope
     intake_obj, intake_error, intake_ref = _artifact_input(
         intake, intake_path, label="intake"
     )
@@ -142,6 +166,9 @@ def build_pi_orchestration_context(
     )
     capability_manifest_obj, capability_manifest_error, capability_manifest_ref = _artifact_input(
         capability_manifest, capability_manifest_path, label="capability_manifest"
+    )
+    code_context_obj, code_context_error, code_context_ref = _artifact_input(
+        code_context, code_context_path, label="code_context"
     )
     # A merged bundle is itself a valid runtime producer artifact. Prefer an
     # explicitly supplied runtime artifact, but let Pi consume the canonical
@@ -192,6 +219,8 @@ def build_pi_orchestration_context(
             diagnosis_bundle_error,
             runtime_debug_plan_error,
             capability_manifest_error,
+            code_context_error,
+            scope_error,
         ]
     )
     missing: list[str] = []
@@ -429,6 +458,203 @@ def build_pi_orchestration_context(
         source["build_probe"] = deepcopy(dict(build))
         source_provenance["build_probe"] = {"source": "preflight.build"}
 
+    code_index_ref: dict[str, Any] | None = None
+    if code_context_obj is not None:
+        if (
+            not isinstance(code_context_obj, Mapping)
+            or code_context_obj.get("schema_version") != "code-context.v1"
+        ):
+            errors.append("code_context_schema_version_mismatch")
+        else:
+            code_source = code_context_obj.get("source_context", {})
+            if not isinstance(code_source, Mapping):
+                errors.append("code_context_source_context_invalid")
+            else:
+                identity_fields_from_code = (
+                    "project_id", "variant_id", "customer", "vehicle", "coem",
+                )
+                for field in identity_fields_from_code:
+                    value = code_source.get(field)
+                    if value in (None, "", []):
+                        continue
+                    existing = identity.get(field)
+                    if existing not in (None, "", []) and str(existing) != str(value):
+                        conflicts.append({
+                            "field": f"code_context.source_context.{field}",
+                            "context_value": existing,
+                            "artifact_value": value,
+                            "reason": "code_context_identity_mismatch",
+                        })
+                        errors.append("code_context_identity_conflict")
+                        continue
+                    _put_value(
+                        identity,
+                        identity_provenance,
+                        field,
+                        value,
+                        {"source": "code_context.source_context", "field": field},
+                    )
+
+                code_snapshot = (
+                    code_source.get("source_snapshot_hash")
+                    or code_source.get("snapshot_hash")
+                )
+                if not code_snapshot:
+                    errors.append("code_context_snapshot_hash_missing")
+                existing_snapshot = source.get("source_snapshot_hash")
+                if (
+                    existing_snapshot not in (None, "", [])
+                    and code_snapshot
+                    and str(existing_snapshot) != str(code_snapshot)
+                ):
+                    conflicts.append({
+                        "field": "source.source_snapshot_hash",
+                        "context_value": existing_snapshot,
+                        "artifact_value": code_snapshot,
+                        "reason": "code_context_source_snapshot_mismatch",
+                    })
+                    errors.append("code_context_source_snapshot_conflict")
+                elif code_snapshot and existing_snapshot in (None, "", []):
+                    _put_value(
+                        source,
+                        source_provenance,
+                        "source_snapshot_hash",
+                        code_snapshot,
+                        {"source": "code_context.source_context", "field": "snapshot_hash"},
+                    )
+
+                code_source_summary = {
+                    "schema_version": code_context_obj.get("schema_version"),
+                    "context_id": code_context_obj.get("context_id", ""),
+                    "source_root": code_source.get("source_root", ""),
+                    "source_snapshot_hash": code_snapshot or "",
+                    "source_role": code_source.get("source_role", ""),
+                    "runtime_binding": code_source.get("runtime_binding", ""),
+                    "binary_fingerprint": code_source.get("binary_fingerprint", ""),
+                    "compile_macro_observation": code_source.get("compile_macro_observation", ""),
+                    "recording_binding": code_source.get("recording_binding", ""),
+                }
+                context_artifact_path_text = (
+                    str(code_context_ref.get("path", "") or "").strip()
+                    if isinstance(code_context_ref, Mapping)
+                    else ""
+                )
+                if context_artifact_path_text:
+                    context_artifact_path = Path(context_artifact_path_text).expanduser().resolve()
+                    if not context_artifact_path.is_file():
+                        if task_scope == "source_code":
+                            errors.append("code_context_artifact_path_not_found")
+                    else:
+                        context_artifact_bytes = b""
+                        try:
+                            context_artifact_bytes = context_artifact_path.read_bytes()
+                            context_artifact_payload = json.loads(context_artifact_bytes.decode("utf-8"))
+                        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                            errors.append(f"code_context_artifact_hash_failed:{type(exc).__name__}")
+                        else:
+                            if context_artifact_payload != code_context_obj:
+                                errors.append("code_context_artifact_changed_during_validation")
+                                context_artifact_bytes = b""
+                        if context_artifact_bytes:
+                            context_artifact_hash = hashlib.sha256(context_artifact_bytes).hexdigest()
+                        else:
+                            context_artifact_hash = ""
+                        if context_artifact_hash:
+                            code_source_summary["code_context_path"] = str(context_artifact_path)
+                            code_source_summary["code_context_sha256"] = context_artifact_hash
+                            source["code_context_path"] = str(context_artifact_path)
+                            source["code_context_sha256"] = context_artifact_hash
+                            if isinstance(code_context_ref, dict):
+                                code_context_ref["path"] = str(context_artifact_path)
+                                code_context_ref["sha256"] = context_artifact_hash
+
+                context_artifacts = code_context_obj.get("artifacts", {})
+                index_path_text = (
+                    str(context_artifacts.get("code_index", "") or "").strip()
+                    if isinstance(context_artifacts, Mapping)
+                    else ""
+                )
+                expected_index_hash = (
+                    str(context_artifacts.get("code_index_sha256", "") or "").strip()
+                    if isinstance(context_artifacts, Mapping)
+                    else ""
+                )
+                index_path: Path | None = None
+                if index_path_text:
+                    index_path = Path(index_path_text).expanduser()
+                    if not index_path.is_absolute():
+                        context_artifact_path = (
+                            str(code_context_ref.get("path", "") or "")
+                            if isinstance(code_context_ref, Mapping)
+                            else ""
+                        )
+                        base_dir = (
+                            Path(context_artifact_path).expanduser().parent
+                            if context_artifact_path
+                            else Path.cwd()
+                        )
+                        index_path = base_dir / index_path
+                    index_path = index_path.resolve()
+
+                if index_path is None:
+                    if task_scope == "source_code":
+                        errors.append("code_context_code_index_path_missing")
+                elif not index_path.is_file():
+                    errors.append("code_context_code_index_not_found")
+                else:
+                    try:
+                        index_artifact_bytes = index_path.read_bytes()
+                        loaded_index = json.loads(index_artifact_bytes.decode("utf-8"))
+                        index_file_hash = hashlib.sha256(index_artifact_bytes).hexdigest()
+                    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                        errors.append(f"code_context_code_index_invalid:{type(exc).__name__}")
+                    else:
+                        if not isinstance(loaded_index, Mapping):
+                            errors.append("code_context_code_index_must_be_object")
+                        else:
+                            if loaded_index.get("schema_version") != "code-index.v1":
+                                errors.append("code_context_code_index_schema_version_mismatch")
+                            context_root = str(code_source.get("source_root", "") or "")
+                            index_root = str(loaded_index.get("source_root", "") or "")
+                            same_root = bool(context_root and index_root and _same_path(context_root, index_root))
+                            if not same_root:
+                                errors.append("code_context_code_index_source_root_mismatch")
+                            index_snapshot = str(loaded_index.get("snapshot_hash", "") or "")
+                            same_snapshot = bool(index_snapshot and code_snapshot and index_snapshot == str(code_snapshot))
+                            if not same_snapshot:
+                                errors.append("code_context_code_index_snapshot_mismatch")
+                            if task_scope == "source_code" and not expected_index_hash:
+                                errors.append("code_context_code_index_hash_missing")
+                            if (
+                                loaded_index.get("schema_version") == "code-index.v1"
+                                and same_root
+                                and same_snapshot
+                            ):
+                                if expected_index_hash and index_file_hash != expected_index_hash:
+                                    errors.append("code_context_code_index_file_hash_mismatch")
+                                else:
+                                    index_hash = index_file_hash
+                                    code_source_summary["code_index_path"] = str(index_path)
+                                    code_source_summary["code_index_hash"] = index_hash
+                                    code_source_summary["code_index_snapshot_hash"] = index_snapshot
+                                    source["code_index_path"] = str(index_path)
+                                    source["code_index_hash"] = index_hash
+                                    source["code_index_snapshot_hash"] = index_snapshot
+                                    code_index_ref = {
+                                        "kind": "code_index",
+                                        "path": str(index_path),
+                                        "sha256": index_hash,
+                                        "source_snapshot_hash": index_snapshot,
+                                        "schema_version": "code-index.v1",
+                                    }
+
+                source["code_context"] = code_source_summary
+                source_provenance["code_context"] = (
+                    deepcopy(dict(code_context_ref))
+                    if code_context_ref
+                    else {"source": "code_context", "context_id": code_source_summary["context_id"]}
+                )
+
     if isinstance(capability_manifest_obj, Mapping):
         manifest_identity = capability_context.get("identity", {})
         for field in ("project_id", "variant_id", "customer", "vehicle", "coem"):
@@ -460,6 +686,10 @@ def build_pi_orchestration_context(
 
     data_obj = intake_obj.get("data", {}) if isinstance(intake_obj, Mapping) else {}
     data: dict[str, Any] = deepcopy(dict(data_obj)) if isinstance(data_obj, Mapping) else {}
+    if task_scope == "source_code":
+        data["required"] = False
+        data["status"] = "not_required"
+        data["reason"] = "source_code_scope_does_not_require_recorded_case_data"
     if case_dir and not data.get("root"):
         data["root"] = str(case_dir)
     if case_dir and not data.get("cases"):
@@ -480,8 +710,10 @@ def build_pi_orchestration_context(
             data["paths"] = [{"path": str(bundle_bag), "source": "diagnosis_bundle.case.bag"}]
             data["cases"] = [case_entry]
             diagnostics.append("data_bound_from_diagnosis_bundle")
-    if not data.get("paths") and not data.get("cases"):
+    if not data.get("paths") and not data.get("cases") and task_scope != "source_code":
         missing.append("data.case_or_intake")
+    elif not data.get("paths") and not data.get("cases") and task_scope == "source_code":
+        diagnostics.append("data_not_required_for_source_code_scope")
     if not data.get("paths") and data.get("cases"):
         diagnostics.append("data_paths_not_materialized")
 
@@ -593,6 +825,8 @@ def build_pi_orchestration_context(
         diagnosis_bundle_ref,
         runtime_debug_plan_ref,
         capability_manifest_ref,
+        code_context_ref,
+        code_index_ref,
     ):
         if ref:
             artifact_list.append(ref)
@@ -614,8 +848,17 @@ def build_pi_orchestration_context(
     source["source_context_fingerprint"] = _fingerprint({k: v for k, v in source.items() if k != "provenance"})
     data["data_fingerprint"] = _fingerprint(data)
 
+    if task_scope == "source_code" and code_context_obj is None and not code_context_error:
+        missing.append("source.code_context")
+        errors.append("source_code_context_missing")
+
     missing = _dedupe_strings(missing)
-    blocked = bool(errors) or (not data.get("paths") and not data.get("cases"))
+    data_missing_for_scope = (
+        task_scope != "source_code"
+        and not data.get("paths")
+        and not data.get("cases")
+    )
+    blocked = bool(errors) or data_missing_for_scope
     if isinstance(intake_obj, Mapping) and intake_obj.get("status") == "blocked":
         blocked = True
     capability_partial = capability_context.get("status") not in {"not_provided", "ready"}
@@ -632,6 +875,7 @@ def build_pi_orchestration_context(
         diagnostics.append("context_requires_confirmation_or_more_artifacts")
 
     canonical = {
+        "task_scope": task_scope,
         "project": {k: v for k, v in identity.items() if k != "provenance"},
         "data": data,
         "source": {k: v for k, v in source.items() if k != "provenance"},
@@ -647,6 +891,7 @@ def build_pi_orchestration_context(
     effective_project_root = str(project_root or source.get("arbe_root", "") or "")
     return {
         "schema_version": SCHEMA_VERSION,
+        "task_scope": task_scope,
         "status": status,
         "run_id": effective_run_id,
         "context_fingerprint": context_fingerprint,

@@ -25,8 +25,9 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path, PurePosixPath
-from typing import Any, Optional, Protocol, Sequence
+from typing import Any, Mapping, Optional, Protocol, Sequence
 
 from .preflight import CommandResult, SshCommandRunner
 from .replay_provider import (
@@ -51,6 +52,8 @@ _CAPTURE_END = "__CR60_PUBLIC_CAPTURE_END__"
 _PUBLIC_CAPTURE_EXTRACTOR = r'''
 import json
 import sys
+import math
+import struct
 import rosbag
 
 path = sys.argv[1]
@@ -71,7 +74,97 @@ capture = {
     "radar_info_rows": [],
     "object_rows": [],
     "roi_rows": [],
+    "point_rows": [],
+    "cluster_rows": [],
+    "track_rows": [],
+    "output_rows": [],
+    "stage_evidence": [],
+    "diagnostics": [],
+    "message_schema": {"status": "not_available"},
+    "message_schemas": [],
 }
+
+DOT_STRUCT = struct.Struct("<hhhhbbbBBBBB")
+DOT_PREFIX = 728
+
+def bytes_value(value):
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    try:
+        return bytes(int(item) & 0xff for item in value)
+    except (TypeError, ValueError):
+        return b""
+
+def topic_radar_id(topic):
+    try:
+        return int(str(topic).rsplit("_", 1)[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+
+def append_lgu_points(topic, msg, stamp, seq):
+    lgu_schema = {"type": "arbe_msgs/wfAutosarData", "payload": "PERInfoOutStruct.dotTrans", "layout_profile": {"name": "arbe_PERInfoOutStruct_debug_tail_v3", "fixed_prefix_size": 728, "dot_struct_size": 16, "verified": False, "source_snapshot_hash": ""}}
+    if lgu_schema not in capture["message_schemas"]:
+        capture["message_schemas"].append(lgu_schema)
+    frame = getattr(msg, "frameID", None)
+    count = max(0, int(getattr(msg, "LGUNum", 0) or 0))
+    raw = bytes_value(getattr(msg, "outputData", b""))
+    radar_id = topic_radar_id(topic)
+    available = max(0, (len(raw) - DOT_PREFIX) // DOT_STRUCT.size)
+    if count > available:
+        capture["diagnostics"].append("lgu_dot_payload_short:%s:%s:%s" % (topic, count, available))
+    for index in range(min(count, available)):
+        offset = DOT_PREFIX + index * DOT_STRUCT.size
+        distance, velocity, azimuth, elevation, power, snr, rcs, theta, phi, dv, peer, ambiguous = DOT_STRUCT.unpack_from(raw, offset)
+        capture["point_rows"].append({
+            "point_key": "%s:%s:%s" % (topic, frame, index),
+            "frame_id": frame,
+            "radar_id": radar_id,
+            "range": distance / 100.0,
+            "doppler": velocity / 100.0,
+            "azimuth": azimuth / 100.0,
+            "elevation": elevation / 100.0,
+            "power": int(power), "snr": int(snr), "rcs": int(rcs),
+            "quality": {"azimuth": int(theta), "elevation": int(phi), "velocity": int(dv)},
+            "azimuth_ambiguous": bool(ambiguous), "local_peer_index": int(peer),
+            "source": "PERInfoOutStruct.dotTrans",
+            "source_ref": {"topic": topic, "frame_id": frame, "message_seq": seq, "byte_offset": offset, "struct_size": DOT_STRUCT.size, "raw_token": "PERInfoOutStruct.dotTrans"},
+            "status": "observed",
+        })
+    capture["stage_evidence"].append({
+        "stage": "input_decode", "frame_id": frame, "status": "completed" if count <= available else "partial",
+        "runtime_proof": "observed", "input_count": min(count, available), "output_count": min(count, available),
+        "source_ref": {"topic": topic, "message_seq": seq},
+    })
+
+def pointcloud2_rows(topic, msg, stamp, seq):
+    point_schema = {"type": "sensor_msgs/PointCloud2", "topic": topic, "payload": "public_stage_point_cloud"}
+    if point_schema not in capture["message_schemas"]:
+        capture["message_schemas"].append(point_schema)
+    width = max(0, int(getattr(msg, "width", 0) or 0)); height = max(0, int(getattr(msg, "height", 1) or 1))
+    point_step = int(getattr(msg, "point_step", 0) or 0); row_step = int(getattr(msg, "row_step", point_step * width) or 0)
+    raw = bytes_value(getattr(msg, "data", b"")); fields = list(getattr(msg, "fields", []) or [])
+    if point_step <= 0 or row_step < width * point_step or len(raw) < row_step * height:
+        capture["diagnostics"].append("pointcloud2_invalid_or_truncated:%s" % topic)
+        return
+    field_specs = {}
+    formats = {1: ("b", 1), 2: ("B", 1), 3: ("h", 2), 4: ("H", 2), 5: ("i", 4), 6: ("I", 4), 7: ("f", 4), 8: ("d", 8)}
+    for field in fields:
+        name = str(getattr(field, "name", "") or ""); datatype = int(getattr(field, "datatype", 0) or 0)
+        spec = formats.get(datatype)
+        if name and spec:
+            field_specs[name] = (int(getattr(field, "offset", 0) or 0), spec[0], spec[1], max(1, int(getattr(field, "count", 1) or 1)))
+    for index in range(width * height):
+        row, col = divmod(index, width or 1); base = row * row_step + col * point_step; values = {}; partial = False
+        for name, (offset, fmt, size, count) in field_specs.items():
+            if offset < 0 or offset + size * count > point_step:
+                values[name] = None; partial = True; continue
+            try:
+                unpacked = struct.unpack_from((">" if bool(getattr(msg, "is_bigendian", False)) else "<") + fmt * count, raw, base + offset)
+                values[name] = unpacked[0] if count == 1 else list(unpacked)
+            except struct.error:
+                values[name] = None; partial = True
+        capture["point_rows"].append({**values, "point_index": index, "source": "sensor_msgs/PointCloud2", "source_ref": {"topic": topic, "message_seq": seq, "point_index": index, "point_step": point_step, "row_step": row_step}, "status": "partial" if partial else "observed"})
+    capture["stage_evidence"].append({"stage": "point_cloud", "status": "completed", "runtime_proof": "observed", "input_count": width * height, "output_count": width * height, "source_ref": {"topic": topic, "message_seq": seq}})
 
 message_seq = 0
 with rosbag.Bag(path, "r") as bag:
@@ -94,11 +187,25 @@ with rosbag.Bag(path, "r") as bag:
                 "source": "radar_info",
                 "data": [float(value) for value in list(getattr(msg, "data", []))],
             })
+        elif topic.startswith("/wf/corner_radar/lgu_data_"):
+            append_lgu_points(topic, msg, stamp, message_seq)
+        elif topic.startswith("/wf/corner_radar/rviz/pointcloud_"):
+            pointcloud2_rows(topic, msg, stamp, message_seq)
+        elif topic.startswith("/wf/rviz/clusters_"):
+            cluster_schema = {"type": "visualization_msgs/MarkerArray", "topic": topic, "payload": "public_stage_clusters"}
+            if cluster_schema not in capture["message_schemas"]:
+                capture["message_schemas"].append(cluster_schema)
+            radar_id = topic_radar_id(topic)
+            markers = list(getattr(msg, "markers", []) or [])
+            for marker in markers:
+                points = [{"x": float(point.x), "y": float(point.y), "z": float(point.z)} for point in getattr(marker, "points", [])]
+                capture["cluster_rows"].append({"cluster_id": "%s:%s" % (topic, getattr(marker, "id", len(capture["cluster_rows"]))), "radar_id": radar_id, "marker_id": int(getattr(marker, "id", 0) or 0), "points": points, "source_ref": {"topic": topic, "message_seq": message_seq}, "status": "observed"})
+            capture["stage_evidence"].append({"stage": "cluster", "status": "completed", "runtime_proof": "observed", "input_count": len(markers), "output_count": len(markers), "source_ref": {"topic": topic, "message_seq": message_seq}})
         elif topic.startswith("/wf/objectlist_"):
-            try:
-                radar_id = int(topic.rsplit("_", 1)[1])
-            except (TypeError, ValueError):
-                radar_id = None
+            object_schema = {"type": "arbe_msgs/wfObjectMsg", "topic": topic, "payload": "public_stage_tracks"}
+            if object_schema not in capture["message_schemas"]:
+                capture["message_schemas"].append(object_schema)
+            radar_id = topic_radar_id(topic)
             header = getattr(msg, "header", None)
             header_stamp = header.stamp.to_sec() if header is not None else None
             for index, obj in enumerate(getattr(msg, "ObjectsBuffer", [])):
@@ -113,6 +220,8 @@ with rosbag.Bag(path, "r") as bag:
                         "object_index": index,
                     })
                     capture["object_rows"].append(row)
+                    capture["track_rows"].append({**row, "track_id": row.get("ID", row.get("id", row.get("object_id"))), "object_id": row.get("objID", row.get("object_id")), "frame_id": None, "status": "observed", "source_ref": {"topic": topic, "message_seq": message_seq, "object_index": index}})
+            capture["stage_evidence"].append({"stage": "track", "status": "completed", "runtime_proof": "observed", "input_count": len(getattr(msg, "ObjectsBuffer", []) or []), "output_count": len(getattr(msg, "ObjectsBuffer", []) or []), "source_ref": {"topic": topic, "message_seq": message_seq}})
         elif topic.startswith("/corner_radar/rviz/") and "Area_" in topic:
             try:
                 radar_id = int(topic.rsplit("_", 1)[1])
@@ -130,6 +239,22 @@ with rosbag.Bag(path, "r") as bag:
                 "point_count": len(points),
                 "points": points,
             })
+        elif topic not in ("/clock",):
+            capture["output_rows"].append({"topic": topic, "record_time": stamp, "message_seq": message_seq, "payload": plain(msg), "status": "observed"})
+
+if len(capture["message_schemas"]) == 1:
+    capture["message_schema"] = capture["message_schemas"][0]
+elif capture["message_schemas"]:
+    capture["message_schema"] = {"status": "multiple", "schemas": capture["message_schemas"]}
+capture["completion"] = {
+    "status": "completed" if capture["stage_evidence"] else "no_stage_output",
+    "stage_count": len(capture["stage_evidence"]),
+    "point_count": len(capture["point_rows"]),
+    "cluster_count": len(capture["cluster_rows"]),
+    "track_count": len(capture["track_rows"]),
+    "output_count": sum(1 for row in capture["track_rows"] if row.get("ID") is not None and int(row.get("ID", -1)) >= 0) + len(capture["output_rows"]),
+    "track_output_count": sum(1 for row in capture["track_rows"] if row.get("ID") is not None and int(row.get("ID", -1)) >= 0),
+}
 
 json.dump(capture, sys.stdout, ensure_ascii=False, allow_nan=True)
 '''
@@ -219,10 +344,16 @@ def build_public_capture_command(
     ros_setup: str = "/opt/ros/noetic/setup.bash",
     workspace_setup: str = "",
     ros_master_uri: str = "http://localhost:11311",
+    attempt_id: str = "",
 ) -> dict[str, Any]:
     """Build an SSH command that records public outputs during a short replay."""
     bag = _remote_absolute_path(remote_bag_path, "remote_bag_path")
     base = _remote_absolute_path(remote_capture_base, "remote_capture_base").removesuffix(".bag")
+    attempt = str(attempt_id or "").strip()
+    if attempt and (len(attempt) > 80 or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for char in attempt)):
+        raise ValueError("attempt_id must contain only letters, digits, '.', '_' or '-'")
+    if attempt:
+        base = f"{base}.{attempt}"
     start = _finite_number(start_sec, "start_sec")
     duration = _finite_number(duration_sec, "duration_sec", minimum=0.01)
     inputs = [str(item).strip() for item in input_topics if str(item).strip()]
@@ -255,6 +386,10 @@ def build_public_capture_command(
     capture_body = [
         f"export ROS_MASTER_URI={shlex.quote(master)}",
         f"mkdir -p {shlex.quote(parent)}",
+        # Keep cleanup in the same remote shell so SSH interruption cannot
+        # leave a tool-owned recorder attached to the user's ROS master.
+        "cleanup() { children=$(pgrep -P \"${rec:-}\" 2>/dev/null || true); for child in $children; do kill -INT \"$child\" 2>/dev/null || true; done; if test -n \"${rec:-}\"; then kill -TERM \"$rec\" 2>/dev/null || true; fi; }",
+        "trap cleanup INT TERM EXIT",
         f"rm -f {shlex.quote(bag_path)} {shlex.quote(bag_path + '.active')} {shlex.quote(json_path)} {shlex.quote(log_path)} {shlex.quote(play_log_path)}",
         f"rosbag record -O {shlex.quote(base)} {' '.join(shlex.quote(item) for item in outputs)} >{shlex.quote(log_path)} 2>&1 & rec=$!",
         "sleep 2",
@@ -289,6 +424,7 @@ def build_public_capture_command(
         "output_topics": outputs,
         "start_sec": start,
         "duration_sec": duration,
+        "attempt_id": attempt,
     }
 
 
@@ -397,11 +533,14 @@ class RemoteArbeReplayProvider(ArbeReplayProvider):
         ros_setup: str = "/opt/ros/noetic/setup.bash",
         workspace_setup: str = "",
         ros_master_uri: str = "http://localhost:11311",
+        attempt_id: str = "",
         execute: bool = False,
         local_capture_path: str | Path = "",
         timeout_sec: float = 120.0,
     ) -> dict[str, Any]:
         """Plan/execute one public replay capture in an existing ROS session."""
+        if execute and not attempt_id:
+            attempt_id = f"attempt-{uuid.uuid4().hex[:12]}"
         plan = build_public_capture_command(
             remote_bag_path=remote_bag_path,
             remote_capture_base=remote_capture_base,
@@ -412,6 +551,7 @@ class RemoteArbeReplayProvider(ArbeReplayProvider):
             ros_setup=ros_setup,
             workspace_setup=workspace_setup,
             ros_master_uri=ros_master_uri,
+            attempt_id=attempt_id,
         )
         payload: dict[str, Any] = {
             "schema_version": PUBLIC_CAPTURE_SCHEMA,
@@ -423,11 +563,29 @@ class RemoteArbeReplayProvider(ArbeReplayProvider):
                 "port": self.port,
                 "remote_bag_path": remote_bag_path,
                 "ros_master_uri": ros_master_uri,
+                "attempt_id": plan.get("attempt_id", ""),
             },
             "command": plan["command"],
+            "execution_plan": {
+                "remote_bag_path": remote_bag_path,
+                "remote_capture_base": remote_capture_base,
+                "start_sec": plan["start_sec"],
+                "duration_sec": plan["duration_sec"],
+                "input_topics": list(plan["input_topics"]),
+                "output_topics": list(plan["output_topics"]),
+                "ros_setup": ros_setup,
+                "workspace_setup": workspace_setup,
+                "ros_master_uri": ros_master_uri,
+            },
             "execute_requested": bool(execute),
             "remote_capture_bag": plan["remote_capture_bag"],
             "remote_capture_json": plan["remote_capture_json"],
+            "lifecycle": {
+                "reset_status": "not_available",
+                "warmup_status": "not_available",
+                "completion_status": "not_available",
+                "diagnostics": ["existing_session_reset_and_warmup_ack_not_exposed_by_public_capture"] ,
+            },
             "diagnostics": [],
         }
         if not execute:
@@ -468,6 +626,21 @@ class RemoteArbeReplayProvider(ArbeReplayProvider):
                 if fetched.ok:
                     payload["local_capture_json"] = str(local_path)
                     payload.setdefault("artifacts", []).append(str(local_path))
+                    try:
+                        capture_payload = json.loads(local_path.read_text(encoding="utf-8"))
+                    except (OSError, UnicodeError, json.JSONDecodeError):
+                        capture_payload = {}
+                    if isinstance(capture_payload, Mapping):
+                        completion = capture_payload.get("completion")
+                        if isinstance(completion, Mapping):
+                            payload["completion"] = dict(completion)
+                            payload["lifecycle"]["completion_status"] = str(completion.get("status", "not_available"))
+                            if str(completion.get("status")) not in {"completed", "observed"}:
+                                payload["status"] = "partial"
+                                payload["diagnostics"].append("replay_stage_completion_not_observed")
+                            elif not int(completion.get("stage_count", 0) or 0):
+                                payload["status"] = "partial"
+                                payload["diagnostics"].append("replay_stage_completion_empty")
                 else:
                     payload["status"] = "partial"
                     payload["diagnostics"].append("local_capture_fetch_failed")

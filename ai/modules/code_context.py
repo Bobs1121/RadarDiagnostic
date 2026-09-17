@@ -51,6 +51,10 @@ class CodeContextRefreshModule(BaseModule):
             "calib_files": {"type": "array", "items": {"type": "string"}},
             "function_keywords": {"type": "object"},
             "source_identity": {"type": "object"},
+            "output_mapping_rte_file": {
+                "type": "string",
+                "description": "Optional source-root-relative active COEM RTE Tx mapping; otherwise resolved from source_identity.coem",
+            },
             "source_docs_dir": {"type": "string"},
             "probe_git": {"type": "boolean"},
             "use_ast": {"type": "boolean"},
@@ -76,6 +80,7 @@ class CodeContextRefreshModule(BaseModule):
         calib_files: Sequence[str] | None = None,
         function_keywords: Mapping[str, Sequence[str]] | None = None,
         source_identity: Mapping[str, Any] | None = None,
+        output_mapping_rte_file: str = "",
         source_docs_dir: str = "",
         probe_git: bool = True,
         use_ast: bool = True,
@@ -93,6 +98,7 @@ class CodeContextRefreshModule(BaseModule):
                 calib_files=calib_files,
                 function_keywords=function_keywords,
                 source_identity=source_identity,
+                output_mapping_rte_file=output_mapping_rte_file,
                 source_docs_dir=source_docs_dir or None,
                 probe_git=probe_git,
                 use_ast=bool(use_ast) and not bool(no_ast),
@@ -131,6 +137,11 @@ class CodeContextRefreshModule(BaseModule):
         parser.add_argument("--calib-file", dest="calib_files", action="append", default=[])
         parser.add_argument("--function-keywords", type=_json_object, default={})
         parser.add_argument("--source-identity", type=_json_object, default={})
+        parser.add_argument(
+            "--output-mapping-rte-file",
+            default="",
+            help="Active COEM RTE Tx mapping relative to source-root; otherwise resolved from source identity",
+        )
         parser.add_argument("--source-docs-dir", default="")
         parser.add_argument("--no-git-probe", dest="probe_git", action="store_false", default=True)
         parser.add_argument("--no-ast", action="store_true")

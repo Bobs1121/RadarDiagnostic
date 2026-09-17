@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Mapping
 
 from .model_router import ModelRouter
 from .utils import parse_json_from_llm, extract_relevant_sections, build_keyword_variants
@@ -263,10 +263,33 @@ class ConditionExtractor:
         Platform-aware: tries platform adapter first, falls back to Gen6 RteComMapping parser.
         Gracefully handles missing adapter / empty mapping by marking can_signal as Unknown.
         """
-        from engines.signal_mapper import extract_signal_mapping, resolve_internal_to_can, load_variable_chains
+        from engines.signal_mapper import (
+            extract_signal_mapping,
+            resolve_internal_to_can,
+            trace_variable_chains,
+        )
+
+        rte_file: str | None = None
+        if isinstance(self.config, Mapping) and (
+            self.config.get("default_variant") or self.config.get("variants")
+        ):
+            try:
+                from config import resolve_variant_rte_mapping_file
+
+                rte_file, _selection_status = resolve_variant_rte_mapping_file(
+                    self.config,
+                    self.source_root,
+                    variant_id=(self.config.get("identity") or {}).get("variant_id"),
+                )
+            except Exception:  # noqa: BLE001 - active variant stays fail-closed
+                rte_file = ""
 
         sig_mapping: dict = {}
-        chains = load_variable_chains(self.cache_dir)
+        # Refresh/validate the deterministic cache against this variant's RTE
+        # sources instead of trusting an unscoped or legacy customer cache.
+        chains = trace_variable_chains(
+            self.source_root, self.cache_dir, rte_file=rte_file
+        )
 
         # Priority 1: platform adapter signal mapping (if available)
         if self._platform_adapter is not None:
@@ -286,6 +309,7 @@ class ConditionExtractor:
             sig_mapping = extract_signal_mapping(
                 self.source_root,
                 self.cache_dir,
+                rte_file=rte_file,
             )
 
         # Resolve can_signals — even with empty mapping, mark as Unknown (never crash)

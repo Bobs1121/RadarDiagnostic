@@ -53,7 +53,6 @@ _BRIDGE_CALL_TMPL = (
     '{ cwd: projectRoot(), encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).toString())'
 )
 
-
 def _js(value) -> str:
     """Python 值 → JS 字面量。"""
     return json.dumps(value, ensure_ascii=False)

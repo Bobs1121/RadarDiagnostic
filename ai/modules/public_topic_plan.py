@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -49,7 +50,18 @@ class PublicTopicPlanModule(BaseModule):
     ) -> ModuleResult:
         try:
             profile = load_profile_mapping(profile_path) if profile_path else {}
-            preflight = load_json_mapping(preflight_path) if preflight_path else {}
+            preflight_sha256 = ""
+            if preflight_path:
+                preflight_bytes = Path(preflight_path).expanduser().resolve().read_bytes()
+                preflight_value = json.loads(preflight_bytes)
+                if not isinstance(preflight_value, Mapping):
+                    raise ValueError("preflight root must be an object")
+                preflight = dict(preflight_value)
+                if preflight.get("schema_version") != "arbe-preflight.v1":
+                    raise ValueError("preflight_path must point to arbe-preflight.v1")
+                preflight_sha256 = hashlib.sha256(preflight_bytes).hexdigest()
+            else:
+                preflight = {}
             runtime_schema = (
                 load_json_mapping(runtime_schema_path) if runtime_schema_path else {}
             )
@@ -59,6 +71,7 @@ class PublicTopicPlanModule(BaseModule):
             payload = build_public_topic_plan(
                 profile=profile,
                 preflight=preflight,
+                preflight_sha256=preflight_sha256,
                 runtime_schema=runtime_schema,
                 topic_inventory=topic_inventory,
             )

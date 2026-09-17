@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cr60-intake-binding.v1",
+  "description": "T10: 材料/数据身份到已配置项目(variant)的确定性绑定结果；版本/分支 fail-closed 门与业务语言澄清问题。生产方 engines/arbe/intake_binding.py；消费方 ai/modules/pi.py（pre-model gate、run binding）。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "binding_status_note",
+    "binding",
+    "identity",
+    "variant",
+    "version_gate",
+    "business_questions",
+    "missing",
+    "conflicts"
+  ],
+  "properties": {
+    "schema_version": {"const": "cr60-intake-binding.v1"},
+    "status": {"enum": ["resolved", "needs_confirmation", "blocked"]},
+    "binding_status_note": {"enum": ["runtime_binding_ready", "awaiting_user_confirmation", "runtime_binding_blocked"]},
+    "binding": {
+      "type": "object",
+      "properties": {
+        "variant_id": {"type": "string"},
+        "customer": {"type": "string"},
+        "vehicle": {"type": "string"},
+        "coem": {"type": "string"},
+        "software_version": {"type": "string"},
+        "code_branch": {"type": "string"}
+      }
+    },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "resolved": {"type": "object"},
+        "missing": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "variant": {
+      "type": "object",
+      "properties": {
+        "variant_id": {"type": "string"},
+        "origin": {"type": "string"},
+        "candidates": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "version_gate": {
+      "type": "object",
+      "required": ["checked", "status"],
+      "properties": {
+        "checked": {"type": "boolean"},
+        "status": {"enum": ["aligned", "mismatch", "not_checked"]},
+        "expected": {"type": "object"},
+        "observed": {"type": "object"},
+        "source": {"type": "string"}
+      }
+    },
+    "business_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "field", "question", "blocking"],
+        "properties": {
+          "id": {"type": "string"},
+          "field": {"type": "string"},
+          "question": {"type": "string", "description": "业务语言措辞，不含 frameID/PID/GDB 表达式等技术 token"},
+          "why": {"type": "string"},
+          "candidates": {"type": "array"},
+          "blocking": {"type": "boolean"}
+        }
+      }
+    },
+    "missing": {"type": "array", "items": {"type": "string"}},
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {"type": "string"},
+          "expected": {},
+          "observed": {},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "intake_ref": {
+      "type": "object",
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string"},
+        "exists": {"type": "boolean"}
+      }
+    },
+    "intake_handoff_id": {"type": "string"},
+    "intake_status": {"type": "string"},
+    "provenance": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  }
+}

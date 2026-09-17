@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-lineage-index.v1",
+  "type": "object",
+  "required": ["schema_version", "artifact_path", "artifact_sha256", "artifact_size_bytes", "row_count", "counts", "callbacks", "unbound"],
+  "properties": {
+    "schema_version": {"const": "perception-lineage-index.v1"},
+    "artifact_path": {"type": "string"},
+    "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "artifact_size_bytes": {"type": "integer", "minimum": 0},
+    "row_count": {"type": "integer", "minimum": 0},
+    "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "callbacks": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/range"}
+    },
+    "unbound": {"$ref": "#/$defs/range"}
+  },
+  "$defs": {
+    "range": {
+      "type": "object",
+      "required": ["offset", "length", "row_count", "counts", "sha256"],
+      "properties": {
+        "offset": {"type": "integer", "minimum": 0},
+        "length": {"type": "integer", "minimum": 0},
+        "row_count": {"type": "integer", "minimum": 0},
+        "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

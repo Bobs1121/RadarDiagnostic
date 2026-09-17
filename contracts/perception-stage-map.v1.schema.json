@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-stage-map.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "source_root", "source_snapshot_hash", "stages", "runtime_proof"],
+  "properties": {
+    "schema_version": {"const": "perception-stage-map.v1"},
+    "status": {"enum": ["ready", "not_available"]},
+    "source_root": {"type": "string"},
+    "source_snapshot_hash": {"type": "string"},
+    "scanned_files": {"type": "array", "items": {"type": "string"}},
+    "stages": {"type": "object"},
+    "runtime_proof": {"const": "not_available"}
+  },
+  "additionalProperties": true
+}

@@ -84,6 +84,20 @@ def test_runtime_guard_preserves_legacy_but_variant_runs_fail_closed():
     assert decision.reasons == ("freshness_missing",)
 
 
+def test_variant_with_available_freshness_but_no_manifest_stays_blocked():
+    decision = runtime_knowledge_decision(
+        {
+            "identity": {
+                "variant_id": "gen6/byd_sc6h",
+                "freshness": {"available": True},
+            }
+        },
+        "conditions:RCTA",
+    )
+    assert not decision.allowed
+    assert decision.reasons == ("manifest_missing",)
+
+
 def test_memory_blocks_stale_variant_code_knowledge(tmp_path):
     from memory.memory_system import MemorySystem
 
@@ -112,6 +126,7 @@ def test_memory_allows_fresh_variant_and_disables_legacy_fallback(tmp_path):
                 "code_changed": False,
                 "constants_changed": False,
                 "identity_changed": False,
+                "state_path": str(tmp_path / "variant_memory" / "freshness_state.json"),
             },
         }
     }
@@ -122,6 +137,9 @@ def test_memory_allows_fresh_variant_and_disables_legacy_fallback(tmp_path):
     assert memory.read_code_knowledge("RCTA") == {}
     current = memory.memory_dir / "code_knowledge" / "RCTA.json"
     current.write_text(json.dumps({"current": True}), encoding="utf-8")
+    # A product is consumable only after the successful refresh publishes
+    # the current scoped manifest; presence of a JSON file is insufficient.
+    publish_knowledge_categories(config, ["code_knowledge:RCTA"], producer="test")
     assert memory.read_code_knowledge("RCTA") == {"current": True}
 
 

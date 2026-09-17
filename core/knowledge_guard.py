@@ -72,6 +72,15 @@ class KnowledgeFreshnessGuard:
             return KnowledgeDecision(category, False, ("freshness_unavailable",))
         if self._manifest_allows(category, freshness):
             return KnowledgeDecision(category, True, ())
+        # A variant run must prove publication through the scoped manifest.
+        # Falling back to the absence of stale flags is unsafe: a newly created
+        # or partially refreshed variant commonly has all flags set to false
+        # before any knowledge product exists.
+        if _variant_id(self._config):
+            path = _manifest_path(freshness)
+            if path is None or not path.exists():
+                return KnowledgeDecision(category, False, ("manifest_missing",))
+            return KnowledgeDecision(category, False, ("category_not_published",))
         reasons = tuple(flag for flag in stale_flags if bool(freshness.get(flag)))
         return KnowledgeDecision(category, not reasons, reasons)
 
@@ -245,6 +254,17 @@ def _manifest_path(freshness: Mapping[str, Any]) -> Path | None:
 
 def _base_category(category: str) -> str:
     return str(category).split(":", 1)[0]
+
+
+def _variant_id(config: Mapping[str, Any] | Any) -> str:
+    """Return the explicit variant identity, if this is a variant run."""
+    if isinstance(config, Mapping):
+        identity = config.get("identity")
+    else:
+        identity = getattr(config, "identity", None)
+    if isinstance(identity, Mapping):
+        return str(identity.get("variant_id") or "")
+    return str(getattr(identity, "variant_id", "") or "")
 
 
 __all__ = [

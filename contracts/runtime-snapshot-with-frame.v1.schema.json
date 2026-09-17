@@ -17,6 +17,25 @@
     "schema_version": {"const": "runtime-snapshot-with-frame.v1"},
     "status": {"type": "string", "enum": ["ready", "partial", "blocked"]},
     "source_context": {"type": "object"},
+    "capture_metadata": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"const": "public-runtime-capture-metadata.v1"},
+        "origin_schema_version": {"type": "string"},
+        "inventory_path": {"type": ["string", "null"]},
+        "inventory_sha256": {"type": ["string", "null"]},
+        "inventory_status": {"type": "string"},
+        "requested_topics": {"type": "array", "items": {"type": "string"}},
+        "inventory_observed_at_utc": {"type": ["string", "null"]},
+        "identity_binding": {"type": "object"},
+        "topic_plan_binding_status": {"type": "string"},
+        "observed_sample_count": {"type": "integer", "minimum": 0},
+        "observed_objectlist_topic_count": {"type": "integer", "minimum": 0},
+        "topic_samples": {"type": "array", "items": {"type": "object"}},
+        "association_policy": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
     "warning_rising_edges": {"type": "array", "items": {"type": "object"}},
     "snapshots": {
       "type": "array",

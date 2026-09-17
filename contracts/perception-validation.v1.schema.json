@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-validation.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "errors", "warnings", "checks", "conclusion_level"],
+  "properties": {
+    "schema_version": {"const": "perception-validation.v1"},
+    "status": {"enum": ["valid", "valid_with_warnings", "invalid"]},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "checks": {"type": "object"},
+    "conclusion_level": {"const": "validation_only"}
+  },
+  "additionalProperties": true
+}

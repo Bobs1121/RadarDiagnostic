@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-analysis.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "conclusion_level", "input_contract", "stage_coverage", "lineage", "gaps"],
+  "properties": {
+    "schema_version": {"const": "perception-analysis.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "conclusion_level": {"enum": ["facts_only", "supported_hypothesis"]},
+    "input_contract": {"type": "object"},
+    "stage_coverage": {"type": "object"},
+    "lineage": {"type": "object"},
+    "run_evidence": {"type": "object"},
+    "comparison": {"type": "object"},
+    "scene": {"type": "object"},
+    "timeline": {"type": "object"},
+    "warmup_analysis": {"type": "object"},
+    "hypothesis_set": {"type": "object"},
+    "capability_manifest": {"type": "object"},
+    "code_flow": {"type": "object"},
+    "gaps": {"type": "array", "items": {"type": "object"}},
+    "hypotheses": {"type": "array", "items": {"type": "object"}},
+    "next_actions": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": true
+}

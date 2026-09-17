@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-report-query.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "section", "report_ref", "data", "truncated"],
+  "properties": {
+    "schema_version": {"const": "perception-report-query.v1"},
+    "status": {"enum": ["ready", "partial", "blocked", "not_found"]},
+    "section": {"enum": ["summary", "stages", "lineage", "timeline", "scene", "run", "source", "gaps"]},
+    "report_ref": {"type": "string"},
+    "data": {},
+    "callback_key": {"type": "string"},
+    "truncated": {"type": "boolean"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

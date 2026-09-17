@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-injection-audit.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "injection_enabled", "gates", "diagnostics", "conclusion_level"],
+  "properties": {
+    "schema_version": {"const": "perception-injection-audit.v1"},
+    "status": {"enum": ["observed", "not_available"]},
+    "injection_enabled": {"type": ["boolean", "null"]},
+    "injection_macros": {"type": "object"},
+    "target_usage": {"type": "object"},
+    "runtime_stage_count": {"type": "integer", "minimum": 0},
+    "gates": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "conclusion_level": {"const": "facts_only"}
+  },
+  "additionalProperties": true
+}

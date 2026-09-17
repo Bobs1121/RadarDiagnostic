@@ -361,6 +361,21 @@ class Gen6SymmetryCodeLearnerAdapter(BaseCodeLearnerAdapter):
         self.project_root = project_root
         self._variant_candidates: dict[str, str] | None = None
 
+    def _resolve_rte_file(self) -> str:
+        """Use only the active variant's configured RTE mapping source."""
+        try:
+            from config import resolve_variant_id, resolve_variant_rte_mapping_file
+
+            identity = self.config.get("identity", {})
+            requested = identity.get("variant_id") if isinstance(identity, dict) else None
+            variant_id = resolve_variant_id(self.config, requested)
+            rte_file, status = resolve_variant_rte_mapping_file(
+                self.config, self.source_root, variant_id=variant_id
+            )
+            return rte_file if status != "variant_unavailable" else ""
+        except Exception:  # noqa: BLE001 - missing variant identity stays unavailable
+            return ""
+
     def _variant_file_map(self) -> dict[str, str]:
         """Map basename -> existing variant file (basename-based redirect).
 
@@ -559,24 +574,43 @@ class Gen6SymmetrySignalMapperAdapter(BaseSignalMapperAdapter):
         self.config = config
         self._mapping_cache: Optional[dict] = None
 
+    def _resolve_rte_file(self) -> str | None:
+        """Resolve the selected variant mapping; keep missing identity unavailable."""
+        try:
+            from config import resolve_variant_id, resolve_variant_rte_mapping_file
+
+            identity = self.config.get("identity", {})
+            requested = identity.get("variant_id") if isinstance(identity, dict) else None
+            variant_id = resolve_variant_id(self.config, requested)
+            rte_file, status = resolve_variant_rte_mapping_file(
+                self.config, self.source_root, variant_id=variant_id
+            )
+            return rte_file if status != "variant_unavailable" else None
+        except Exception:  # noqa: BLE001 - mapping remains unavailable
+            return None
+
     def _get_mapping(self) -> dict:
         if self._mapping_cache is not None:
             return self._mapping_cache
         from engines import signal_mapper
         self._mapping_cache = signal_mapper.extract_signal_mapping(
-            self.source_root, self.output_dir
+            self.source_root, self.output_dir, rte_file=self._resolve_rte_file()
         )
         return self._mapping_cache
 
     def extract_signal_mapping(self, source_root: Path,
                                output_dir: Path) -> dict:
         from engines import signal_mapper
-        return signal_mapper.extract_signal_mapping(source_root, output_dir)
+        return signal_mapper.extract_signal_mapping(
+            source_root, output_dir, rte_file=self._resolve_rte_file()
+        )
 
     def extract_output_mapping(self, source_root: Path,
                                output_dir: Path) -> dict:
         from engines import signal_mapper
-        return signal_mapper.extract_output_signal_mapping(source_root, output_dir)
+        return signal_mapper.extract_output_signal_mapping(
+            source_root, output_dir, rte_file=self._resolve_rte_file()
+        )
 
     def resolve_internal_to_can(self, var_name: str, mapping: dict,
                                 extra: Optional[dict] = None) -> list[str]:

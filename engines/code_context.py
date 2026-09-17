@@ -102,6 +102,65 @@ def _resolve_source_file(source_root: Path, value: str | Path) -> Path:
     return resolved
 
 
+def _resolve_variant_output_mapping(
+    source_root: Path,
+    *,
+    source_identity: Mapping[str, Any],
+    requested_file: str = "",
+) -> tuple[str | None, str, str]:
+    """Resolve the active COEM RTE mapping without crossing variants.
+
+    An explicit file wins. Otherwise a known ``coem`` identity selects its
+    mapping from either a project root or a COEM-only source root. If a COEM
+    is known but its mapping is missing, return unavailable instead of
+    falling back to another project's legacy default.
+    """
+    identity_file = str(source_identity.get("output_mapping_rte_file", "") or "").strip()
+    requested = str(requested_file or "").strip()
+    if requested and identity_file:
+        requested_path = _resolve_source_file(source_root, requested)
+        identity_path = _resolve_source_file(source_root, identity_file)
+        if requested_path != identity_path:
+            raise CodeContextError(
+                "output_mapping_rte_file conflicts with source_identity.output_mapping_rte_file"
+            )
+    explicit = requested or identity_file
+    if explicit:
+        path = _resolve_source_file(source_root, explicit)
+        if not path.is_file():
+            raise CodeContextError(f"output mapping source file not found: {explicit}")
+        return _normalise_relative(path.relative_to(source_root)), "explicit", ""
+
+    coem = str(
+        source_identity.get("coem")
+        or source_identity.get("coem_project")
+        or source_identity.get("coem_project_id")
+        or ""
+    ).strip()
+    if not coem:
+        return None, "coem_identity_required", ""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", coem):
+        raise CodeContextError(f"invalid coem identity for output mapping: {coem}")
+
+    mapping_relative = Path("components/AswIf/ASW_ComMapping/RteComMapping_Tx.c")
+    legacy_relative = Path("components/AswIf/ASW_IN/RteComMapping.c")
+    candidates = (
+        Path("coem") / coem / mapping_relative,
+        Path("coem") / coem / legacy_relative,
+        mapping_relative,
+        legacy_relative,
+    )
+    for candidate in candidates:
+        path = (source_root / candidate).resolve()
+        try:
+            path.relative_to(source_root)
+        except ValueError:
+            continue
+        if path.is_file():
+            return _normalise_relative(path.relative_to(source_root)), "coem_identity", coem
+    return None, "coem_mapping_unavailable", coem
+
+
 def discover_source_files(
     source_root: str | Path,
     requested_files: Sequence[str | Path] | None = None,
@@ -644,13 +703,21 @@ def build_code_context(
     calib_files: Sequence[str | Path] | None = None,
     function_keywords: Mapping[str, Sequence[str]] | None = None,
     source_identity: Mapping[str, Any] | None = None,
+    output_mapping_rte_file: str = "",
     source_docs_dir: str | Path | None = None,
     probe_git: bool = True,
     use_ast: bool = True,
     force: bool = False,
     max_files: int = 20_000,
 ) -> dict[str, Any]:
-    """Build or reuse a deterministic ``code-context.v1`` artifact."""
+    """Build or reuse a deterministic ``code-context.v1`` artifact.
+
+    Output-signal mapping is bound to an explicit RTE source file or the
+    current ``source_identity.coem``. Without either, this snapshot leaves the
+    mapping unavailable instead of applying a legacy cross-variant default.
+    The selected Tx source files join the snapshot manifest so changes
+    invalidate reuse.
+    """
     root = Path(source_root).expanduser().resolve()
     output = Path(output_dir).expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -662,9 +729,47 @@ def build_code_context(
         else output / "codegraph.db"
     )
 
-    files = discover_source_files(root, key_files, max_files=max_files)
-    file_manifest, snapshot_hash = build_source_manifest(root, files)
     identity = dict(source_identity or {})
+    mapping_identity_file = str(identity.get("output_mapping_rte_file", "") or "").strip()
+    resolved_mapping_file, mapping_selection, coem = _resolve_variant_output_mapping(
+        root,
+        source_identity=identity,
+        requested_file=output_mapping_rte_file,
+    )
+    if output_mapping_rte_file or mapping_identity_file:
+        identity["output_mapping_rte_file"] = resolved_mapping_file
+
+    try:
+        from engines.signal_mapper import discover_output_signal_mapping_files
+
+        if not resolved_mapping_file:
+            mapping_source_paths: list[Path] = []
+        else:
+            mapping_source_paths = discover_output_signal_mapping_files(
+                root,
+                resolved_mapping_file,
+            )
+    except ImportError:
+        mapping_source_paths = []
+        mapping_selection = "unavailable"
+
+    effective_key_files: Sequence[str | Path] | None = (
+        list(key_files) if key_files is not None else None
+    )
+    if effective_key_files is not None:
+        effective_key_files = list(effective_key_files)
+        known_files = {
+            _normalise_relative(_resolve_source_file(root, value).relative_to(root))
+            for value in effective_key_files
+        }
+        for mapping_path in mapping_source_paths:
+            relative = _normalise_relative(mapping_path.relative_to(root))
+            if relative not in known_files:
+                effective_key_files.append(relative)
+                known_files.add(relative)
+
+    files = discover_source_files(root, effective_key_files, max_files=max_files)
+    file_manifest, snapshot_hash = build_source_manifest(root, files)
     identity.setdefault("source_root", str(root))
     identity.setdefault("source_snapshot_hash", snapshot_hash)
     # A remote-source mirror may live inside the radarAnalyze checkout.  In
@@ -698,6 +803,15 @@ def build_code_context(
         existing_source = existing.get("source_context", {}) or {}
         existing_artifacts = existing.get("artifacts", {}) or {}
         existing_index = Path(str(existing_artifacts.get("code_index", index_path)))
+        expected_index_hash = str(existing_artifacts.get("code_index_sha256", "") or "")
+        try:
+            index_integrity_valid = bool(
+                expected_index_hash
+                and existing_index.is_file()
+                and _sha256_file(existing_index) == expected_index_hash
+            )
+        except OSError:
+            index_integrity_valid = False
         existing_output_mapping = Path(str(existing_artifacts.get("output_mapping", ""))).expanduser() if existing_artifacts.get("output_mapping") else None
         embedded_output_mapping = False
         if existing_index.exists():
@@ -712,22 +826,32 @@ def build_code_context(
                 or embedded_output_mapping
             )
         )
+        current_mapping_files = [
+            _normalise_relative(path.relative_to(root))
+            for path in mapping_source_paths
+        ]
+        mapping_identity_unchanged = bool(
+            existing_source.get("output_mapping_selection") == mapping_selection
+            and existing_source.get("output_mapping_files") == current_mapping_files
+        )
         if (
             not force
             and
             str(existing_source.get("snapshot_hash", "")) == snapshot_hash
             and existing_index.exists()
+            and index_integrity_valid
             and has_output_mapping
+            and mapping_identity_unchanged
         ):
             reused = dict(existing)
             reused["operation"] = "reused"
             reused["current_snapshot_hash"] = snapshot_hash
             return reused
 
-    if key_files:
+    if effective_key_files:
         graph_key_files = [
             _normalise_relative(_resolve_source_file(root, value).relative_to(root))
-            for value in key_files
+            for value in effective_key_files
         ]
     else:
         graph_key_files = [str(row["path"]) for row in file_manifest]
@@ -765,7 +889,7 @@ def build_code_context(
         raise CodeContextError(f"CodeGraph build failed: {result.error}")
 
     # Do not publish an index if the input moved while it was being parsed.
-    end_files = discover_source_files(root, key_files, max_files=max_files)
+    end_files = discover_source_files(root, effective_key_files, max_files=max_files)
     end_manifest, end_hash = build_source_manifest(root, end_files)
     if end_hash != snapshot_hash:
         raise SourceChangedDuringBuild(
@@ -782,6 +906,7 @@ def build_code_context(
         "edges_removed": result.edges_removed,
         "duration_sec": result.duration_sec,
         "use_ast_requested": bool(use_ast),
+        "use_ast_effective": bool(getattr(builder, "use_ast", False)),
     }
     index = export_code_index(
         db_path=graph_path,
@@ -802,13 +927,37 @@ def build_code_context(
     try:
         from engines.signal_mapper import extract_output_signal_mapping
 
-        output_mapping = extract_output_signal_mapping(
-            root,
-            output_mapping_dir,
-        )
+        if coem and not resolved_mapping_file:
+            output_mapping = {
+                "mappings": [],
+                "signal_to_expr": {},
+                "source": "unavailable",
+                "selection_status": "coem_mapping_not_found",
+                "coem": coem,
+            }
+        elif not resolved_mapping_file:
+            output_mapping = {
+                "mappings": [],
+                "signal_to_expr": {},
+                "source": "unavailable",
+                "selection_status": "coem_identity_required",
+            }
+        elif mapping_source_paths:
+            output_mapping = extract_output_signal_mapping(
+                root,
+                output_mapping_dir,
+                rte_file=resolved_mapping_file,
+            )
+        else:
+            output_mapping = {
+                "mappings": [],
+                "signal_to_expr": {},
+                "source": "unavailable",
+                "selection_status": "no_mapping_source_found",
+            }
     except (ImportError, OSError, TypeError, ValueError):
         output_mapping = {"mappings": [], "signal_to_expr": {}, "source": "unavailable"}
-    if not output_mapping_path.exists():
+    if output_mapping.get("source") == "unavailable" or not output_mapping_path.exists():
         _atomic_write_json(output_mapping_path, output_mapping)
     index["output_mapping"] = output_mapping
     index["output_mapping_path"] = str(output_mapping_path)
@@ -838,6 +987,7 @@ def build_code_context(
     index["conditions"] = existing_conditions
     index.setdefault("summary", {})["conditions"] = len(existing_conditions)
     _atomic_write_json(index_path, index)
+    code_index_sha256 = _sha256_file(index_path)
 
     context = {
         "schema_version": CONTEXT_SCHEMA_VERSION,
@@ -851,11 +1001,17 @@ def build_code_context(
             "snapshot_hash": snapshot_hash,
             "git": git_identity,
             "files": end_manifest,
+            "output_mapping_selection": mapping_selection,
+            "output_mapping_files": [
+                _normalise_relative(path.relative_to(root))
+                for path in mapping_source_paths
+            ],
         },
         "build": build_info,
         "artifacts": {
             "code_context": str(context_path),
             "code_index": str(index_path),
+            "code_index_sha256": code_index_sha256,
             "codegraph_db": str(graph_path),
             "output_mapping": str(output_mapping_path),
         },
@@ -891,7 +1047,16 @@ def query_code_context(
     index_path = Path(str(artifacts.get("code_index", ""))).expanduser().resolve()
     if not index_path.exists():
         raise CodeContextError(f"code index artifact not found: {index_path}")
-    index = _load_json(index_path)
+    try:
+        index_bytes = index_path.read_bytes()
+        index = json.loads(index_bytes.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CodeContextError(f"cannot read JSON artifact {index_path}: {exc}") from exc
+    if not isinstance(index, dict):
+        raise CodeContextError(f"JSON artifact root must be object: {index_path}")
+    expected_index_hash = str(artifacts.get("code_index_sha256", "") or "")
+    if expected_index_hash and hashlib.sha256(index_bytes).hexdigest() != expected_index_hash:
+        raise CodeContextError(f"code index file hash does not match code context: {index_path}")
     sections = {
         "files", "functions", "calls", "call_chain", "variables_read", "variables_written",
         "signals", "output_mapping", "conditions", "states", "parameters", "semantics", "edges",

@@ -40,7 +40,6 @@ class EventCodePathModule(BaseModule):
             "source_root": {"type": "string"},
             "max_call_depth": {"type": "integer"},
             "max_breakpoints": {"type": "integer"},
-            "output": {"type": "string"},
         },
         "required": ["event"],
         "anyOf": [

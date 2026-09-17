@@ -34,7 +34,7 @@ class EvidenceQueryModule(BaseModule):
     """Return one bounded event/frame/field slice for Pi or a report."""
 
     name = "evidence-query"
-    description = "按事件、帧、功能和字段查询已有 CR60 证据 artifact"
+    description = "按事件、帧、功能和字段查询已有 CR60 证据 artifact，包括保留 unbound 状态的 ROS runtime snapshot"
     tags = ["evidence", "query", "event", "frame", "target", "ego", "read-only", "atomic"]
     input_schema: dict[str, Any] = {
         "type": "object",
@@ -45,13 +45,21 @@ class EvidenceQueryModule(BaseModule):
             "viewer_model_path": {"type": "string"},
             "runtime_evidence": {"type": "object"},
             "runtime_evidence_path": {"type": "string"},
+            "runtime_snapshot": {"type": "object"},
+            "runtime_snapshot_path": {
+                "type": "string",
+                "description": "Optional runtime-snapshot-with-frame.v1; unbound ObjectList rows stay separate from alarm events.",
+            },
             "event_id": {"type": "string"},
             "event_index": {"type": "integer"},
             "function": {"type": "string", "description": "功能/事件函数 token；精确匹配，也允许 token_侧别 前缀匹配"},
             "side": {"type": "string"},
             "radar_id": {"type": ["string", "integer"]},
-            "frame_id": {"type": ["string", "integer"]},
-            "fields": {"type": "array", "items": {"type": "string"}, "description": "真实 artifact 点号字段路径，例如 target.fields、ego.fields、frame、code.call_chain"},
+            "frame_id": {
+                "type": ["string", "integer"],
+                "description": "Exact frame filter; unbound runtime ObjectList rows are excluded, never time-matched.",
+            },
+            "fields": {"type": "array", "items": {"type": "string"}, "description": "真实 artifact 字段路径；runtime snapshot 查询时使用当前消息定义中的确切 field token，例如 objID、distX"},
             "max_events": {"type": "integer", "default": 20},
             "max_frames": {"type": "integer", "default": 24},
             "max_targets": {"type": "integer", "default": 24},
@@ -67,12 +75,20 @@ class EvidenceQueryModule(BaseModule):
             {"required": ["bundle_path"]},
             {"required": ["viewer_model"]},
             {"required": ["viewer_model_path"]},
+            {"required": ["runtime_snapshot"]},
+            {"required": ["runtime_snapshot_path"]},
         ],
         "additionalProperties": False,
     }
     output_schema: dict[str, Any] = {
         "type": "object",
         "required": ["schema_version", "status", "query", "events", "matched_event_count"],
+        "properties": {
+            "runtime_snapshot_rows": {"type": "array", "items": {"type": "object"}},
+            "matched_runtime_object_count": {"type": "integer", "minimum": 0},
+            "runtime_snapshot_total_count": {"type": "integer", "minimum": 0},
+            "runtime_snapshot_truncated": {"type": "boolean"},
+        },
     }
 
     def run(
@@ -84,6 +100,8 @@ class EvidenceQueryModule(BaseModule):
         viewer_model_path: str = "",
         runtime_evidence: Mapping[str, Any] | None = None,
         runtime_evidence_path: str = "",
+        runtime_snapshot: Mapping[str, Any] | None = None,
+        runtime_snapshot_path: str = "",
         event_id: str = "",
         event_index: int | None = None,
         function: str = "",
@@ -107,6 +125,8 @@ class EvidenceQueryModule(BaseModule):
                 viewer_model_path=viewer_model_path,
                 runtime_evidence=runtime_evidence,
                 runtime_evidence_path=runtime_evidence_path,
+                runtime_snapshot=runtime_snapshot,
+                runtime_snapshot_path=runtime_snapshot_path,
                 event_id=event_id,
                 event_index=event_index,
                 function=function,
@@ -143,7 +163,7 @@ class EvidenceQueryModule(BaseModule):
 
         status = str(payload.get("status", "blocked"))
         return ModuleResult(
-            ok=status in {"ready", "not_found"},
+            ok=status in {"ready", "not_found", "partial"},
             message=f"evidence-query:{status}",
             module=self.name,
             artifacts=artifacts,
@@ -156,6 +176,12 @@ class EvidenceQueryModule(BaseModule):
         parser.add_argument("--bundle", dest="bundle_path", default="")
         parser.add_argument("--viewer-model", dest="viewer_model_path", default="")
         parser.add_argument("--runtime-evidence", dest="runtime_evidence_path", default="")
+        parser.add_argument(
+            "--runtime-snapshot",
+            dest="runtime_snapshot_path",
+            default="",
+            help="Query an existing runtime-snapshot-with-frame.v1 without treating it as an event binding.",
+        )
         parser.add_argument("--event-id", default="")
         parser.add_argument("--event-index", type=int, default=None)
         parser.add_argument("--function", default="")

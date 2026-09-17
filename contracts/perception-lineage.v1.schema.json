@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-lineage.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "nodes", "edges", "edge_count"],
+  "properties": {
+    "schema_version": {"const": "perception-lineage.v1"},
+    "status": {"enum": ["observed", "derived", "not_available"]},
+    "nodes": {"type": "object"},
+    "node_counts": {
+      "type": "object",
+      "properties": {
+        "points": {"type": "integer", "minimum": 0},
+        "clusters": {"type": "integer", "minimum": 0},
+        "tracks": {"type": "integer", "minimum": 0},
+        "outputs": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "inline_node_counts": {
+      "type": "object",
+      "properties": {
+        "points": {"type": "integer", "minimum": 0},
+        "clusters": {"type": "integer", "minimum": 0},
+        "tracks": {"type": "integer", "minimum": 0},
+        "outputs": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "edges": {"type": "array", "items": {"type": "object"}},
+    "edge_count": {"type": "integer", "minimum": 0},
+    "raw_edge_count": {"type": "integer", "minimum": 0},
+    "invalid_edge_count": {"type": "integer", "minimum": 0},
+    "inline_edge_count": {"type": "integer", "minimum": 0},
+    "edges_truncated": {"type": "boolean"},
+    "raw_edges_truncated": {"type": "boolean"},
+    "invalid_edges_truncated": {"type": "boolean"},
+    "nodes_truncated": {"type": "boolean"},
+    "lineage_artifact": {
+      "type": "object",
+      "required": ["path", "format", "row_count", "counts", "sha256", "status"],
+      "properties": {
+        "path": {"type": "string"},
+        "format": {"const": "jsonl"},
+        "row_count": {"type": "integer", "minimum": 0},
+        "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "index_ref": {
+          "type": "object",
+          "required": ["path", "format", "sha256", "callback_count"],
+          "properties": {
+            "path": {"type": "string"},
+            "format": {"const": "json"},
+            "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+            "callback_count": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "status": {"const": "observed"}
+      },
+      "additionalProperties": true
+    },
+    "raw_edges": {"type": "array", "items": {"type": "object"}},
+    "invalid_edges": {"type": "array", "items": {"type": "object"}},
+    "relation_kinds": {"type": "array", "items": {"type": "string"}},
+    "relation_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "raw_relation_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "relation_summaries": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["from_node_kind", "to_node_kind", "edge_row_count", "unique_pair_count", "unique_from_node_count", "unique_to_node_count"],
+        "properties": {
+          "from_node_kind": {"enum": ["points", "clusters", "tracks", "outputs", "not_available"]},
+          "to_node_kind": {"enum": ["points", "clusters", "tracks", "outputs", "not_available"]},
+          "edge_row_count": {"type": "integer", "minimum": 0},
+          "unique_pair_count": {"type": "integer", "minimum": 0},
+          "unique_from_node_count": {"type": "integer", "minimum": 0},
+          "unique_to_node_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "relation_scopes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["population", "inclusion_condition", "basis", "limitation"],
+        "properties": {
+          "population": {"type": "string"},
+          "inclusion_condition": {"type": "string"},
+          "basis": {"type": "string"},
+          "limitation": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "track_population": {
+      "type": "object",
+      "required": ["status", "scope", "track_nodes_mirror_output_rows", "internal_candidate_track_population", "internal_mature_track_population", "cluster_supports_track_scope", "track_emits_output_scope", "unclustered_point_scope", "limitation"],
+      "properties": {
+        "status": {"enum": ["observed_subset", "not_available"]},
+        "scope": {"type": "string"},
+        "track_nodes_mirror_output_rows": {"type": "boolean"},
+        "internal_candidate_track_population": {"enum": ["not_available"]},
+        "internal_mature_track_population": {"enum": ["not_available"]},
+        "cluster_supports_track_scope": {"const": "unique_cluster_track_pairs_where_point_track_uid_matches_captured_public_objectlist_id"},
+        "track_emits_output_scope": {"const": "one_unique_derived_edge_per_captured_public_objectlist_output_row"},
+        "unclustered_point_scope": {"const": "cluster_id_minus_one_has_no_cluster_node_or_point_support_edge; track_lifecycle_not_inferred"},
+        "source_topics": {"type": "array", "items": {"type": "string"}},
+        "identity_basis": {"type": "string"},
+        "limitation": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "track_population": {
+      "type": "object",
+      "required": ["status", "scope", "track_nodes_mirror_output_rows", "internal_candidate_track_population", "internal_mature_track_population", "limitation"],
+      "properties": {
+        "status": {"enum": ["observed_subset", "not_available"]},
+        "scope": {"type": "string"},
+        "row_count": {"type": "integer", "minimum": 0},
+        "track_nodes_mirror_output_rows": {"type": "boolean"},
+        "internal_candidate_track_population": {"enum": ["not_available"]},
+        "internal_mature_track_population": {"enum": ["not_available"]},
+        "source_topics": {"type": "array", "items": {"type": "string"}},
+        "identity_basis": {"type": "string"},
+        "limitation": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "identity_warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

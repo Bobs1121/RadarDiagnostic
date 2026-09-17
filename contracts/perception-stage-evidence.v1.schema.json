@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-stage-evidence.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "stages", "available_stage_count", "total_stage_count"],
+  "properties": {
+    "schema_version": {"const": "perception-stage-evidence.v1"},
+    "status": {"enum": ["ready", "partial", "not_available"]},
+    "stages": {"type": "array", "items": {"type": "object"}},
+    "available_stage_count": {"type": "integer", "minimum": 0},
+    "total_stage_count": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": true
+}

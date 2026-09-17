@@ -58,3 +58,56 @@ def test_code_analyze_source_index_returns_conditions_for_the_real_function():
     )
     assert result.ok is True
     assert result.data["data"][0]["expression"] == "frame_counter > 0"
+
+
+def test_code_analyze_bounds_large_call_chain_and_reports_exact_counts():
+    index = _source_index()
+    index["calls"]["Gate"] = [f"Stage{i:03d}" for i in range(321)]
+
+    result = CodeAnalyzeModule().safe_run(
+        kind="call_chain",
+        name="Gate",
+        code_index=index,
+        max_depth=1,
+        max_results=25,
+    )
+
+    assert result.ok is True
+    assert len(result.data["data"]) == 25
+    assert result.data["result_bounds"] == {
+        "limit": 25,
+        "total_count": 321,
+        "returned_count": 25,
+        "truncated": True,
+    }
+    assert "25/321 rows; truncated" in result.message
+
+
+def test_code_analyze_rejects_invalid_result_limit():
+    result = CodeAnalyzeModule().safe_run(
+        kind="callees", name="Gate", code_index=_source_index(), max_results=0
+    )
+
+    assert result.ok is False
+    assert result.message == "max_results must be between 1 and 5000"
+
+
+def test_code_analyze_bounds_codegraph_backend_results(monkeypatch):
+    module = CodeAnalyzeModule(source_root="/snapshot/gen6")
+    rows = [{"callee_name": f"Stage{i:03d}"} for i in range(30)]
+    monkeypatch.setattr(module, "_get_graph", lambda: object())
+    monkeypatch.setattr(module, "_dispatch", lambda *_args: rows)
+
+    result = module.safe_run(
+        kind="callees", name="PostProcessMainTI", max_results=8
+    )
+
+    assert result.ok is True
+    assert result.data["backend"] == "codegraph_db"
+    assert len(result.data["data"]) == 8
+    assert result.data["result_bounds"] == {
+        "limit": 8,
+        "total_count": 30,
+        "returned_count": 8,
+        "truncated": True,
+    }

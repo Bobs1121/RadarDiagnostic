@@ -23,6 +23,7 @@
   ],
   "properties": {
     "schema_version": { "const": "pi-orchestration-context.v1" },
+    "task_scope": { "enum": ["case_analysis", "source_code"] },
     "status": { "enum": ["ready", "partial", "blocked"] },
     "run_id": { "type": "string", "minLength": 1 },
     "context_fingerprint": { "type": "string", "minLength": 1 },
@@ -30,7 +31,32 @@
     "project_root": { "type": "string" },
     "project": { "type": "object" },
     "data": { "type": "object" },
-    "source": { "type": "object" },
+    "source": {
+      "type": "object",
+      "properties": {
+        "source_snapshot_hash": { "type": "string" },
+        "code_context_path": { "type": "string" },
+        "code_context_sha256": { "type": "string" },
+        "code_index_path": { "type": "string" },
+        "code_index_hash": { "type": "string" },
+        "code_index_snapshot_hash": { "type": "string" },
+        "code_context": {
+          "type": "object",
+          "properties": {
+            "schema_version": { "const": "code-context.v1" },
+            "source_root": { "type": "string" },
+            "source_snapshot_hash": { "type": "string" },
+            "code_context_path": { "type": "string" },
+            "code_context_sha256": { "type": "string" },
+            "code_index_path": { "type": "string" },
+            "code_index_hash": { "type": "string" },
+            "code_index_snapshot_hash": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
     "build": { "type": "object" },
     "runtime": { "type": "object" },
     "policy": { "type": "object" },

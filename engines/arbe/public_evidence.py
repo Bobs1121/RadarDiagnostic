@@ -55,6 +55,7 @@ def build_public_topic_plan(
     *,
     profile: Mapping[str, Any] | None = None,
     preflight: Mapping[str, Any] | None = None,
+    preflight_sha256: str = "",
     runtime_schema: Mapping[str, Any] | None = None,
     topic_inventory: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -189,6 +190,7 @@ def build_public_topic_plan(
             )
 
     runtime_identity = preflight.get("workspace", {}) if isinstance(preflight, Mapping) else {}
+    preflight_server = preflight.get("server", {}) if isinstance(preflight, Mapping) else {}
     public_contract = (
         preflight.get("public_evidence", {})
         if isinstance(preflight, Mapping) and isinstance(preflight.get("public_evidence"), Mapping)
@@ -202,7 +204,9 @@ def build_public_topic_plan(
         "source_schema": {
             "source_context": runtime_schema.get("source_context", {}),
             "message_contract": runtime_schema.get("message_contract", {}),
+            "preflight_server": preflight_server if isinstance(preflight_server, Mapping) else {},
             "preflight_workspace": runtime_identity,
+            "preflight_sha256": str(preflight_sha256),
             "preflight_public_evidence": public_contract,
         },
         "without_gdb": [

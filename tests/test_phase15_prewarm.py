@@ -93,11 +93,102 @@ def test_trace_variable_chains_writes_meta_cache(tmp_path: Path) -> None:
 
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     assert "file_hashes" in meta
-    assert meta.get("version") == 1
+    assert meta.get("version") == 4
     assert meta.get("alias_count") == len(result.get("struct_aliases", {}))
     assert meta.get("rte_file", "").endswith("RteComMapping.c")
+    assert meta.get("rte_mapping_status") == "auto_unique"
     # Every scanned source file should have a hash entry.
     assert len(meta["file_hashes"]) >= 1
+
+
+def test_trace_variable_chains_blocks_ambiguous_rte_mappings(tmp_path: Path) -> None:
+    from engines.signal_mapper import trace_variable_chains
+
+    source_root = _write_source_tree(tmp_path / "src")
+    byd_rte = source_root / "coem" / "BYD_SC6H" / "components" / "AswIf" / "ASW_ComMapping" / "RteComMapping.c"
+    byd_rte.parent.mkdir(parents=True)
+    byd_rte.write_text(
+        "void RunB(void) { RteComMapping_WriteSignal(BydStatus)(BydSts.warning); }\n",
+        encoding="utf-8",
+    )
+    docs_dir = tmp_path / "source_docs"
+
+    ambiguous = trace_variable_chains(source_root, docs_dir)
+    assert ambiguous["status"] == "partial"
+    assert ambiguous["rte_mapping_status"] == "ambiguous"
+    assert ambiguous["rte_file"] == ""
+    assert ambiguous["rte_write_prefixes"] == []
+
+    resolved = trace_variable_chains(
+        source_root,
+        docs_dir,
+        rte_file=str(byd_rte.relative_to(source_root)),
+        force=True,
+    )
+    assert resolved["status"] == "ready"
+    assert resolved["rte_mapping_status"] == "explicit"
+    assert resolved["rte_file"].startswith("coem/BYD_SC6H/")
+
+
+def test_trace_variable_chains_limits_global_copy_scan_to_active_coem(tmp_path: Path) -> None:
+    from engines.signal_mapper import trace_variable_chains
+
+    source_root = tmp_path / "src"
+    byd_rte = source_root / "coem" / "BYD_SC6H" / "components" / "AswIf" / "ASW_ComMapping" / "RteComMapping.c"
+    byd_rte.parent.mkdir(parents=True)
+    byd_rte.write_text("AdasStM.warning = 1;\n", encoding="utf-8")
+    for coem, global_name in (("BYD_SC6H", "g_byd_warning"), ("GWM_B26", "g_gwm_warning")):
+        global_file = source_root / "coem" / coem / "components" / "AswPerception" / "func" / "globalVariDef.c"
+        global_file.parent.mkdir(parents=True, exist_ok=True)
+        global_file.write_text(
+            "void CopyWarning(const RteAdasStM *AdasStM) {\n"
+            f"    {global_name} = *AdasStM;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+    result = trace_variable_chains(
+        source_root,
+        tmp_path / "docs",
+        rte_file=str(byd_rte.relative_to(source_root)),
+    )
+
+    assert result["coem"] == "BYD_SC6H"
+    assert "g_byd_warning" in result["struct_aliases"]
+    assert "g_gwm_warning" not in result["struct_aliases"]
+    assert not any("GWM_B26" in path for path in result["scanned_files"])
+
+
+def test_gen6_signal_mapper_adapter_uses_effective_variant_rte_file(tmp_path: Path) -> None:
+    from ai.platform_adapters.gen6_symmetry import Gen6SymmetrySignalMapperAdapter
+
+    source_root = tmp_path / "source"
+    byd_rte = source_root / "coem" / "BYD_SC6H" / "components" / "AswIf" / "ASW_ComMapping" / "RteComMapping.c"
+    gwm_rte = source_root / "coem" / "GWM_B26" / "components" / "AswIf" / "ASW_IN" / "RteComMapping.c"
+    byd_rte.parent.mkdir(parents=True)
+    gwm_rte.parent.mkdir(parents=True)
+    byd_rte.write_text("RteComMapping_ReadSignal(BYD_SPEED)(&BydStM.VehicleSpeed);\n", encoding="utf-8")
+    gwm_rte.write_text("RteComMapping_ReadSignal(GWM_SPEED)(&GwmStM.VehicleSpeed);\n", encoding="utf-8")
+    config = {
+        "default_variant": "gen6/byd_sc6h",
+        "codebases": {"byd": {"root_path": str(source_root)}},
+        "variants": {
+            "gen6/byd_sc6h": {
+                "codebase_id": "byd",
+                "key_source_files": [str(byd_rte.relative_to(source_root)).replace("/", "\\")],
+                "source_domains": {"signal_chain": ["coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c"]},
+            },
+        },
+    }
+    adapter = Gen6SymmetrySignalMapperAdapter(
+        source_root, tmp_path / "docs", config, tmp_path,
+    )
+
+    mapping = adapter.extract_signal_mapping(source_root, tmp_path / "docs")
+
+    assert mapping["selection_status"] == "explicit"
+    assert mapping["source_file"].startswith("coem/BYD_SC6H/")
+    assert {row["can_signal"] for row in mapping["mappings"]} == {"BYD_SPEED"}
 
 
 def test_trace_variable_chains_cache_hit_on_unchanged(tmp_path: Path) -> None:
@@ -136,6 +227,22 @@ def test_trace_variable_chains_cache_hit_on_unchanged(tmp_path: Path) -> None:
         (docs_dir / "variable_chains.meta.json").read_text(encoding="utf-8")
     )
     assert second_meta["file_hashes"] == first_meta["file_hashes"]
+
+
+def test_trace_variable_chains_cache_binds_rte_selection_status(tmp_path: Path) -> None:
+    from engines.signal_mapper import trace_variable_chains
+
+    source_root = _write_source_tree(tmp_path / "src")
+    docs_dir = tmp_path / "source_docs"
+    auto = trace_variable_chains(source_root, docs_dir)
+    explicit_rte = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
+
+    explicit = trace_variable_chains(source_root, docs_dir, rte_file=explicit_rte)
+    meta = json.loads((docs_dir / "variable_chains.meta.json").read_text(encoding="utf-8"))
+
+    assert auto["rte_mapping_status"] == "auto_unique"
+    assert explicit["rte_mapping_status"] == "explicit"
+    assert meta["rte_mapping_status"] == "explicit"
 
 
 def test_trace_variable_chains_invalidation_on_change(tmp_path: Path) -> None:
@@ -177,9 +284,7 @@ def test_trace_variable_chains_invalidation_on_change(tmp_path: Path) -> None:
         (docs_dir / "variable_chains.meta.json").read_text(encoding="utf-8")
     )
     # The hash for the modified file MUST change.
-    gv_rel = (
-        "coem\\GWM_B26\\components\\AswPerception\\func\\globalVariDef.c"
-    )
+    gv_rel = "coem/GWM_B26/components/AswPerception/func/globalVariDef.c"
     assert second_meta["file_hashes"][gv_rel] != first_meta["file_hashes"][gv_rel]
 
 
@@ -329,6 +434,66 @@ def test_run_prewarm_writes_meta_json(tmp_path: Path, monkeypatch: pytest.Monkey
     assert meta["force"] is False
     # trace_variable_chains was actually called → variable_chains.json exists
     assert (docs_dir / "variable_chains.json").exists()
+
+
+def test_run_prewarm_uses_effective_variant_rte_mapping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import ai.code_learner as _cl_mod
+    import cli
+
+    source_root = tmp_path / "source"
+    byd_rte = source_root / "coem" / "BYD_SC6H" / "components" / "AswIf" / "ASW_ComMapping" / "RteComMapping.c"
+    gwm_rte = source_root / "coem" / "GWM_B26" / "components" / "AswIf" / "ASW_IN" / "RteComMapping.c"
+    byd_rte.parent.mkdir(parents=True)
+    gwm_rte.parent.mkdir(parents=True)
+    byd_rte.write_text("AdasStM.warning = 1;\n", encoding="utf-8")
+    gwm_rte.write_text("GwmStM.warning = 1;\n", encoding="utf-8")
+    docs_dir = tmp_path / "docs"
+    config = {
+        "default_project": "gwm_b26",
+        "default_variant": "gen6/byd_sc6h",
+        "identity": {"variant_id": "gen6/byd_sc6h"},
+        "paths": {"source_code": str(source_root), "source_docs": str(docs_dir)},
+        "codebases": {"byd": {"root_path": str(source_root)}},
+        "variants": {
+            "gen6/byd_sc6h": {
+                "codebase_id": "byd",
+                "key_source_files": [str(byd_rte.relative_to(source_root)).replace("/", "\\")],
+            },
+        },
+    }
+    captured = {}
+
+    class _StubRouter:
+        pass
+
+    class _StubLearner:
+        def __init__(self, router, cfg, project_root):
+            pass
+
+        def learn(self, **kwargs):
+            return {"learned_count": 0, "skipped_count": 0, "error_count": 0}
+
+        def ensure_overview_docs(self, **kwargs):
+            return {"generated": [], "skipped": [], "failed": [], "reason": "all_up_to_date"}
+
+    monkeypatch.setattr(cli, "get_router", lambda _config: _StubRouter())
+    monkeypatch.setattr(cli, "_check_variant_freshness", lambda *_args, **_kwargs: {"status": "ready", "changed_keys": []})
+    monkeypatch.setattr(_cl_mod, "CodeLearner", _StubLearner)
+
+    def fake_trace(source_root_arg, output_dir, *, rte_file=None, force=False):
+        captured["rte_file"] = rte_file
+        return {
+            "struct_aliases": {},
+            "rte_file": rte_file,
+            "rte_mapping_status": "explicit",
+        }
+
+    monkeypatch.setattr("engines.signal_mapper.trace_variable_chains", fake_trace)
+    summary = cli._run_prewarm(config=config, force=False)
+
+    assert captured["rte_file"] == "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c"
+    assert summary["operations"]["variable_chains"]["rte_mapping_status"] == "explicit"
+    assert summary["operations"]["variable_chains"]["rte_variant_resolution"] == "configured"
 
 
 def test_run_prewarm_force_rebuilds_caches(

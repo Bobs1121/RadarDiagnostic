@@ -8,7 +8,8 @@ hierarchy (PlatformFamily → Codebase → Variant → PackageProfile → Snapsh
 
 Backward compatibility:
     - `get_project(key)` still works — internally bridges to Variant.
-    - `load_config()` backfills `paths.*` from the default project.
+    - `load_config()` backfills legacy `paths.*` from the effective variant first,
+      falling back to `default_project` only when no variant resolves.
     - New code should use `get_variant()`, `get_package_profile()`, etc.
 
 Public API:
@@ -20,6 +21,7 @@ Public API:
     get_platform(config, platform_id)→ PlatformFamily object
     get_package_profile(config, pid) → PackageProfile object
     resolve_variant_id(config, project_key_or_variant) → str
+    resolve_variant_rte_mapping_file(config, source_root, variant_id) → (path, status)
     resolve_codegraph_db(...), resolve_source_docs_dir(...), resolve_memory_dir(...)
     resolve_workspace_dir(...), resolve_snapshots_dir(...)
     get_variable_filter(config)
@@ -687,24 +689,62 @@ def load_config(config_path: str | Path | None = None) -> dict:
     raw = expand_project_intake(raw, config_path.parent)
     config = _resolve_values(raw)
 
-    # ── Backward-compat shim: populate paths.source_code from default project ──
-    projects = config.get("projects", {})
-    default_key = config.get("default_project", "")
+    # ── Backward-compat shim: mirror the effective variant, then legacy project ──
+    # config.local.yaml may override default_variant while the historical
+    # default_project remains set to another customer (often GWM_B26). If
+    # paths.* is backfilled from default_project first, older consumers silently
+    # mix that project's source/DBC/RTE files with the active variant. Explicit
+    # paths.* still win; otherwise derive compatibility paths from the resolved
+    # variant and use default_project only when no variant can be resolved.
+    project_root = Path(config_path).expanduser().resolve().parent
+    paths = config.setdefault("paths", {})
+    effective_variant_id = ""
+    try:
+        candidate_variant_id = resolve_variant_id(config, None)
+        if candidate_variant_id in config.get("variants", {}):
+            effective_variant_id = candidate_variant_id
+            variant, codebase, _ = get_variant(config, effective_variant_id)
+            source_settings = _resolve_source_context_settings(config, effective_variant_id)
+            source_override = _resolve_path_setting(project_root, source_settings.get("source_root"))
+            if "source_code" not in paths:
+                paths["source_code"] = str(source_override or codebase.root_path)
+            if "key_source_files" not in paths:
+                paths["key_source_files"] = list(variant.key_source_files or [])
+            # The legacy global source_domains block is often GWM-specific.
+            # Once a variant resolves, its declared domains own the source
+            # scan scope even when a legacy global block is present.
+            config["source_domains"] = dict(variant.source_domains or {})
+            if "dbc_files" not in paths:
+                paths["dbc_files"] = [
+                    str(file)
+                    for dbc_set in (variant.dbc_sets or [])
+                    for file in (getattr(dbc_set, "files", []) or [])
+                ]
+            if "source_docs" not in paths:
+                paths["source_docs"] = str(
+                    resolve_source_docs_dir(
+                        config, project_root, variant_id=effective_variant_id
+                    )
+                )
+    except (ValueError, TypeError, KeyError):
+        effective_variant_id = ""
 
-    if default_key and default_key in projects:
-        proj = projects[default_key]
-        paths = config.setdefault("paths", {})
-        # Only set if not already present (explicit paths.source_code wins)
-        if "source_code" not in paths and "source_code" in proj:
-            paths["source_code"] = proj["source_code"]
-        if "dbc_files" not in paths and "dbc_files" in proj:
-            paths["dbc_files"] = proj["dbc_files"]
-        if "key_source_files" not in paths and "key_source_files" in proj:
-            paths["key_source_files"] = proj["key_source_files"]
-    elif "paths" in config and "source_code" in config["paths"]:
-        log.warning(
-            "paths.source_code is deprecated; use projects/<key>/source_code instead"
-        )
+    if not effective_variant_id:
+        projects = config.get("projects", {})
+        default_key = config.get("default_project", "")
+        if default_key and default_key in projects:
+            proj = projects[default_key]
+            # Only set if absent (explicit paths.* wins).
+            if "source_code" not in paths and "source_code" in proj:
+                paths["source_code"] = proj["source_code"]
+            if "dbc_files" not in paths and "dbc_files" in proj:
+                paths["dbc_files"] = proj["dbc_files"]
+            if "key_source_files" not in paths and "key_source_files" in proj:
+                paths["key_source_files"] = proj["key_source_files"]
+        elif "source_code" in paths:
+            log.warning(
+                "paths.source_code is deprecated; use projects/<key>/source_code instead"
+            )
 
     return config
 
@@ -901,6 +941,67 @@ def resolve_source_code(config: dict, project_key: str | None = None) -> str:
     # Fallback to legacy
     proj = get_project(config, project_key)
     return proj.get("source_code", "")
+
+
+def resolve_variant_rte_mapping_file(
+    config: dict,
+    source_root: str | Path | None = None,
+    variant_id: str | None = None,
+) -> tuple[str, str]:
+    """Select the active variant's RTE mapping without a cross-COEM fallback.
+
+    Returns a source-root-relative path and a selection status. An empty path
+    means the caller must keep the mapping unavailable; it must not auto-pick
+    a different COEM from the same multi-customer codebase.
+    """
+    try:
+        effective_variant = resolve_variant_id(config, variant_id)
+        variant, codebase, _ = get_variant(config, effective_variant)
+    except (ValueError, KeyError, TypeError):
+        return "", "variant_unavailable"
+
+    root = Path(source_root or codebase.root_path).expanduser().resolve()
+    raw_variant = config.get("variants", {}).get(effective_variant, {})
+    source_files = list(getattr(variant, "key_source_files", []) or [])
+    domains = getattr(variant, "source_domains", {}) or {}
+    if isinstance(domains, dict):
+        source_files.extend(domains.get("signal_chain", []) or [])
+    if isinstance(raw_variant, dict):
+        raw_domains = raw_variant.get("source_domains", {})
+        if isinstance(raw_domains, dict):
+            source_files.extend(raw_domains.get("signal_chain", []) or [])
+
+    candidates: list[tuple[str, str]] = []
+    for value in source_files:
+        normalized = str(value).replace("\\", "/").strip()
+        leaf = Path(normalized).name
+        if Path(normalized).suffix.lower() != ".c" or not (
+            leaf == "RteComMapping.c" or leaf.startswith("RteComMapping_Rx")
+        ):
+            continue
+        candidate = Path(normalized).expanduser()
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        try:
+            resolved = candidate.resolve()
+            relative = resolved.relative_to(root).as_posix()
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if resolved.is_file():
+            candidates.append((relative, leaf))
+
+    exact = sorted({path for path, leaf in candidates if leaf == "RteComMapping.c"})
+    if len(exact) == 1:
+        return exact[0], "configured"
+    if len(exact) > 1:
+        return "", "ambiguous"
+    rx_files = sorted({path for path, leaf in candidates if leaf.startswith("RteComMapping_Rx")})
+    if rx_files:
+        parents = {str(Path(path).parent) for path in rx_files}
+        if len(parents) == 1:
+            return rx_files[0], "configured_rx_only"
+        return "", "ambiguous"
+    return "", "not_found"
 
 
 def resolve_codegraph_db(config: dict, project_root: Path, project_key: str | None = None, variant_id: str | None = None) -> Path:

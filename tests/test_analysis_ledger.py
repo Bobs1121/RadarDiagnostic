@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from ai.capability.registry import capability_catalog
+from ai.capability.registry import capability_catalog, module_input_schema
 from ai.modules import MODULE_REGISTRY
 from ai.modules.analysis_ledger import (
     AnalysisClaimAppendModule,
@@ -25,7 +25,7 @@ from ai.modules.analysis_collaboration import (
 from engines.analysis_ledger import AnalysisLedger, LedgerConflict
 
 
-def _create(ledger: AnalysisLedger, run_id: str = "run-test") -> dict:
+def _create(ledger: AnalysisLedger, run_id: str = "run-test", binding: dict | None = None) -> dict:
     return ledger.create_run(
         run_id=run_id,
         owner="tester",
@@ -33,7 +33,7 @@ def _create(ledger: AnalysisLedger, run_id: str = "run-test") -> dict:
             "question": "判断报警链路并逐步准备 debug",
             "customer_claim": "客户认为误报警",
         },
-        binding={
+        binding=binding or {
             "project_id": "cr60-light",
             "variant_id": "BYD_UKE_03_QZH",
             "data_fingerprint": "bag-sha",
@@ -261,6 +261,44 @@ def test_user_observation_is_separate_from_runtime_evidence(tmp_path: Path):
     Draft202012Validator(observation_schema).validate(observation)
 
 
+def test_user_feedback_kinds_are_provenance_bound_and_not_knowledge_or_runtime(tmp_path: Path):
+    ledger = AnalysisLedger(tmp_path / "ledger")
+    _create(
+        ledger,
+        binding={
+            "variant_id": "gen6/byd_sc6h",
+            "source_snapshot_hash": "source-1",
+            "data_fingerprint": "data-1",
+        },
+    )
+    for kind, summary in (
+        ("feedback_confirmed", "用户确认这次是正报"),
+        ("feedback_rejected", "用户否定该候选根因"),
+        ("feedback_irrelevant", "用户标记该候选与问题无关"),
+    ):
+        feedback = ledger.append_user_observation(
+            "run-test",
+            kind=kind,
+            summary=summary,
+            target={"frame_id": 100, "radar_id": 2, "object_id": 44},
+            binding={
+                "variant_id": "gen6/byd_sc6h",
+                "source_snapshot_hash": "source-1",
+                "data_fingerprint": "data-1",
+            },
+        )
+        assert feedback["kind"] == kind
+        assert feedback["created_by"] == "user"
+        assert feedback["evidence_layer"] == "user_observation"
+        assert feedback["runtime_eligible"] is False
+        assert feedback["binding"]["variant_id"] == "gen6/byd_sc6h"
+    read = ledger.read_run("run-test", include_entities=True)
+    assert read["summary"]["user_observation_count"] == 3
+    assert {item["kind"] for item in read["entities"]["user_observations"]} == {
+        "feedback_confirmed", "feedback_rejected", "feedback_irrelevant"
+    }
+
+
 def test_concurrent_step_writes_are_serialized(tmp_path: Path):
     ledger = AnalysisLedger(tmp_path / "ledger")
     _create(ledger)
@@ -394,6 +432,24 @@ def test_ledger_modules_are_pi_registered_and_compose(tmp_path: Path):
     assert read.data["summary"]["hypothesis_count"] == 1
     assert read.data["summary"]["experiment_count"] == 1
     assert read.data["summary"]["user_observation_count"] == 1
+
+
+def test_pi_ledger_tool_schemas_leave_bound_run_fields_optional():
+    names = (
+        "analysis-run-read",
+        "analysis-run-update",
+        "analysis-step-record",
+        "analysis-claim-append",
+        "analysis-hypothesis-record",
+        "debug-experiment-record",
+        "analysis-user-observation",
+    )
+    for name in names:
+        schema = module_input_schema(MODULE_REGISTRY[name])
+        assert "run_id" in schema["properties"]
+        assert "ledger_root" in schema["properties"]
+        assert "run_id" not in schema.get("required", [])
+        assert "ledger_root" not in schema.get("required", [])
 
 
 def test_analysis_step_cli_wiring():

@@ -16,9 +16,15 @@ changing the Pi contract.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+import yaml
+
+from .ros_inventory import SCHEMA_VERSION as ROS_TOPIC_INVENTORY_SCHEMA
 
 
 SCHEMA_VERSION = "runtime-snapshot-with-frame.v1"
@@ -27,10 +33,393 @@ ASSOCIATION_STATUSES = frozenset({
 })
 OBJECT_ASSOCIATION_MODES = frozenset({"strict", "publication_order", "auto"})
 OBJECT_VALIDITY_POLICIES = frozenset({"preserve", "arbe_wf_sobj"})
+_ROS_MESSAGE_ARRAY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*/[A-Za-z][A-Za-z0-9_]*\[(?:\d+)?\]$")
+_MAX_RUNTIME_OBJECT_FIELDS = 512
 
 
 class PublicRuntimeError(ValueError):
     """Raised when a public runtime capture cannot be normalized."""
+
+
+def _topic_plan_channel(topic: str, topic_plan: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(topic_plan, Mapping):
+        return {}
+    channels = topic_plan.get("channels")
+    if not isinstance(channels, Sequence) or isinstance(channels, (str, bytes, bytearray)):
+        return {}
+    for channel in channels:
+        if not isinstance(channel, Mapping):
+            continue
+        pattern = str(channel.get("topic") or "").strip()
+        if pattern == topic:
+            return dict(channel)
+        if "{radar_id}" in pattern:
+            prefix, suffix = pattern.split("{radar_id}", 1)
+            if topic.startswith(prefix) and topic.endswith(suffix):
+                middle = topic[len(prefix) : len(topic) - len(suffix) if suffix else None]
+                if middle.isdigit():
+                    return {**dict(channel), "resolved_radar_id": int(middle)}
+    return {}
+
+
+def _object_array_field(message_schema: Mapping[str, Any]) -> dict[str, Any] | None:
+    message_type = str(message_schema.get("message_type") or "")
+    field_catalog = message_schema.get("field_catalog")
+    if not isinstance(field_catalog, Sequence) or isinstance(field_catalog, (str, bytes, bytearray)):
+        return None
+    candidates = [
+        dict(item)
+        for item in field_catalog
+        if isinstance(item, Mapping)
+        and str(item.get("message_type") or "") == message_type
+        and _ROS_MESSAGE_ARRAY_RE.fullmatch(str(item.get("type") or ""))
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _sample_radar_id(topic: str, channel: Mapping[str, Any]) -> tuple[int | None, str]:
+    resolved = channel.get("resolved_radar_id")
+    if isinstance(resolved, int) and not isinstance(resolved, bool):
+        return resolved, "public_topic_plan"
+    channel_id = str(channel.get("channel_id") or "")
+    match = re.search(r"_(\d+)$", channel_id)
+    if match:
+        return int(match.group(1)), "public_topic_plan_channel_id"
+    tail = str(topic).rstrip("/").rsplit("/", 1)[-1]
+    match = re.search(r"_(\d+)$", tail)
+    if match:
+        return int(match.group(1)), "topic_suffix"
+    return None, "not_available"
+
+
+def _read_frame_key(payload: Mapping[str, Any], frame_key: str) -> Any:
+    value = str(frame_key or "").strip()
+    if not value or value in {"not_in_message", "unknown"}:
+        return None
+    indexed = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\[(\d+)\]", value)
+    if indexed:
+        rows = payload.get(indexed.group(1))
+        index = int(indexed.group(2))
+        if isinstance(rows, Sequence) and not isinstance(rows, (str, bytes, bytearray)) and index < len(rows):
+            return rows[index]
+        return None
+    current: Any = payload
+    for component in value.split("."):
+        if isinstance(current, Mapping):
+            current = current.get(component)
+        else:
+            return None
+    return current
+
+
+def runtime_capture_from_topic_inventory(
+    inventory: Mapping[str, Any],
+    *,
+    inventory_path: str = "",
+    inventory_sha256: str = "",
+    topic_plan: Mapping[str, Any] | None = None,
+    topic_plan_path: str = "",
+    topic_plan_sha256: str = "",
+    preflight: Mapping[str, Any] | None = None,
+    preflight_sha256: str = "",
+) -> dict[str, Any]:
+    """Project bounded, independently sampled ROS inventory rows for normalization.
+
+    Only active message schemas and exact public-topic-plan channels are used.
+    One-message samples have no shared message sequence, so this adapter never
+    creates cross-topic frame association evidence.
+    """
+    if inventory.get("schema_version") != ROS_TOPIC_INVENTORY_SCHEMA:
+        raise PublicRuntimeError("capture is not ros-topic-inventory.v1")
+    topic_rows = inventory.get("topics")
+    if not isinstance(topic_rows, Sequence) or isinstance(topic_rows, (str, bytes, bytearray)):
+        raise PublicRuntimeError("ros-topic-inventory topics must be an array")
+    server_value = inventory.get("server")
+    server = dict(server_value) if isinstance(server_value, Mapping) else {}
+    raw_diagnostics = inventory.get("diagnostics")
+    diagnostics: list[str] = (
+        [str(item) for item in raw_diagnostics if str(item)]
+        if isinstance(raw_diagnostics, Sequence) and not isinstance(raw_diagnostics, (str, bytes, bytearray))
+        else []
+    )
+    active_topic_plan: Mapping[str, Any] | None = topic_plan
+    topic_plan_binding_status = "not_provided"
+    topic_plan_diagnostic = ""
+    if topic_plan is not None:
+        plan_schema = topic_plan.get("source_schema")
+        plan_schema = plan_schema if isinstance(plan_schema, Mapping) else {}
+        plan_server = plan_schema.get("preflight_server")
+        plan_server = plan_server if isinstance(plan_server, Mapping) else {}
+        plan_workspace = plan_schema.get("preflight_workspace")
+        plan_workspace = plan_workspace if isinstance(plan_workspace, Mapping) else {}
+        plan_preflight_sha256 = str(plan_schema.get("preflight_sha256") or "")
+        inventory_binding = inventory.get("runtime_binding")
+        inventory_binding = inventory_binding if isinstance(inventory_binding, Mapping) else {}
+        inventory_preflight_sha256 = str(inventory_binding.get("preflight_sha256") or "")
+        current_server = preflight.get("server") if isinstance(preflight, Mapping) else None
+        current_server = current_server if isinstance(current_server, Mapping) else {}
+        current_workspace = preflight.get("workspace") if isinstance(preflight, Mapping) else None
+        current_workspace = current_workspace if isinstance(current_workspace, Mapping) else {}
+        server_keys = ("host", "user", "port", "transport")
+        comparable_server_keys = [
+            key for key in server_keys
+            if key in plan_server and key in current_server and key in server
+        ]
+        server_identity_matches = bool(comparable_server_keys) and all(
+            str(plan_server[key]) == str(current_server[key]) == str(server[key])
+            for key in comparable_server_keys
+        )
+        workspace_identity_matches = bool(plan_workspace) and dict(plan_workspace) == dict(current_workspace)
+        if not isinstance(preflight, Mapping):
+            topic_plan_binding_status = "preflight_required"
+            topic_plan_diagnostic = "topic_plan_requires_current_preflight"
+        elif topic_plan.get("status") != "ready":
+            topic_plan_binding_status = "plan_not_ready"
+            topic_plan_diagnostic = "topic_plan_not_ready"
+        elif not plan_server or not plan_workspace:
+            topic_plan_binding_status = "plan_identity_missing"
+            topic_plan_diagnostic = "topic_plan_preflight_identity_missing"
+        elif not preflight_sha256 or not plan_preflight_sha256 or not inventory_preflight_sha256:
+            topic_plan_binding_status = "preflight_hash_missing"
+            topic_plan_diagnostic = "topic_plan_inventory_preflight_hash_missing"
+        elif inventory_binding.get("status") != "preflight_bound":
+            topic_plan_binding_status = "inventory_not_preflight_bound"
+            topic_plan_diagnostic = "inventory_preflight_binding_not_ready"
+        elif not (
+            plan_preflight_sha256 == str(preflight_sha256)
+            and inventory_preflight_sha256 == str(preflight_sha256)
+        ):
+            topic_plan_binding_status = "preflight_hash_conflict"
+            topic_plan_diagnostic = "topic_plan_inventory_preflight_hash_conflict"
+        elif not server_identity_matches or not workspace_identity_matches:
+            topic_plan_binding_status = "identity_conflict"
+            topic_plan_diagnostic = "topic_plan_inventory_preflight_identity_conflict"
+        else:
+            topic_plan_binding_status = "bound"
+        if topic_plan_binding_status != "bound":
+            active_topic_plan = None
+            diagnostics.append(topic_plan_diagnostic)
+    warning_rows: list[dict[str, Any]] = []
+    radar_info_rows: list[dict[str, Any]] = []
+    object_rows: list[dict[str, Any]] = []
+    samples: list[dict[str, Any]] = []
+    observed_sample_count = 0
+    observed_objectlist_topic_count = 0
+
+    for raw_topic in topic_rows:
+        if not isinstance(raw_topic, Mapping):
+            continue
+        topic = str(raw_topic.get("topic") or "")
+        message_type = str(raw_topic.get("type") or "")
+        sample = raw_topic.get("sample")
+        sample = sample if isinstance(sample, Mapping) else {}
+        message_schema = raw_topic.get("message_schema")
+        message_schema = message_schema if isinstance(message_schema, Mapping) else {}
+        channel = _topic_plan_channel(topic, active_topic_plan)
+        sample_status = str(sample.get("status") or "not_requested")
+        sample_observed = bool(sample.get("message_observed")) and sample_status == "observed"
+        if sample_observed:
+            observed_sample_count += 1
+        topic_summary = {
+            "topic": topic,
+            "message_type": message_type,
+            "channel_id": str(channel.get("channel_id") or ""),
+            "source_kind": str(channel.get("source_kind") or ""),
+            "sample_status": sample_status,
+            "message_observed": sample_observed,
+            "observed_at_utc": sample.get("observed_at_utc"),
+            "sample_sha256": sample.get("stdout_sha256"),
+            "sample_char_count": sample.get("stdout_char_count"),
+            "sample_truncated": bool(sample.get("stdout_truncated")),
+            "message_schema_status": str(message_schema.get("status") or "not_requested"),
+            "message_definition_sha256": message_schema.get("message_definition_sha256"),
+            "field_count": message_schema.get("field_count"),
+            "field_catalog_truncated": bool(message_schema.get("field_catalog_truncated")),
+        }
+        samples.append(topic_summary)
+        if not sample_observed:
+            if sample_status not in {"not_requested", "no_message"}:
+                diagnostics.append(f"topic_sample_unavailable:{topic}:{sample_status}")
+            continue
+        if bool(sample.get("stdout_truncated")):
+            diagnostics.append(f"topic_sample_truncated:{topic}")
+            continue
+        text = str(sample.get("stdout") or "")
+        sample_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        expected_sample_hash = str(sample.get("stdout_sha256") or "")
+        if expected_sample_hash and expected_sample_hash != sample_hash:
+            diagnostics.append(f"topic_sample_hash_mismatch:{topic}")
+            continue
+        expected_char_count = sample.get("stdout_char_count")
+        if (
+            isinstance(expected_char_count, int)
+            and not isinstance(expected_char_count, bool)
+            and expected_char_count != len(text)
+        ):
+            diagnostics.append(f"topic_sample_length_mismatch:{topic}")
+            continue
+        if "stdout_truncated" not in sample and len(text) >= 20_000:
+            diagnostics.append(f"topic_sample_truncation_unknown:{topic}")
+            continue
+        try:
+            message = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            diagnostics.append(f"topic_sample_yaml_invalid:{topic}:{type(exc).__name__}")
+            continue
+        if not isinstance(message, Mapping):
+            diagnostics.append(f"topic_sample_not_object:{topic}")
+            continue
+        source_kind = str(channel.get("source_kind") or "")
+        channel_id = str(channel.get("channel_id") or "")
+        radar_id, radar_id_source = _sample_radar_id(topic, channel)
+
+        is_object_message = (
+            source_kind == "ros_wfObjectMsg"
+            or message_type.rsplit("/", 1)[-1] == "wfObjectMsg"
+        )
+        if is_object_message:
+            observed_objectlist_topic_count += 1
+            if (
+                message_schema.get("status") != "ready"
+                or bool(message_schema.get("field_catalog_truncated"))
+                or bool(message_schema.get("definition_truncated"))
+                or str(message_schema.get("message_type") or "") != message_type
+                or not str(message_schema.get("message_definition_sha256") or "")
+            ):
+                diagnostics.append(f"objectlist_schema_not_ready:{topic}")
+                continue
+            array_field = _object_array_field(message_schema)
+            if not array_field:
+                diagnostics.append(f"objectlist_message_has_no_unique_object_array:{topic}")
+                continue
+            object_message_type = re.sub(
+                r"\[(?:\d+)?\]$", "", str(array_field.get("type") or "")
+            )
+            nested_field_catalog = [
+                {
+                    "token": str(item.get("name") or ""),
+                    "type": str(item.get("type") or ""),
+                    "source_path": str(item.get("path") or ""),
+                }
+                for item in message_schema.get("field_catalog", []) or []
+                if isinstance(item, Mapping)
+                and str(item.get("message_type") or "") == object_message_type
+                and str(item.get("name") or "")
+            ]
+            topic_summary.update({
+                "object_array_field_path": str(array_field.get("path") or ""),
+                "object_message_type": object_message_type,
+                "object_field_catalog": nested_field_catalog[:_MAX_RUNTIME_OBJECT_FIELDS],
+                "object_field_count": len(nested_field_catalog),
+                "object_field_catalog_truncated": (
+                    len(nested_field_catalog) > _MAX_RUNTIME_OBJECT_FIELDS
+                    or bool(message_schema.get("field_catalog_truncated"))
+                    or bool(message_schema.get("definition_truncated"))
+                ),
+            })
+            field_name = str(array_field.get("name") or "")
+            rows = message.get(field_name)
+            if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes, bytearray)):
+                diagnostics.append(f"objectlist_array_missing_from_sample:{topic}:{field_name}")
+                continue
+            if not rows:
+                diagnostics.append(f"objectlist_sample_observed_empty:{topic}")
+            for object_index, item in enumerate(rows):
+                if not isinstance(item, Mapping):
+                    diagnostics.append(f"objectlist_row_not_object:{topic}:{object_index}")
+                    continue
+                object_rows.append({
+                    **dict(item),
+                    "topic": topic,
+                    "message_type": message_type,
+                    "source": "ros-topic-inventory",
+                    "radar_id": radar_id,
+                    "radar_id_source": radar_id_source,
+                    "object_index": object_index,
+                    "sample_observed_at_utc": sample.get("observed_at_utc"),
+                    "source_ref": {
+                        "topic": topic,
+                        "message_type": message_type,
+                        "channel_id": channel_id,
+                        "message_definition_sha256": message_schema.get("message_definition_sha256"),
+                        "field_path": array_field.get("path"),
+                        "sample_sha256": sample.get("stdout_sha256") or sample_hash,
+                        "inventory_sha256": inventory_sha256 or None,
+                    },
+                })
+            continue
+
+        if source_kind == "ros_algorithm_warning" or channel_id.lower().startswith("algorithm_warning"):
+            row = dict(message)
+            row.setdefault("topic", topic)
+            row.setdefault("source", "warning_status_with_frame" if "with_frame" in channel_id else "warning_status")
+            if radar_id is not None:
+                row.setdefault("radar_id", radar_id)
+            frame_value = _read_frame_key(message, str(channel.get("frame_key") or ""))
+            if frame_value not in (None, ""):
+                row.setdefault("frame_id", frame_value)
+            if "data" in message or "bits" in message or "warnings" in message:
+                warning_rows.append(row)
+            else:
+                diagnostics.append(f"warning_sample_has_no_recognized_values:{topic}")
+            continue
+
+        if "radar_info" in channel_id.lower() or topic.rstrip("/").endswith("/radar_info"):
+            row = dict(message)
+            row.setdefault("topic", topic)
+            row.setdefault("source", "radar_info")
+            if radar_id is not None:
+                row.setdefault("radar_id", radar_id)
+            radar_info_rows.append(row)
+            continue
+
+        diagnostics.append(f"topic_sample_role_not_resolved:{topic}")
+
+    return {
+        "warning_rows": warning_rows,
+        "radar_info_rows": radar_info_rows,
+        "object_rows": object_rows,
+        "source_context": {
+            "runtime_source": "ros-topic-inventory.v1",
+            "server": server,
+            "topic_plan_path": topic_plan_path or None,
+            "topic_plan_sha256": topic_plan_sha256 or None,
+            "preflight_sha256": preflight_sha256 or None,
+            "topic_plan_binding_status": topic_plan_binding_status,
+        },
+        "capture_metadata": {
+            "schema_version": "public-runtime-capture-metadata.v1",
+            "origin_schema_version": ROS_TOPIC_INVENTORY_SCHEMA,
+            "inventory_path": inventory_path or None,
+            "inventory_sha256": inventory_sha256 or None,
+            "inventory_status": str(inventory.get("status") or "unknown"),
+            "requested_topics": [str(item) for item in inventory.get("requested_topics", []) or []],
+            "inventory_observed_at_utc": inventory.get("observed_at_utc"),
+            "server": server,
+            "topic_plan_binding_status": topic_plan_binding_status,
+            "preflight_sha256": preflight_sha256 or None,
+            "identity_binding": {
+                "status": "not_bound",
+                "required_before_runtime_evidence_consumption": [
+                    "analysis_run_id",
+                    "data_fingerprint",
+                    "source_snapshot_hash",
+                    "binary_fingerprint",
+                    "config_fingerprint",
+                    "session_id",
+                ],
+            },
+            "observed_sample_count": observed_sample_count,
+            "observed_objectlist_topic_count": observed_objectlist_topic_count,
+            "topic_samples": samples,
+            "association_policy": {
+                "topics_sampled_independently": True,
+                "cross_topic_frame_association": "not_asserted",
+                "time_neighbour_matching": False,
+            },
+        },
+        "diagnostics": list(dict.fromkeys(diagnostics)),
+    }
 
 
 def _as_rows(value: object) -> list[dict[str, Any]]:
@@ -218,6 +607,8 @@ def normalize_public_runtime(
     object_association_mode: str = "strict",
     object_validity_policy: str = "preserve",
     preflight: Mapping[str, Any] | None = None,
+    capture_metadata: Mapping[str, Any] | None = None,
+    capture_diagnostics: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Join public rows using an explicitly selected, source-aware policy.
 
@@ -270,7 +661,7 @@ def normalize_public_runtime(
             else:
                 valid_objects.append(row)
         objects = valid_objects
-    diagnostics: list[str] = []
+    diagnostics: list[str] = [str(item) for item in (capture_diagnostics or []) if str(item)]
     snapshots: dict[tuple[str, str], dict[str, Any]] = {}
     callback_frames: dict[tuple[str, str], Any] = {}
     publication_frames: dict[str, list[dict[str, Any]]] = {}
@@ -430,10 +821,19 @@ def normalize_public_runtime(
             snapshot["object_association_status"] = "frame_verified"
 
     rows = sorted(snapshots.values(), key=lambda row: (str(row["radar_id"]), str(row["frame_id"])))
+    observed_sample_count = (
+        capture_metadata.get("observed_sample_count", 0)
+        if isinstance(capture_metadata, Mapping)
+        else 0
+    )
+    has_observed_capture = isinstance(observed_sample_count, int) and not isinstance(observed_sample_count, bool) and observed_sample_count > 0
     if rows:
         status = "ready"
     elif warnings or radar_infos or objects:
         status = "partial"
+    elif has_observed_capture:
+        status = "partial"
+        diagnostics.append("observed_runtime_samples_not_projected")
     else:
         status = "blocked"
         diagnostics.append("no_public_runtime_rows")
@@ -443,7 +843,7 @@ def normalize_public_runtime(
         diagnostics.append("objectlist_publication_association_ambiguous")
     if object_association_mode == "publication_order" and publication_missing_sequence:
         diagnostics.append("objectlist_rows_missing_publication_sequence")
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "status": status,
         "source_context": dict(source_context or {}),
@@ -466,6 +866,9 @@ def normalize_public_runtime(
         "diagnostics": list(dict.fromkeys(diagnostics)),
         "ignored_objects": ignored_objects,
     }
+    if isinstance(capture_metadata, Mapping):
+        payload["capture_metadata"] = dict(capture_metadata)
+    return payload
 
 
 def load_capture(path: str | Path) -> dict[str, Any]:

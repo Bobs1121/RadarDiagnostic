@@ -1224,6 +1224,42 @@ def _next_actions(report: Mapping[str, Any]) -> list[dict[str, Any]]:
         actions.append({"id": "can-tx-observation", "tool": "code-gdb-plan", "reason": "当前还没有精确 CAN Tx 0→非零上升沿；继续解析真实 signal token 并生成可执行观测计划"})
     if source_status.get("objectlist_candidate") == "derived":
         actions.append({"id": "stamped-object-snapshot", "tool": "public-topic-plan", "reason": "objectlist 仍是 derived publication-order 关联；需要 callback/stamped snapshot 或 GDB 才能证明目标绝对同帧"})
+    snapshot_rows = [item for item in report.get("runtime_snapshot_rows", []) or [] if isinstance(item, Mapping)]
+    if snapshot_rows:
+        target_rows = snapshot_rows[:8]
+        target = {
+            "radar_ids": sorted({str(item.get("radar_id")) for item in target_rows if item.get("radar_id") not in (None, "")}),
+            "frame_ids": sorted({str(item.get("frame_id")) for item in target_rows if item.get("frame_id") not in (None, "")}),
+            "object_ids": sorted({
+                str(field.get("value"))
+                for item in target_rows
+                for field in item.get("field_rows", []) or []
+                if isinstance(field, Mapping)
+                and str(field.get("token") or "").lower() in {"id", "objid", "object_id", "objectid"}
+                and field.get("value") not in (None, "", [])
+            }),
+            "topics": sorted({str(item.get("topic")) for item in target_rows if item.get("topic")}),
+            "association_statuses": sorted({str(item.get("association_status") or "unbound") for item in target_rows}),
+            "source_refs": [
+                item.get("source_ref")
+                for item in target_rows
+                if isinstance(item.get("source_ref"), Mapping)
+            ],
+        }
+        actions.append({
+            "id": "snapshot-source-navigation",
+            "tool": "event-code-path",
+            "reason": "当前 ObjectList snapshot 只提供动态字段和 source provenance；如需解释字段来源，按已有事件/代码上下文生成 event-code-path，不从 objID 猜函数",
+            "target": target,
+            "handoff_status": "requires_event_and_source_binding",
+        })
+        actions.append({
+            "id": "snapshot-debug-experiment",
+            "tool": "debug-experiment-record",
+            "reason": "为 unbound ObjectList 行计划一次低成本区分实验；先绑定事件/frame/source/runtime identity，不能把 snapshot 行直接升级为观察结论",
+            "target": target,
+            "handoff_status": "plan_only_requires_approval_and_identity",
+        })
     deduped: list[dict[str, Any]] = []
     seen_actions: set[tuple[str, str]] = set()
     for action in actions:
@@ -1282,6 +1318,19 @@ def _markdown(report: Mapping[str, Any]) -> str:
             "",
             "> Full selected-event fields are retained in `diagnostic-report.json`; they are not duplicated here.",
         ])
+    perception = report.get("perception_analysis") if isinstance(report.get("perception_analysis"), Mapping) else {}
+    if perception:
+        contract = perception.get("input_contract") if isinstance(perception.get("input_contract"), Mapping) else {}
+        coverage = perception.get("stage_coverage") if isinstance(perception.get("stage_coverage"), Mapping) else {}
+        scene = perception.get("scene") if isinstance(perception.get("scene"), Mapping) else {}
+        warmup = perception.get("warmup_analysis") if isinstance(perception.get("warmup_analysis"), Mapping) else {}
+        lines.extend(["", "## 3.1 Point-cloud perception evidence", "", f"- status: `{perception.get('status', 'not_available')}`", f"- conclusion level: `{perception.get('conclusion_level', 'facts_only')}`", f"- input boundary: `{contract.get('input_boundary', 'not_available')}`", f"- points: `{contract.get('point_count', 'not_available')}`", f"- stages with evidence: `{coverage.get('available_stage_count', 0)}/{coverage.get('total_stage_count', 0)}`", f"- selected scene frame: `{scene.get('selected_frame', 'not_available')}` ({scene.get('status', 'not_available')})", f"- warm-up analysis: `{warmup.get('status', 'not_available')}`", "", "| stage | status | input | output | runtime proof |", "|---|---|---:|---:|---|"])
+        for row in coverage.get("stages", []) if isinstance(coverage.get("stages"), list) else []:
+            if isinstance(row, Mapping):
+                lines.append(f"| `{row.get('stage', '')}` | `{row.get('status', '')}` | {row.get('input_count', 'N/A')} | {row.get('output_count', 'N/A')} | `{row.get('runtime_proof', 'not_available')}` |")
+        for gap in perception.get("gaps", []) if isinstance(perception.get("gaps"), list) else []:
+            if isinstance(gap, Mapping):
+                lines.append(f"- gap `{gap.get('id', '')}`: {gap.get('message', '')}")
     narrative = report.get("diagnostic_narrative") if isinstance(report.get("diagnostic_narrative"), Mapping) else {}
     timeline = report.get("alert_timeline") if isinstance(report.get("alert_timeline"), Mapping) else {}
     if timeline:
@@ -1334,6 +1383,24 @@ def _markdown(report: Mapping[str, Any]) -> str:
             lines.append(f"| `{label}` | `{path}:{line if line not in (None, '') else 'N/A'}` |")
     else:
         lines.append("- status: `not_available`; no source proof for public object/frame correlation was provided.")
+    snapshot_rows = [item for item in report.get("runtime_snapshot_rows", []) or [] if isinstance(item, Mapping)]
+    if snapshot_rows:
+        lines.extend([
+            "", "## 4.2 Independent ObjectList snapshot", "",
+            "> These rows are independently sampled public ObjectList data. `unbound` rows are not attached to an alarm frame/event.",
+            "", "| radar | frame | association | topic | fields | sample time |", "|---:|---:|---|---|---|---|"
+        ])
+        for row in snapshot_rows[:32]:
+            fields = ", ".join(
+                f"{item.get('token')}={item.get('value')}"
+                for item in row.get("field_rows", []) or []
+                if isinstance(item, Mapping)
+            )
+            lines.append(
+                f"| {row.get('radar_id', 'N/A')} | `{row.get('frame_id') or 'not_available'}` | "
+                f"`{row.get('association_status', 'unbound')}` | `{row.get('topic', '')}` | {fields or 'not_available'} | "
+                f"`{row.get('sample_observed_at_utc', 'not_available')}` |"
+            )
     assessment = narrative.get("alarm_assessment") if isinstance(narrative.get("alarm_assessment"), Mapping) else {}
     if narrative:
         lines.extend(["", "## 5. Diagnostic narrative", "", f"- should_alert: `{assessment.get('should_alert', 'indeterminate')}`", f"- status: `{assessment.get('status', 'insufficient_evidence')}`", f"- statement: {assessment.get('statement', '')}", f"- executive summary: {narrative.get('executive_summary', '')}", ""])
@@ -1441,11 +1508,29 @@ def _markdown(report: Mapping[str, Any]) -> str:
             )
     if user_observations:
         lines.extend(["", "### User observations", "", "| kind | summary | experiment | attachments |", "|---|---|---|---:|"])
+        feedback_labels = {
+            "feedback_confirmed": "用户确认",
+            "feedback_rejected": "用户否定",
+            "feedback_irrelevant": "用户标记无关",
+        }
         for item in user_observations:
+            kind = str(item.get("kind", ""))
             lines.append(
-                f"| `{item.get('kind', '')}` | {str(item.get('summary', '')).replace('|', '\\|')} | "
+                f"| `{feedback_labels.get(kind, kind)}` (`{kind}`) | {str(item.get('summary', '')).replace('|', '\\|')} | "
                 f"`{item.get('experiment_id', '') or '—'}` | {item.get('artifact_ref_count', 0)} |"
             )
+    feedback_review = report.get("feedback_review") if isinstance(report.get("feedback_review"), Mapping) else {}
+    if feedback_review:
+        gate = feedback_review.get("knowledge_publish_gate") if isinstance(feedback_review.get("knowledge_publish_gate"), Mapping) else {}
+        counts = feedback_review.get("counts") if isinstance(feedback_review.get("counts"), Mapping) else {}
+        lines.extend([
+            "", "### Feedback review", "",
+            f"- status: `{feedback_review.get('status', 'partial')}`",
+            f"- knowledge publish gate: `{gate.get('status', 'not_available')}`",
+            f"- writes knowledge: `{gate.get('writes_knowledge', False)}`",
+            f"- confirmed / rejected / irrelevant: `{counts.get('feedback_confirmed', 0)}` / `{counts.get('feedback_rejected', 0)}` / `{counts.get('feedback_irrelevant', 0)}`",
+            "- policy: feedback is a separate user evidence layer; it does not overwrite observed/runtime facts or publish knowledge automatically.",
+        ])
     return "\n".join(lines) + "\n"
 
 
@@ -2542,6 +2627,75 @@ def _runtime_fact_table_html(report: Mapping[str, Any]) -> str:
             + '</tbody></table><div class="meta">Only key runtime/GDB facts are shown; full observations and transcripts remain in the selected-event artifact.</div>')
 
 
+def _runtime_snapshot_table_html(report: Mapping[str, Any]) -> str:
+    """Render independently sampled ObjectList rows without implying event/frame binding."""
+    rows = [item for item in report.get("runtime_snapshot_rows", []) or [] if isinstance(item, Mapping)]
+    if not rows:
+        return '<div class="scene-empty">No independently sampled ObjectList rows are available.</div>'
+
+    def cell(value: Any) -> str:
+        if isinstance(value, (Mapping, list)):
+            value = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+        return html.escape(str(value))
+
+    table_rows: list[str] = []
+    for row in rows:
+        fields = [item for item in row.get("field_rows", []) or [] if isinstance(item, Mapping)]
+        field_text = "<br>".join(
+            f"<code>{cell(item.get('token'))}</code>={cell(item.get('value'))}"
+            f" <span class=\"status {cell(item.get('status') or 'not_available')}\">{cell(item.get('status') or 'not_available')}</span>"
+            for item in fields[:32]
+        ) or "not_available"
+        identity = row.get("identity_binding") if isinstance(row.get("identity_binding"), Mapping) else {}
+        table_rows.append(
+            "<tr>"
+            f"<td>{cell(row.get('radar_id'))}</td>"
+            f"<td>{cell(row.get('frame_id') if row.get('frame_id') not in (None, '') else 'not_available')}</td>"
+            f"<td><span class=\"status {cell(row.get('association_status') or 'unbound')}\">{cell(row.get('association_status') or 'unbound')}</span></td>"
+            f"<td>{cell(row.get('topic') or 'not_available')}</td>"
+            f"<td>{field_text}</td>"
+            f"<td><code>{cell(row.get('sample_observed_at_utc') or 'not_available')}</code><br>"
+            f"<span class=\"meta\">identity={cell(identity.get('status') or 'not_bound')}</span></td>"
+            "</tr>"
+        )
+    return (
+        '<div class="meta">这些 ObjectList 行来自独立 ROS sample；它们保留动态字段来源，但没有自动绑定到报警事件或同帧 warning。</div>'
+        '<table><thead><tr><th>Radar</th><th>Frame</th><th>Association</th><th>Topic</th><th>Current message fields</th><th>Sample / identity</th></tr></thead>'
+        f'<tbody>{"".join(table_rows)}</tbody></table>'
+    )
+
+
+def _feedback_review_html(report: Mapping[str, Any]) -> str:
+    """Render feedback gate separately from observed/runtime diagnosis facts."""
+    review = report.get("feedback_review") if isinstance(report.get("feedback_review"), Mapping) else {}
+    if not review:
+        return '<div class="scene-empty">No feedback-review.v1 artifact is attached.</div>'
+    gate = review.get("knowledge_publish_gate") if isinstance(review.get("knowledge_publish_gate"), Mapping) else {}
+    counts = review.get("counts") if isinstance(review.get("counts"), Mapping) else {}
+    conflicts = [item for item in review.get("conflicts", []) or [] if isinstance(item, Mapping)]
+    diagnostics = [str(item) for item in review.get("diagnostics", []) or []]
+    rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(counts.get(key, 0)))}</td></tr>"
+        for key, label in (
+            ("feedback_confirmed", "用户确认"),
+            ("feedback_rejected", "用户否定"),
+            ("feedback_irrelevant", "用户标记无关"),
+        )
+    )
+    conflict_html = "".join(f"<li>{html.escape(json.dumps(item, ensure_ascii=False, default=str))}</li>" for item in conflicts)
+    diagnostics_html = "".join(f"<li>{html.escape(item)}</li>" for item in diagnostics)
+    return (
+        f'<div class="meta">Feedback layer status: <span class="status {html.escape(str(review.get("status") or "partial"))}">{html.escape(str(review.get("status") or "partial"))}</span>; '
+        f'knowledge publish gate: <code>{html.escape(str(gate.get("status") or "not_available"))}</code>; '
+        f'writes knowledge: <code>{html.escape(str(gate.get("writes_knowledge", False)))}</code></div>'
+        '<table><thead><tr><th>Feedback</th><th>Count</th></tr></thead><tbody>'
+        f'{rows}</tbody></table>'
+        + (f'<details><summary>Conflicts</summary><ul>{conflict_html}</ul></details>' if conflict_html else '')
+        + (f'<details><summary>Diagnostics</summary><ul>{diagnostics_html}</ul></details>' if diagnostics_html else '')
+        + '<div class="meta">用户反馈是独立 evidence layer；它不会覆盖 observed/runtime，也不会自动发布 knowledge。</div>'
+    )
+
+
 def _timeline_display_rows(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     timeline = report.get("alert_timeline") if isinstance(report.get("alert_timeline"), Mapping) else {}
     narrative = report.get("diagnostic_narrative") if isinstance(report.get("diagnostic_narrative"), Mapping) else {}
@@ -2755,6 +2909,12 @@ def _collaboration_board_html(report: Mapping[str, Any]) -> str:
             value = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
         return html.escape(str(value))
 
+    feedback_labels = {
+        "feedback_confirmed": "用户确认",
+        "feedback_rejected": "用户否定",
+        "feedback_irrelevant": "用户标记无关",
+    }
+
     blocks: list[str] = []
     if hypotheses:
         rows = []
@@ -2809,9 +2969,11 @@ def _collaboration_board_html(report: Mapping[str, Any]) -> str:
                 for key in ("radar_id", "frame_id", "object_id")
                 if target.get(key) not in (None, "", [])
             ) or "—"
+            kind = str(item.get("kind") or "note")
+            kind_label = feedback_labels.get(kind, kind)
             rows.append(
                 "<tr>"
-                f"<td>{cell(item.get('kind') or 'note')}</td>"
+                f"<td><span class=\"status {cell(kind)}\">{cell(kind_label)}</span><br><code>{cell(kind)}</code></td>"
                 f"<td>{cell(item.get('summary') or '—')}</td>"
                 f"<td><code>{cell(target_text)}</code></td>"
                 f"<td>{cell(item.get('experiment_id') or '—')}</td>"
@@ -3226,10 +3388,47 @@ def _html(report: Mapping[str, Any], markdown: str) -> str:
     scene = _scene_svg(report)
     story_html = _diagnostic_story_html(report)
     execution_context_html = _execution_context_html(report)
+    perception_obj = report.get("perception_analysis") if isinstance(report.get("perception_analysis"), Mapping) else {}
+    perception_html = ""
+    if perception_obj:
+        perception_scene = perception_obj.get("scene") if isinstance(perception_obj.get("scene"), Mapping) else {}
+        perception_timeline = perception_obj.get("timeline") if isinstance(perception_obj.get("timeline"), Mapping) else {}
+        perception_warmup = perception_obj.get("warmup_analysis") if isinstance(perception_obj.get("warmup_analysis"), Mapping) else {}
+        scene_counts = perception_scene.get("counts") if isinstance(perception_scene.get("counts"), Mapping) else {}
+        scene_summary = (
+            f'<p>selected frame: <code>{html.escape(str(perception_scene.get("selected_frame", "not_available")))}</code>; '
+            f'scene status: <code>{html.escape(str(perception_scene.get("status", "not_available")))}</code>; '
+            f'points/clusters/tracks/outputs: <code>{html.escape(str(scene_counts.get("points", 0)))}/'
+            f'{html.escape(str(scene_counts.get("clusters", 0)))}/'
+            f'{html.escape(str(scene_counts.get("tracks", 0)))}/'
+            f'{html.escape(str(scene_counts.get("outputs", 0)))}</code></p>'
+        )
+        timeline_rows = "".join(
+            f'<tr><td><code>{html.escape(str(row.get("frame_key", "")))}</code></td>'
+            f'<td>{html.escape(str(len(row.get("stages", []) or [])))}</td>'
+            f'<td>{html.escape(", ".join(str(item) for item in row.get("track_ids", []) or []))}</td>'
+            f'<td>{html.escape(", ".join(str(item) for item in row.get("output_ids", []) or []))}</td></tr>'
+            for row in perception_timeline.get("rows", []) or [] if isinstance(row, Mapping)
+        )
+        perception_html = (
+            '<section><h2>点云感知证据</h2>'
+            f'<p>状态：<code>{html.escape(str(perception_obj.get("status", "not_available")))}</code>；'
+            f'结论等级：<code>{html.escape(str(perception_obj.get("conclusion_level", "facts_only")))}</code></p>'
+            f'{scene_summary}'
+            '<h3>Exact-frame perception timeline</h3>'
+            '<table><thead><tr><th>frame</th><th>stages</th><th>tracks</th><th>outputs</th></tr></thead><tbody>'
+            f'{timeline_rows or "<tr><td colspan=\"4\">No explicit frame timeline</td></tr>"}</tbody></table>'
+            f'<p>warm-up status: <code>{html.escape(str(perception_warmup.get("status", "not_available")))}</code>; '
+            f'runs: <code>{html.escape(str((perception_warmup.get("metrics") or {}).get("run_count", 0) if isinstance(perception_warmup.get("metrics"), Mapping) else 0))}</code></p>'
+            f'<details><summary>展开 perception-analysis.v1</summary><pre>{html.escape(json.dumps(perception_obj, ensure_ascii=False, indent=2, default=str))}</pre></details>'
+            '</section>'
+        )
     parameter_table = _parameter_table_html(report)
     condition_chain_table = _condition_chain_table_html(report)
     fact_table = _fact_table_html(report)
     runtime_fact_table = _runtime_fact_table_html(report)
+    runtime_snapshot_table = _runtime_snapshot_table_html(report)
+    feedback_review_html = _feedback_review_html(report)
     analysis_trace_html = _analysis_trace_html(report)
     collaboration_board_html = _collaboration_board_html(report)
     can_output_html = _can_output_html(report)
@@ -3246,18 +3445,20 @@ def _html(report: Mapping[str, Any], markdown: str) -> str:
  </style></head><body><main><header><div class="meta">CR60 / DETAILED DIAGNOSTIC REPORT</div><h1>{title}</h1><p>本报告把报警时刻的数据、当前源码条件和运行结果整理成可追溯的工程分析。</p></header>
 <section><h2>概览</h2><div class="meta">报告状态：<code>{html.escape(str(report.get('status')))}</code> · 事件数：<code>{html.escape(str((report.get('overview') or {{}}).get('event_count',0)))}</code> · 时间线：<code>{html.escape(str((report.get('overview') or {{}}).get('timeline_status','not_available')))}</code> · 判断终点：<code>{html.escape('算法最终输出' if output_policy.get('effective_endpoint') == 'algorithm' else 'CAN 输出' if output_policy.get('effective_endpoint') == 'can_tx' else '未确定')}</code></div></section>
 <section><h2>本次实际执行方式</h2><div class="meta">区分实车录制输入和本地算法仿真；这部分说明报警数据是如何产生的。</div>{execution_context_html}</section>
+{perception_html}
 <section><h2>报警事件</h2><table><thead><tr><th>事件</th><th>功能</th><th>侧别</th><th>雷达</th><th>首帧/分析帧</th></tr></thead><tbody>{''.join(f"<tr><td><code>{html.escape(str(e.get('event_id','')))}</code></td><td>{html.escape(str(e.get('function','')))}</td><td>{html.escape(str(e.get('side','')))}</td><td>{html.escape(str(e.get('radar_id','')))}</td><td><code>{html.escape(str((e.get('first_frame') or {{}}).get('frame_id','N/A')))}</code></td></tr>" for e in report.get('event_index',[]) or [] if isinstance(e,Mapping))}</tbody></table></section>
 <section><h2>总结性分析结论</h2><div class="narrative-assessment"><span class="status {html.escape(should_alert)}">{html.escape(should_alert_label)}</span> {html.escape(str(assessment.get('statement', '当前没有足够证据形成报警结论。')))}</div><p class="executive-summary">{executive_summary}</p><h3>报警条件链</h3><div class="meta">按当前 source 的真实调用关系和源码顺序呈现，不把不同分支拼成固定流程。</div>{condition_chain_table}<h3>报警帧关键数据</h3><div class="meta">下面表格是本次结论使用的自车、目标、源码参数和 runtime 中间量；保留真实 code token、数值、来源和帧号。</div>{parameter_table}{f'<details><summary>展开原始文字证据（{len(narrative_items)} 条）</summary><ol>{narrative_full}</ol></details>' if narrative_full else ''}<details><summary>diagnostic-narrative.v1 JSON</summary><pre>{html.escape(narrative_json)}</pre></details></section>
 <section><h2>报警工况图</h2><div class="meta">实线表示报警时刻目标和 ROI；虚线/交点表示代码运行态预测结果。坐标：+X 向前，+Y 向左。</div><div class="scene">{scene}</div></section>
 <section><h2>报警命中流程</h2><div class="meta">按当前 source 的真实执行顺序，说明数据如何代入代码条件并到达 arbe 报警灯输出。</div>{story_html}</section>
  <section><h2>报警帧时间线</h2><div class="meta">查看原始报警、算法输出和各播放帧的状态；完整时间线可展开。</div>{timeline_html}<details><summary>完整报警帧时间线 JSON</summary><pre>{html.escape(timeline_json)}</pre></details></section>
  <section><h2>数据与报警帧关联</h2><details><summary>查看关联检查结果</summary>{public_contract_html}</details></section>
- <section><h2>Evidence detail tables</h2><details open><summary>Recorded / static frame facts</summary><div class="meta">原始输入和 viewer projection 的紧凑字段。</div>{fact_table}</details><details><summary>Runtime / GDB facts</summary><div class="meta">运行时字段与记录输入分开保留。</div>{runtime_fact_table}</details></section>
+ <section><h2>Evidence detail tables</h2><details open><summary>Recorded / static frame facts</summary><div class="meta">原始输入和 viewer projection 的紧凑字段。</div>{fact_table}</details><details><summary>Runtime / GDB facts</summary><div class="meta">运行时字段与记录输入分开保留。</div>{runtime_fact_table}</details><details><summary>独立 ObjectList snapshot facts</summary>{runtime_snapshot_table}</details></section>
  <section><h2>完整代码条件明细</h2><details><summary>展开 {len(condition_items)} / {condition_total} 条关键条件</summary><div class="meta">这里保留源表达式、代入结果和求值原因；主叙事已用自然语言解释命中过程。</div><table><thead><tr><th>状态</th><th>源码位置</th><th>源表达式</th><th>代入表达式</th><th>说明</th></tr></thead><tbody>{condition_rows or '<tr><td colspan="5">No key source condition rows are available.</td></tr>'}</tbody></table></details><details><summary>完整 condition-trace JSON</summary><pre>{html.escape(condition_json)}</pre></details></section>
  <section><h2>报警输出信号路径</h2><details open>{can_output_html}</details></section>
  <section><h2>可复制的断点条件</h2><div class="meta">这些条件来自当前事件的源码断点包，复制前确认 source 和 binary 对齐。</div>{debug_anchors}</section>
  <section><h2>当前报警完整数据</h2><details><summary>展开完整事件数据</summary><pre>{html.escape(detail)}</pre></details></section>
-<section><h2>调查过程记录</h2><details><summary>展开分析账本和用户观察</summary><div class="meta">这里记录工具阶段、观察、缺口和下一步，不影响上面的数据与结论。</div>{analysis_trace_html}{collaboration_board_html}</details></section>
+ <section><h2>调查过程记录</h2><details><summary>展开分析账本和用户观察</summary><div class="meta">这里记录工具阶段、观察、缺口和下一步，不影响上面的数据与结论。</div>{analysis_trace_html}{collaboration_board_html}</details></section>
+ <section><h2>Feedback review</h2><details open>{feedback_review_html}</details></section>
 <section><h2>证据完整性</h2><details><summary>展开完整性检查和未证明事项</summary><pre>{html.escape(conclusion)}</pre></details></section>
 <section><h2>分析限制</h2><details><summary>展开缺口说明</summary><pre>{html.escape(diagnosis)}</pre></details></section>
 <section><h2>建议下一步</h2><ul>{''.join(f"<li><code>{html.escape(str(a.get('tool','')))}</code> · {html.escape(str(a.get('reason','')))}</li>" for a in report.get('next_actions',[]) or [] if isinstance(a,Mapping))}</ul></section>
@@ -3273,6 +3474,10 @@ def build_diagnostic_report(
     viewer_model_path: str = "",
     runtime_evidence: Mapping[str, Any] | None = None,
     runtime_evidence_path: str = "",
+    runtime_snapshot: Mapping[str, Any] | None = None,
+    runtime_snapshot_path: str = "",
+    feedback_review: Mapping[str, Any] | None = None,
+    feedback_review_path: str = "",
     runtime_debug_plan: Mapping[str, Any] | None = None,
     runtime_debug_plan_path: str = "",
     preflight: Mapping[str, Any] | None = None,
@@ -3288,6 +3493,8 @@ def build_diagnostic_report(
     analysis: Mapping[str, Any] | None = None,
     analysis_run: Mapping[str, Any] | None = None,
     analysis_run_path: str = "",
+    perception_analysis: Mapping[str, Any] | None = None,
+    perception_analysis_path: str = "",
     event_id: str = "",
     event_index: int | None = None,
     function: str = "",
@@ -3303,6 +3510,12 @@ def build_diagnostic_report(
     bundle_obj, bundle_ref, bundle_error = _load_object(bundle, bundle_path, label="bundle")
     viewer_obj, viewer_ref, viewer_error = _load_object(viewer_model, viewer_model_path, label="viewer_model")
     runtime_obj, runtime_ref, runtime_error = _load_object(runtime_evidence, runtime_evidence_path, label="runtime_evidence")
+    snapshot_obj, snapshot_ref, snapshot_error = _load_object(runtime_snapshot, runtime_snapshot_path, label="runtime_snapshot")
+    if snapshot_obj is not None and snapshot_obj.get("schema_version") != "runtime-snapshot-with-frame.v1":
+        snapshot_error = "runtime_snapshot_schema_unsupported"
+    feedback_obj, feedback_ref, feedback_error = _load_object(feedback_review, feedback_review_path, label="feedback_review")
+    if feedback_obj is not None and feedback_obj.get("schema_version") != "feedback-review.v1":
+        feedback_error = "feedback_review_schema_unsupported"
     plan_obj, plan_ref, plan_error = _load_object(runtime_debug_plan, runtime_debug_plan_path, label="runtime_debug_plan")
     preflight_obj, preflight_ref, preflight_error = _load_object(preflight, preflight_path, label="arbe_preflight")
     context_obj, context_ref, context_error = _load_object(code_context, code_context_path, label="code_context")
@@ -3310,6 +3523,7 @@ def build_diagnostic_report(
     trace_obj, trace_ref, trace_error = _load_object(condition_trace, condition_trace_path, label="condition_trace")
     run_obj, run_ref, run_error = _load_object(analysis_run, analysis_run_path, label="analysis_run")
     gdb_session_obj, gdb_session_ref, gdb_session_error = _load_object(gdb_session, gdb_session_path, label="gdb_session")
+    perception_obj, perception_ref, perception_error = _load_object(perception_analysis, perception_analysis_path, label="perception_analysis")
     runtime_normalization_error = ""
     if isinstance(runtime_obj, Mapping) and runtime_obj.get("schema_version") == "runtime-case-evidence.v1":
         try:
@@ -3324,7 +3538,7 @@ def build_diagnostic_report(
     if plan_obj is None and isinstance(bundle_obj, Mapping) and isinstance(bundle_obj.get("runtime_debug_plan"), Mapping):
         plan_obj = dict(bundle_obj["runtime_debug_plan"])
         plan_ref = {"label": "runtime_debug_plan", "source": "embedded_in_bundle", "schema_version": plan_obj.get("schema_version", "")}
-    errors = [item for item in (bundle_error, viewer_error, runtime_error, plan_error, preflight_error, context_error, path_error, trace_error, run_error, gdb_session_error) if item]
+    errors = [item for item in (bundle_error, viewer_error, runtime_error, snapshot_error, feedback_error, plan_error, preflight_error, context_error, path_error, trace_error, run_error, gdb_session_error, perception_error) if item]
     if runtime_normalization_error:
         errors.append(runtime_normalization_error)
     if bundle_obj is None and viewer_obj is None:
@@ -3335,6 +3549,7 @@ def build_diagnostic_report(
         ("event_code_path", path_obj),
         ("runtime_evidence", runtime_obj),
         ("gdb_session", gdb_session_obj),
+        ("perception_analysis", perception_obj),
     ):
         for conflict in _identity_conflicts(
             label_left="bundle",
@@ -3364,6 +3579,7 @@ def build_diagnostic_report(
         bundle=bundle_obj,
         viewer_model=viewer_obj,
         runtime_evidence=runtime_obj,
+        runtime_snapshot=snapshot_obj,
         event_id=event_id,
         event_index=event_index,
         function=function,
@@ -3507,6 +3723,10 @@ def build_diagnostic_report(
         })
         if diagnosis_section.get("status") == "pending":
             diagnosis_section["status"] = "partial"
+    runtime_snapshot_rows = list(query.get("runtime_snapshot_rows", []) or [])
+    runtime_snapshot_status = "not_available"
+    if snapshot_obj is not None:
+        runtime_snapshot_status = "partial" if query.get("status") == "partial" else "ready"
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
             "status": "blocked" if errors else "ready" if selected else "partial",
@@ -3521,6 +3741,8 @@ def build_diagnostic_report(
             },
             "radars": sorted({str(item.get("radar_id")) for item in event_index_rows if item.get("radar_id") not in (None, "")}),
             "runtime_status": runtime_obj.get("status", "not_available") if isinstance(runtime_obj, Mapping) else "not_available",
+            "runtime_snapshot_status": runtime_snapshot_status,
+            "runtime_snapshot_object_count": len(runtime_snapshot_rows),
             "code_context_status": context_obj.get("status", "not_available") if isinstance(context_obj, Mapping) else "not_available",
             "timeline_status": timeline_obj.get("status", "not_available"),
             "timeline_row_count": len(timeline_obj.get("rows", []) or []),
@@ -3529,6 +3751,10 @@ def build_diagnostic_report(
         },
         "event_index": event_index_rows,
         "selected_event": selected,
+        "runtime_snapshot_rows": runtime_snapshot_rows,
+        "runtime_snapshot_provenance": _artifact_ref(snapshot_ref),
+        "feedback_review": deepcopy(feedback_obj) if isinstance(feedback_obj, Mapping) else {},
+        "feedback_review_provenance": _artifact_ref(feedback_ref),
         "frame_mapping_conflicts": frame_mapping_conflicts,
         "diagnosis": diagnosis_section,
         "alert_timeline": timeline_obj,
@@ -3538,6 +3764,7 @@ def build_diagnostic_report(
         "geometry_projection": geometry_projection_obj,
         "gdb_confirmation": gdb_confirmation_obj,
         "execution_context": execution_context_obj,
+        "perception_analysis": deepcopy(perception_obj) if isinstance(perception_obj, Mapping) else {},
         "can_output": can_output_obj,
         "output_policy": deepcopy(narrative_obj.get("output_policy") or {}),
         "arbe_preflight": {
@@ -3572,13 +3799,16 @@ def build_diagnostic_report(
             {"layer": "recorded_or_static_bundle", "status": "present" if bundle_obj else "not_available", "ref": _artifact_ref(bundle_ref)},
             {"layer": "viewer_projection", "status": "present" if viewer_obj else "not_available", "ref": _artifact_ref(viewer_ref)},
             {"layer": "runtime_observation", "status": runtime_obj.get("status", "present") if isinstance(runtime_obj, Mapping) else "not_available", "ref": _artifact_ref(runtime_ref)},
+            {"layer": "runtime_snapshot", "status": runtime_snapshot_status, "ref": _artifact_ref(snapshot_ref)},
+            {"layer": "feedback_review", "status": feedback_obj.get("status", "not_available") if isinstance(feedback_obj, Mapping) else "not_available", "ref": _artifact_ref(feedback_ref)},
             {"layer": "arbe_preflight", "status": preflight_obj.get("status", "present") if isinstance(preflight_obj, Mapping) else "not_available", "ref": _artifact_ref(preflight_ref)},
             {"layer": "condition_trace", "status": trace_obj.get("status", "not_available") if isinstance(trace_obj, Mapping) else "not_available", "ref": _artifact_ref(trace_ref)},
             {"layer": "alert_timeline", "status": timeline_obj.get("status", "not_available"), "ref": {}},
+            {"layer": "perception", "status": perception_obj.get("status", "not_available") if isinstance(perception_obj, Mapping) else "not_available", "ref": _artifact_ref(perception_ref)},
             {"layer": "ai_interpretation", "status": "present_inference" if isinstance(analysis, Mapping) else "not_provided", "ref": {}},
         ],
-        "input_refs": [_artifact_ref(item) for item in (bundle_ref, viewer_ref, runtime_ref, plan_ref, preflight_ref, context_ref, path_ref, trace_ref, run_ref, gdb_session_ref) if item],
-        "artifact_refs": [_artifact_ref(item) for item in (bundle_ref, viewer_ref, runtime_ref, plan_ref, preflight_ref, context_ref, path_ref, trace_ref, gdb_session_ref) if item],
+        "input_refs": [_artifact_ref(item) for item in (bundle_ref, viewer_ref, runtime_ref, snapshot_ref, feedback_ref, plan_ref, preflight_ref, context_ref, path_ref, trace_ref, run_ref, gdb_session_ref, perception_ref) if item],
+        "artifact_refs": [_artifact_ref(item) for item in (bundle_ref, viewer_ref, runtime_ref, snapshot_ref, feedback_ref, plan_ref, preflight_ref, context_ref, path_ref, trace_ref, run_ref, gdb_session_ref, perception_ref) if item],
         "analysis_run_ref": _artifact_ref(run_ref),
         "conflicts": conflicts,
         "diagnostics": list(dict.fromkeys(

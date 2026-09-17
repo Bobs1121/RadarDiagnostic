@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -29,6 +30,11 @@ def _profile() -> dict:
 def test_public_topic_plan_keeps_frame_and_display_guarantees_separate():
     payload = build_public_topic_plan(
         profile=_profile(),
+        preflight={
+            "server": {"host": "10.0.0.1", "user": "tester", "port": 22},
+            "workspace": {"arbe_root": "/opt/arbe", "outer": {"head": "abc"}},
+        },
+        preflight_sha256="test-preflight-sha",
         topic_inventory={
             "topics": [
                 {
@@ -44,6 +50,9 @@ def test_public_topic_plan_keeps_frame_and_display_guarantees_separate():
     )
     assert payload["schema_version"] == "public-topic-plan.v1"
     assert payload["status"] == "ready"
+    assert payload["source_schema"]["preflight_server"]["host"] == "10.0.0.1"
+    assert payload["source_schema"]["preflight_workspace"]["arbe_root"] == "/opt/arbe"
+    assert payload["source_schema"]["preflight_sha256"] == "test-preflight-sha"
     lgu = next(item for item in payload["channels"] if item["channel_id"] == "lgu_input")
     objects = next(item for item in payload["channels"] if item["channel_id"] == "algorithm_object_display")
     assert lgu["frame_key"] == "wfAutosarData.frameID"
@@ -107,6 +116,25 @@ def test_public_modules_are_registered_and_write_audit_artifact(tmp_path: Path):
     assert result.ok is False  # no profile means no configured channels
     assert plan_output.exists()
     assert json.loads(plan_output.read_text(encoding="utf-8"))["status"] == "blocked"
+
+
+def test_public_topic_plan_binds_preflight_artifact_hash(tmp_path: Path):
+    preflight = {
+        "schema_version": "arbe-preflight.v1",
+        "status": "ready",
+        "server": {"host": "10.0.0.1", "user": "tester", "port": 22},
+        "workspace": {"arbe_root": "/opt/arbe"},
+    }
+    preflight_path = tmp_path / "preflight.json"
+    preflight_path.write_text(json.dumps(preflight), encoding="utf-8")
+    output_path = tmp_path / "topic-plan.json"
+    result = PublicTopicPlanModule().safe_run(
+        preflight_path=str(preflight_path), output=str(output_path)
+    )
+    assert result.data["source_schema"]["preflight_sha256"] == hashlib.sha256(
+        preflight_path.read_bytes()
+    ).hexdigest()
+    assert result.data["source_schema"]["preflight_server"]["host"] == "10.0.0.1"
 
 
 def test_public_capabilities_expose_atomic_tags_and_schemas():

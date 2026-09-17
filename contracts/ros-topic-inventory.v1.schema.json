@@ -9,6 +9,7 @@
     "status": { "enum": ["planned", "ready", "failed", "blocked"] },
     "server": { "type": "object" },
     "requested_topics": { "type": "array", "items": { "type": "string" } },
+    "preflight_path": { "type": "string" },
     "topics": {
       "type": "array",
       "items": {
@@ -24,12 +25,59 @@
           "publisher_present": { "type": "boolean" },
           "message_observable": { "type": ["boolean", "null"] },
           "observability_basis": { "type": "string" },
-          "sample": { "type": "object" },
+          "sample": {
+            "type": "object",
+            "properties": {
+              "status": { "enum": ["observed", "no_message", "failed", "blocked"] },
+              "message_observed": { "type": "boolean" },
+              "observed_at_utc": { "type": "string", "format": "date-time" },
+              "observation_clock": { "const": "client_utc" },
+              "stdout": { "type": "string" },
+              "stdout_sha256": { "type": "string" },
+              "stdout_char_count": { "type": "integer", "minimum": 0 },
+              "stdout_truncated": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          },
+          "message_schema": {
+            "type": "object",
+            "required": ["status", "message_type"],
+            "properties": {
+              "status": { "enum": ["ready", "partial", "failed", "empty", "blocked"] },
+              "message_type": { "type": "string" },
+              "message_definition_sha256": { "type": "string" },
+              "definition_char_count": { "type": "integer", "minimum": 0 },
+              "field_catalog": { "type": "array", "items": { "type": "object" } },
+              "field_count": { "type": "integer", "minimum": 0 },
+              "field_catalog_truncated": { "type": "boolean" },
+              "definition_truncated": { "type": "boolean" },
+              "command_result": { "type": "object" },
+              "diagnostics": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false
+          },
           "data_observable": { "type": "boolean" },
           "status": { "enum": ["ready", "not_found"] }
         },
         "additionalProperties": true
       }
+    },
+    "inspect_message_schemas": { "type": "boolean" },
+    "observed_at_utc": { "type": "string", "format": "date-time" },
+    "runtime_binding": {
+      "type": "object",
+      "required": ["status", "preflight_sha256"],
+      "properties": {
+        "status": { "enum": ["not_bound", "preflight_bound", "preflight_partial"] },
+        "preflight_path": { "type": ["string", "null"] },
+        "preflight_sha256": { "type": "string" },
+        "preflight_status": { "type": "string" },
+        "server": { "type": "object" },
+        "workspace": { "type": "object" },
+        "binary_fingerprint": { "type": "string" },
+        "config_fingerprint": { "type": "string" }
+      },
+      "additionalProperties": true
     },
     "diagnostics": { "type": "array", "items": { "type": "string" } }
   },

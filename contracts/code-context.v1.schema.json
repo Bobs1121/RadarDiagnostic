@@ -38,6 +38,7 @@
       "properties": {
         "code_context": {"type": "string", "minLength": 1},
         "code_index": {"type": "string", "minLength": 1},
+        "code_index_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "codegraph_db": {"type": "string", "minLength": 1}
       },
       "additionalProperties": true

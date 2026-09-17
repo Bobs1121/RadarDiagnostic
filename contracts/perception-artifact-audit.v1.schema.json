@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-artifact-audit.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "path", "format", "parser", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "perception-artifact-audit.v1"},
+    "status": {"enum": ["supported", "unsupported", "blocked"]},
+    "path": {"type": "string"},
+    "format": {"type": "string"},
+    "size_bytes": {"type": "integer", "minimum": 0},
+    "sha256": {"type": "string"},
+    "parser": {"type": "string"},
+    "registered_formats": {"type": "array", "items": {"type": "string"}},
+    "registered_parsers": {"type": "array", "items": {"type": "string"}},
+    "payload_shape": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

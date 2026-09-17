@@ -25,6 +25,18 @@
         "additionalProperties": true
       }
     },
+    "source_schema": {
+      "type": "object",
+      "properties": {
+        "source_context": {"type": "object"},
+        "message_contract": {"type": "object"},
+        "preflight_server": {"type": "object"},
+        "preflight_workspace": {"type": "object"},
+        "preflight_sha256": {"type": "string"},
+        "preflight_public_evidence": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
     "without_gdb": { "type": "array", "items": { "type": "string" } },
     "gdb_or_probe_required": { "type": "array", "items": { "type": "string" } }
   },

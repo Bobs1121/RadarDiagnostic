@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-report.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "analysis", "generated_by"],
+  "properties": {
+    "schema_version": {"const": "perception-report.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "analysis": {"type": "object"},
+    "validation": {"type": "object"},
+    "generated_by": {"const": "point-cloud-analyze"},
+    "artifact_paths": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

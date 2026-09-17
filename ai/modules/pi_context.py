@@ -23,6 +23,7 @@ class PiContextModule(BaseModule):
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
+            "task_scope": {"type": "string", "enum": ["case_analysis", "source_code"], "default": "case_analysis"},
             "intake": {"type": "object"},
             "intake_path": {"type": "string"},
             "preflight": {"type": "object"},
@@ -46,6 +47,8 @@ class PiContextModule(BaseModule):
             "runtime_debug_plan_path": {"type": "string"},
             "capability_manifest": {"type": "object"},
             "capability_manifest_path": {"type": "string"},
+            "code_context": {"type": "object"},
+            "code_context_path": {"type": "string"},
             "output": {"type": "string"}
         },
         "additionalProperties": False
@@ -61,6 +64,7 @@ class PiContextModule(BaseModule):
     def run(
         self,
         *,
+        task_scope: str = "case_analysis",
         intake: Mapping[str, Any] | None = None,
         intake_path: str = "",
         preflight: Mapping[str, Any] | None = None,
@@ -84,10 +88,13 @@ class PiContextModule(BaseModule):
         runtime_debug_plan_path: str = "",
         capability_manifest: Mapping[str, Any] | None = None,
         capability_manifest_path: str = "",
+        code_context: Mapping[str, Any] | None = None,
+        code_context_path: str = "",
         output: str = "",
         **_: Any,
     ) -> ModuleResult:
         payload = build_pi_orchestration_context(
+            task_scope=task_scope,
             intake=intake,
             intake_path=intake_path,
             preflight=preflight,
@@ -111,6 +118,8 @@ class PiContextModule(BaseModule):
             runtime_debug_plan_path=runtime_debug_plan_path,
             capability_manifest=capability_manifest,
             capability_manifest_path=capability_manifest_path,
+            code_context=code_context,
+            code_context_path=code_context_path,
         )
         artifacts: list[str] = []
         if str(output or "").strip():
@@ -140,6 +149,7 @@ class PiContextModule(BaseModule):
     @classmethod
     def register_cli(cls, subparsers: Any) -> Any:
         parser = super().register_cli(subparsers)
+        parser.add_argument("--task-scope", choices=["case_analysis", "source_code"], default="case_analysis")
         parser.add_argument("--intake", dest="intake_path", default="")
         parser.add_argument("--preflight", dest="preflight_path", default="")
         parser.add_argument("--case-dir", default="")
@@ -155,6 +165,7 @@ class PiContextModule(BaseModule):
         parser.add_argument("--diagnosis-bundle", "--diagnosis-bundle-path", dest="diagnosis_bundle_path", default="")
         parser.add_argument("--runtime-debug-plan", "--runtime-debug-plan-path", dest="runtime_debug_plan_path", default="")
         parser.add_argument("--capability-manifest", "--capability-manifest-path", dest="capability_manifest_path", default="")
+        parser.add_argument("--code-context", "--code-context-path", dest="code_context_path", default="")
         parser.add_argument("--output", default="")
         return parser
 

@@ -157,11 +157,11 @@ class AnalysisRunReadModule(_LedgerModule):
     input_schema = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
-            "run_id": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
             "include_entities": {"type": "boolean"},
         },
-        "required": ["run_id"],
+        "required": [],
         "additionalProperties": False,
     }
     output_schema = {
@@ -207,8 +207,8 @@ class AnalysisRunUpdateModule(_LedgerModule):
     input_schema = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
-            "run_id": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
             "status": {
                 "type": "string",
                 "enum": ["created", "running", "partial", "blocked", "failed", "completed"],
@@ -220,7 +220,7 @@ class AnalysisRunUpdateModule(_LedgerModule):
             "binding": {"type": "object"},
             "artifact_refs": {"type": "array", "items": {}},
         },
-        "required": ["run_id"],
+        "required": [],
         "additionalProperties": False,
     }
     output_schema = {
@@ -285,9 +285,9 @@ class AnalysisStepRecordModule(_LedgerModule):
     input_schema = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
             "action": {"type": "string", "enum": ["begin", "complete"]},
-            "run_id": {"type": "string"},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
             "step_id": {"type": "string"},
             "stage": {"type": "string"},
             "status": {
@@ -306,7 +306,7 @@ class AnalysisStepRecordModule(_LedgerModule):
             "next_action_candidates": {"type": "array", "items": {}},
             "metrics": {"type": "object"},
         },
-        "required": ["action", "run_id"],
+        "required": ["action"],
         "additionalProperties": False,
     }
     output_schema = {
@@ -409,8 +409,8 @@ class AnalysisClaimAppendModule(_LedgerModule):
     input_schema = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
-            "run_id": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
             "step_id": {"type": "string"},
             "claim_id": {"type": "string"},
             "scope": {"type": "string"},
@@ -425,7 +425,7 @@ class AnalysisClaimAppendModule(_LedgerModule):
             "conflicts": {"type": "array", "items": {}},
             "binding": {"type": "object"},
         },
-        "required": ["run_id", "scope", "statement", "status", "created_by"],
+        "required": ["scope", "statement", "status", "created_by"],
         "additionalProperties": False,
     }
     output_schema = {

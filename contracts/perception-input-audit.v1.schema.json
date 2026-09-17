@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-input-audit.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "payloads", "topic_names_used_for_classification", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "perception-input-audit.v1"},
+    "status": {"enum": ["ready", "blocked"]},
+    "payloads": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["source_key", "row_count", "status"],
+        "properties": {
+          "source_key": {"type": "string"},
+          "row_count": {"type": "integer", "minimum": 0},
+          "status": {"enum": ["observed", "observed_empty"]},
+          "message_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "message_schema": {"type": "object"},
+    "topics": {"type": "array", "items": {"type": "string"}},
+    "topic_names_used_for_classification": {"const": false},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

@@ -29,6 +29,20 @@ def test_public_capture_command_is_existing_sim_verify_replay_plan():
     assert plan["remote_capture_json"] == "/tmp/run-1/public.json"
 
 
+def test_public_capture_plan_has_interrupt_cleanup_and_scoped_attempt_path():
+    plan = build_public_capture_command(
+        remote_bag_path="/data/example.bag",
+        remote_capture_base="/tmp/run-1/public",
+        start_sec=0,
+        duration_sec=1,
+        input_topics=["/wf/corner_radar/lgu_data_1"],
+        output_topics=["/corner_radar/warning_status_with_frame"],
+        attempt_id="attempt-123",
+    )
+    assert "trap cleanup INT TERM EXIT" in plan["command"]
+    assert plan["remote_capture_json"].endswith(".attempt-123.json")
+
+
 def test_public_capture_markers_parse_numeric_status():
     values = parse_public_capture_result(
         "noise\n"

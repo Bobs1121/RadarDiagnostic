@@ -79,7 +79,7 @@ class AnalysisHypothesisRecordModule(_CollaborationModule):
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
             "hypothesis_id": {"type": "string"},
             "category": {"type": "string"},
             "statement": {"type": "string"},
@@ -93,9 +93,9 @@ class AnalysisHypothesisRecordModule(_CollaborationModule):
             "binding": {"type": "object"},
             "reason": {"type": "string"},
             "actor": {"type": "string", "enum": ["tool", "ai", "user", "pi"]},
-            "run_id": {"type": "string"},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
         },
-        "required": ["run_id"],
+        "required": [],
         "additionalProperties": False,
     }
     output_schema = {
@@ -178,9 +178,9 @@ class DebugExperimentRecordModule(_CollaborationModule):
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
             "action": {"type": "string", "enum": ["plan", "update"]},
-            "run_id": {"type": "string"},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
             "experiment_id": {"type": "string"},
             "question": {"type": "string"},
             "method": {"type": "string", "enum": ["", "static_query", "public_runtime", "replay", "gdb", "manual_vscode", "parameter_what_if"]},
@@ -199,7 +199,7 @@ class DebugExperimentRecordModule(_CollaborationModule):
             "reason": {"type": "string"},
             "actor": {"type": "string", "enum": ["tool", "ai", "user", "pi"]},
         },
-        "required": ["action", "run_id"],
+        "required": ["action"],
         "additionalProperties": False,
     }
     output_schema = {
@@ -304,15 +304,15 @@ class DebugExperimentRecordModule(_CollaborationModule):
 
 class AnalysisUserObservationModule(_CollaborationModule):
     name = "analysis-user-observation"
-    description = "Append a user's manual VSCode/GDB/screenshot/note observation"
+    description = "Append a user's manual observation or explicit confirmed/rejected/irrelevant feedback"
     tags = ["analysis", "user", "observation", "debug", "collaboration", "atomic", "local-write"]
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
-            "ledger_root": {"type": "string"},
-            "run_id": {"type": "string"},
+            "ledger_root": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun ledger; omit this field."},
+            "run_id": {"type": "string", "description": "In Pi, the bridge binds the current AnalysisRun; omit this field."},
             "observation_id": {"type": "string"},
-            "kind": {"type": "string", "enum": ["manual_vscode", "gdb_transcript", "screenshot", "note"]},
+            "kind": {"type": "string", "enum": ["manual_vscode", "gdb_transcript", "screenshot", "note", "feedback_confirmed", "feedback_rejected", "feedback_irrelevant"]},
             "summary": {"type": "string"},
             "content": {"type": "string"},
             "artifact_refs": {"type": "array", "items": {}},
@@ -321,7 +321,7 @@ class AnalysisUserObservationModule(_CollaborationModule):
             "hypothesis_refs": {"type": "array", "items": {}},
             "binding": {"type": "object"},
         },
-        "required": ["run_id", "summary"],
+        "required": ["summary"],
         "additionalProperties": False,
     }
     output_schema = {
@@ -375,7 +375,7 @@ class AnalysisUserObservationModule(_CollaborationModule):
         parser.add_argument("--ledger-root", default=cls.default_ledger_root)
         parser.add_argument("--run-id", required=True)
         parser.add_argument("--observation-id", default="")
-        parser.add_argument("--kind", choices=["manual_vscode", "gdb_transcript", "screenshot", "note"], default="note")
+        parser.add_argument("--kind", choices=["manual_vscode", "gdb_transcript", "screenshot", "note", "feedback_confirmed", "feedback_rejected", "feedback_irrelevant"], default="note")
         parser.add_argument("--summary", required=True)
         parser.add_argument("--content", default="")
         parser.add_argument("--artifact-refs", type=_json_array, default=[])

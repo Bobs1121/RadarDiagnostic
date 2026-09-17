@@ -12,6 +12,7 @@ Architecture:
 """
 import json
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from .model_router import ModelRouter
@@ -24,6 +25,7 @@ EXPERTS = {
         "name": "信号链路专家",
         "emoji": "🔗",
         "domain": "CAN信号→内部变量映射",
+        "source_domains": ["signal_chain"],
         "source_files": [
             "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.c",
             "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\RteComMapping.h",
@@ -37,7 +39,7 @@ EXPERTS = {
 通用规则(不限定某个功能):
 - 所有 `*SwtReq` 类信号 → 通过 RteComMapping 写入 `b*Enable`（按当前分析功能前缀查找）
 - 所有 `AEB*/ESP*/ACC*/TCS*/DTC*` 外部系统标志 → 读取为 `g_DTCCode.b*ActiveFlg` 或同结构体字段
-- 车型变体: `g_GWMSpecificVariant.bits`
+- 车型变体字段必须从当前 variant 的实际 RTE/source 域确认，不得沿用其他 COEM 的变量名
 - 私 CAN: `g_RteComMapping_*WarnSig`（左右雷达互传）
 
 禁止把其他功能（如 FCTA、BSD）的专属映射当作当前功能的真实链路。必须基于
@@ -50,6 +52,7 @@ EXPERTS = {
         "name": "算法逻辑专家",
         "emoji": "⚙️",
         "domain": "adasFunc.c报警条件与阈值",
+        "source_domains": ["algorithm", "constants", "output", "signal_chain"],
         "source_files": [
             "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.c",
             "coem\\GWM_B26\\components\\AswPerception\\func\\adasFunc.h",
@@ -81,6 +84,7 @@ EXPERTS = {
         "name": "系统状态专家",
         "emoji": "🔄",
         "domain": "双状态机与功能使能",
+        "source_domains": ["system_state", "algorithm", "signal_chain"],
         "source_files": [
             "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.c",
             "coem\\GWM_B26\\components\\AswIf\\ASW_IN\\ASWIN_SystemState.h",
@@ -109,6 +113,7 @@ EXPERTS = {
         "name": "感知与目标专家",
         "emoji": "👁️",
         "domain": "目标属性与过滤",
+        "source_domains": ["perception"],
         "source_files": [
             "adas\\symmetry\\perception\\src\\objAttribCal.c",
             "adas\\symmetry\\perception\\src\\track.c",
@@ -138,6 +143,7 @@ rcw_flag / rcta_flag / rctb_flag / fcta_flag / fctb_flag），均为 int8（-128
         "name": "架构专家",
         "emoji": "📡",
         "domain": "左右雷达与输出合并",
+        "source_domains": ["output", "signal_chain", "system_state"],
         "source_files": [
             "coem\\GWM_B26\\components\\AswIf\\ASW_OUT\\ASWOUT_OutCalc.c",
         ],
@@ -213,6 +219,27 @@ class ExpertPanel:
         self.source_root = Path(config["paths"]["source_code"])
         self._source_cache = {}
         self._thinking = router.thinking_mode
+        identity = config.get("identity", {})
+        requested_variant = identity.get("variant_id") if isinstance(identity, Mapping) else None
+        try:
+            from config import resolve_variant_id
+            self._variant_id = resolve_variant_id(config, requested_variant)
+        except Exception:  # noqa: BLE001 - source resolver remains fail-closed
+            self._variant_id = str(requested_variant or config.get("default_variant") or "")
+        variants = config.get("variants", {})
+        self._variant_config = (
+            variants.get(self._variant_id)
+            if isinstance(variants, Mapping) and self._variant_id in variants
+            else None
+        )
+        # When an effective variant exists, use its source domains directly;
+        # the deprecated top-level source_domains block may belong to another
+        # customer's legacy default_project.
+        self._source_domains = (
+            self._variant_config.get("source_domains", {})
+            if isinstance(self._variant_config, Mapping)
+            else config.get("source_domains", {})
+        )
 
     MAX_PARALLEL = 5
 
@@ -661,11 +688,25 @@ CAN信号→内部变量→判断条件→结果 (一条链路一行)
 
     def _load_expert_sources(self, expert_def: dict) -> str:
         parts = []
-        for rel_path in expert_def.get("source_files", []):
+        if isinstance(self._variant_config, Mapping):
+            domain_map = self._source_domains if isinstance(self._source_domains, Mapping) else {}
+            rel_paths = [
+                path
+                for domain in expert_def.get("source_domains", []) or []
+                for path in (domain_map.get(domain, []) or [])
+            ]
+        else:
+            rel_paths = list(expert_def.get("source_files", []) or [])
+        for rel_path in dict.fromkeys(str(item) for item in rel_paths):
+            rel_path = rel_path.replace("\\", "/")
             if rel_path in self._source_cache:
                 parts.append(self._source_cache[rel_path])
                 continue
-            full_path = self.source_root / rel_path
+            full_path = (self.source_root / rel_path).resolve()
+            try:
+                full_path.relative_to(self.source_root.resolve())
+            except ValueError:
+                continue
             if full_path.exists():
                 try:
                     text = full_path.read_text(encoding="utf-8", errors="replace")

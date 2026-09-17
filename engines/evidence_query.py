@@ -833,6 +833,141 @@ def _project_event(
     }
 
 
+def _project_runtime_snapshot_rows(
+    snapshot: Mapping[str, Any],
+    *,
+    radar_id: str,
+    frame_id: str,
+    requested_fields: Sequence[str],
+    max_targets: int,
+    max_field_rows: int,
+) -> tuple[list[dict[str, Any]], list[str], bool, int, int]:
+    """Return a bounded, schema-backed view of public snapshot ObjectList rows."""
+    metadata = snapshot.get("capture_metadata")
+    metadata = metadata if isinstance(metadata, Mapping) else {}
+    topic_samples = metadata.get("topic_samples")
+    schema_by_topic = {
+        str(item.get("topic") or ""): item
+        for item in topic_samples or []
+        if isinstance(item, Mapping) and item.get("topic")
+    } if isinstance(topic_samples, Sequence) and not isinstance(topic_samples, (str, bytes, bytearray)) else {}
+
+    candidates: list[dict[str, Any]] = []
+    for item in snapshot.get("unbound_objects", []) or []:
+        if isinstance(item, Mapping):
+            candidates.append(dict(item))
+    for frame in snapshot.get("snapshots", []) or []:
+        if not isinstance(frame, Mapping):
+            continue
+        for item in frame.get("objects", []) or []:
+            if not isinstance(item, Mapping):
+                continue
+            candidate = dict(item)
+            candidate.setdefault("radar_id", frame.get("radar_id"))
+            candidate.setdefault("frame_id", frame.get("frame_id"))
+            candidates.append(candidate)
+
+    diagnostics: list[str] = []
+    unbound_excluded_by_frame = 0
+    filtered: list[dict[str, Any]] = []
+    requested_radar = str(radar_id or "").strip()
+    requested_frame = str(frame_id or "").strip()
+    for item in candidates:
+        row_radar = item.get("radar_id")
+        if row_radar in (None, ""):
+            row_radar = (item.get("fields") or {}).get("radar_id") if isinstance(item.get("fields"), Mapping) else None
+        if requested_radar and str(row_radar or "") != requested_radar:
+            continue
+        row_frame = item.get("frame_id")
+        association_status = str(item.get("association_status") or "unbound")
+        if requested_frame:
+            if row_frame in (None, ""):
+                if association_status == "unbound":
+                    unbound_excluded_by_frame += 1
+                continue
+            if str(row_frame) != requested_frame:
+                continue
+        filtered.append(item)
+
+    projected: list[dict[str, Any]] = []
+    field_limit = max(1, int(max_field_rows))
+    for item in filtered:
+        object_fields = item.get("fields")
+        object_fields = object_fields if isinstance(object_fields, Mapping) else {}
+        source_ref = object_fields.get("source_ref")
+        source_ref = source_ref if isinstance(source_ref, Mapping) else {}
+        topic = str(object_fields.get("topic") or source_ref.get("topic") or "")
+        topic_schema = schema_by_topic.get(topic, {})
+        catalog = topic_schema.get("object_field_catalog")
+        catalog = catalog if isinstance(catalog, Sequence) and not isinstance(catalog, (str, bytes, bytearray)) else []
+        catalog_by_token = {
+            str(entry.get("token") or ""): entry
+            for entry in catalog
+            if isinstance(entry, Mapping) and entry.get("token")
+        }
+        if requested_fields:
+            tokens = [str(token).removeprefix("fields.") for token in requested_fields]
+        else:
+            tokens = list(catalog_by_token)
+        field_rows: list[dict[str, Any]] = []
+        for token in tokens:
+            schema_field = catalog_by_token.get(token)
+            if schema_field is None:
+                field_rows.append({
+                    "token": token,
+                    "status": "not_available",
+                    "reason": "field_not_in_current_message_definition",
+                })
+                continue
+            found, value = _get_path(object_fields, token)
+            field_rows.append({
+                "token": token,
+                "type": schema_field.get("type"),
+                "source_path": schema_field.get("source_path"),
+                "value": _bound_query_value(value, max_rows=field_limit) if found else None,
+                "status": "observed" if found else "not_available",
+                "reason": "" if found else "field_missing_from_sample_row",
+            })
+        if not catalog:
+            diagnostics.append(f"object_field_catalog_not_available:{topic or 'unknown_topic'}")
+        bounded_fields = field_rows[:field_limit]
+        field_truncated = len(field_rows) > field_limit or bool(topic_schema.get("object_field_catalog_truncated"))
+        projected.append({
+            "radar_id": item.get("radar_id") if item.get("radar_id") not in (None, "") else row_radar,
+            "frame_id": item.get("frame_id"),
+            "association_status": association_status,
+            "event_association_status": "not_available",
+            "callback_id": item.get("callback_id"),
+            "object_index": item.get("object_index"),
+            "topic": topic,
+            "message_type": object_fields.get("message_type"),
+            "sample_observed_at_utc": object_fields.get("sample_observed_at_utc"),
+            "field_rows": bounded_fields,
+            "field_rows_requested": len(field_rows),
+            "object_field_count_in_schema": topic_schema.get("object_field_count"),
+            "fields_truncated": field_truncated,
+            "field_catalog_status": topic_schema.get("message_schema_status", "not_available"),
+            "message_definition_sha256": topic_schema.get("message_definition_sha256"),
+            "source_ref": {
+                "topic": topic,
+                "field_path": source_ref.get("field_path"),
+                "sample_sha256": source_ref.get("sample_sha256") or topic_schema.get("sample_sha256"),
+                "inventory_path": metadata.get("inventory_path"),
+                "inventory_sha256": metadata.get("inventory_sha256"),
+                "message_definition_sha256": topic_schema.get("message_definition_sha256"),
+            },
+            "identity_binding": deepcopy(metadata.get("identity_binding", {})),
+        })
+
+    total_count = len(projected)
+    sliced, truncated = _slice_rows(projected, max_items=max_targets, selected_frame_id=requested_frame)
+    if unbound_excluded_by_frame:
+        diagnostics.append("unbound_runtime_snapshot_rows_excluded_by_frame_filter")
+    if truncated:
+        diagnostics.append("runtime_snapshot_object_results_truncated")
+    return sliced, list(dict.fromkeys(diagnostics)), truncated, unbound_excluded_by_frame, total_count
+
+
 def build_evidence_query(
     *,
     bundle: Mapping[str, Any] | None = None,
@@ -841,6 +976,8 @@ def build_evidence_query(
     viewer_model_path: str = "",
     runtime_evidence: Mapping[str, Any] | None = None,
     runtime_evidence_path: str = "",
+    runtime_snapshot: Mapping[str, Any] | None = None,
+    runtime_snapshot_path: str = "",
     event_id: str = "",
     event_index: int | None = None,
     function: str = "",
@@ -864,6 +1001,11 @@ def build_evidence_query(
     runtime_obj, runtime_ref, runtime_error = _load_object(
         runtime_evidence, runtime_evidence_path, label="runtime_evidence"
     )
+    snapshot_obj, snapshot_ref, snapshot_error = _load_object(
+        runtime_snapshot, runtime_snapshot_path, label="runtime_snapshot"
+    )
+    if snapshot_obj is not None and snapshot_obj.get("schema_version") != "runtime-snapshot-with-frame.v1":
+        snapshot_error = "runtime_snapshot_schema_unsupported"
     if runtime_obj is None and isinstance(bundle_obj, Mapping) and isinstance(bundle_obj.get("runtime_evidence"), Mapping):
         runtime_obj = dict(bundle_obj["runtime_evidence"])
         runtime_ref = {
@@ -871,17 +1013,17 @@ def build_evidence_query(
             "source": "embedded_in_bundle",
             "schema_version": runtime_obj.get("schema_version", ""),
         }
-    errors = [item for item in (bundle_error, viewer_error, runtime_error) if item]
-    if bundle_obj is None and viewer_obj is None:
-        errors.append("bundle_or_viewer_model_required")
+    errors = [item for item in (bundle_error, viewer_error, runtime_error, snapshot_error) if item]
+    if bundle_obj is None and viewer_obj is None and snapshot_obj is None:
+        errors.append("bundle_viewer_or_runtime_snapshot_required")
     if errors:
         return {
             "schema_version": SCHEMA_VERSION,
             "status": "blocked",
             "query": {},
             "events": [],
-            "input_refs": [item for item in (bundle_ref, viewer_ref, runtime_ref) if item],
-            "artifact_refs": [item for item in (bundle_ref, viewer_ref, runtime_ref) if item],
+            "input_refs": [item for item in (bundle_ref, viewer_ref, runtime_ref, snapshot_ref) if item],
+            "artifact_refs": [item for item in (bundle_ref, viewer_ref, runtime_ref, snapshot_ref) if item],
             "diagnostics": list(dict.fromkeys(errors)),
         }
 
@@ -920,7 +1062,7 @@ def build_evidence_query(
         selected_events,
         max_items=max_events,
     )
-    refs = [item for item in (bundle_ref, viewer_ref, runtime_ref) if item]
+    refs = [item for item in (bundle_ref, viewer_ref, runtime_ref, snapshot_ref) if item]
     projected = [
         _project_event(
             event,
@@ -936,17 +1078,62 @@ def build_evidence_query(
         for event in selected_events
     ]
     diagnostics: list[str] = []
-    if not projected:
+    snapshot_rows: list[dict[str, Any]] = []
+    snapshot_truncated = False
+    unbound_rows_excluded_by_frame = 0
+    snapshot_total_count = 0
+    if snapshot_obj is not None:
+        snapshot_rows, snapshot_diagnostics, snapshot_truncated, unbound_rows_excluded_by_frame, snapshot_total_count = _project_runtime_snapshot_rows(
+            snapshot_obj,
+            radar_id=str(radar_id or "").strip(),
+            frame_id=str(frame_id or "").strip(),
+            requested_fields=requested_fields,
+            max_targets=max_targets,
+            max_field_rows=max_field_rows,
+        )
+        diagnostics.extend(snapshot_diagnostics)
+        if event_id or function or side:
+            diagnostics.append("runtime_snapshot_rows_not_bound_to_event")
+        if not snapshot_rows and unbound_rows_excluded_by_frame:
+            diagnostics.append("runtime_snapshot_has_no_exact_frame_match")
+    snapshot_effective_fields = list(dict.fromkeys(
+        field.get("token")
+        for row in snapshot_rows
+        for field in row.get("field_rows", [])
+        if isinstance(field, Mapping) and field.get("token")
+    ))
+    if snapshot_obj is not None and bundle_obj is None and viewer_obj is None and not requested_fields:
+        effective_fields = snapshot_effective_fields
+    if not projected and snapshot_obj is None:
         diagnostics.append("no_event_matches_query")
     if events_truncated:
         diagnostics.append("event_results_truncated")
-    if viewer_obj is None:
+    if bundle_obj is not None and viewer_obj is None:
         diagnostics.append("viewer_model_not_supplied_bundle_projection_used")
-    if runtime_obj is None:
+    if runtime_obj is None and snapshot_obj is None and (bundle_obj is not None or viewer_obj is not None):
         diagnostics.append("runtime_evidence_not_supplied")
+    snapshot_identity = snapshot_obj.get("capture_metadata", {}).get("identity_binding", {}) if isinstance(snapshot_obj, Mapping) and isinstance(snapshot_obj.get("capture_metadata"), Mapping) else {}
+    has_unbound_snapshot_rows = any(row.get("association_status") == "unbound" for row in snapshot_rows)
+    if snapshot_rows and snapshot_identity.get("status") == "not_bound":
+        diagnostics.append("runtime_snapshot_identity_not_bound")
+    if snapshot_obj is not None and snapshot_rows:
+        status = (
+            "partial"
+            if has_unbound_snapshot_rows
+            or snapshot_identity.get("status") == "not_bound"
+            or snapshot_truncated
+            else "ready"
+        )
+    elif projected:
+        status = "ready"
+    else:
+        status = "not_found"
+        if snapshot_obj is not None:
+            diagnostics.append("runtime_snapshot_has_no_matching_object_rows")
+    matched_snapshot_objects = len(snapshot_rows)
     return {
         "schema_version": SCHEMA_VERSION,
-        "status": "ready" if projected else "not_found",
+        "status": status,
         "query": {
             "event_id": str(event_id or ""),
             "event_index": event_index,
@@ -961,18 +1148,25 @@ def build_evidence_query(
             "max_targets": int(max_targets),
             "include_details": bool(include_details),
             "max_field_rows": int(max_field_rows),
+            "runtime_snapshot": snapshot_obj is not None,
+            "runtime_snapshot_fields": snapshot_effective_fields,
         },
         "case": deepcopy((bundle_obj or viewer_obj or {}).get("case", {})),
         "provenance": {
             "bundle": bundle_ref or {},
             "viewer_model": viewer_ref or {},
             "runtime_evidence": runtime_ref or {},
+            "runtime_snapshot": snapshot_ref or {},
             "bundle_schema_version": (bundle_obj or {}).get("schema_version", ""),
             "viewer_schema_version": (viewer_obj or {}).get("schema_version", ""),
             "runtime_schema_version": (runtime_obj or {}).get("schema_version", ""),
         },
         "matched_event_count": len(projected),
+        "matched_runtime_object_count": matched_snapshot_objects,
+        "runtime_snapshot_total_count": snapshot_total_count,
         "events": projected,
+        "runtime_snapshot_rows": snapshot_rows,
+        "runtime_snapshot_truncated": snapshot_truncated,
         "artifact_refs": refs,
         "diagnostics": list(dict.fromkeys(diagnostics)),
     }

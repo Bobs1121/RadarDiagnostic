@@ -167,6 +167,10 @@ class SshCommandRunner:
     def destination(self) -> str:
         return f"{self.username}@{self.host}" if self.username else self.host
 
+    def probe_connection(self, *, timeout_sec: float = 5.0) -> CommandResult:
+        """Test that a read-only remote command can complete within a short bound."""
+        return self.run("printf 'arbe_preflight_ssh_ready\\n'", timeout_sec=timeout_sec)
+
     def run(self, command: str, *, timeout_sec: float) -> CommandResult:
         started = time.monotonic()
         args = [
@@ -768,6 +772,12 @@ def _parse_binary_fingerprint(text: str) -> str:
     return ""
 
 
+def _parse_first_sha256(text: str) -> str:
+    """Parse a standalone or ``sha256sum``-style digest from probe output."""
+    match = re.search(r"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])", str(text or ""))
+    return match.group(1).lower() if match else ""
+
+
 class ArbePreflight:
     """Read-only probe for one Linux arbe workspace."""
 
@@ -797,11 +807,25 @@ class ArbePreflight:
         self.timeout_sec = max(0.5, float(timeout_sec))
         self.include_process_snapshot = bool(include_process_snapshot)
         self._commands: list[CommandResult] = []
+        self._remote_probe_failure: dict[str, str] | None = None
 
     def _probe(self, name: str, command: str) -> dict[str, Any]:
+        if self.server_host and self._remote_probe_failure:
+            return {
+                "name": name,
+                "ok": False,
+                "returncode": None,
+                "timed_out": False,
+                "stdout": "",
+                "stderr": "",
+                "duration_sec": 0.0,
+                "skipped": True,
+                "skip_reason": "remote_probe_skipped_after_incomplete_probe",
+                "blocked_by_probe": self._remote_probe_failure["probe"],
+            }
         result = self.runner.run(command, timeout_sec=self.timeout_sec)
         self._commands.append(result)
-        return {
+        probe = {
             "name": name,
             "ok": result.ok,
             "returncode": result.returncode,
@@ -810,8 +834,17 @@ class ArbePreflight:
             "stderr": result.stderr,
             "duration_sec": round(result.duration_sec, 6),
         }
+        if self.server_host and (result.timed_out or result.returncode == 255):
+            self._remote_probe_failure = {
+                "probe": name,
+                "reason": "remote_probe_timed_out" if result.timed_out else "ssh_session_failed",
+            }
+            probe["remote_probe_failure"] = self._remote_probe_failure["reason"]
+        return probe
 
     def run(self) -> dict[str, Any]:
+        self._commands = []
+        self._remote_probe_failure = None
         if not self.arbe_root:
             return {
                 "schema_version": SCHEMA_VERSION,
@@ -819,6 +852,13 @@ class ArbePreflight:
                 "blockers": ["arbe_root_missing"],
                 "warnings": [],
                 "commands": [],
+                "probe_execution": {
+                    "mode": "ssh" if self.server_host else "local",
+                    "status": "not_started",
+                    "failed_probe": None,
+                    "failure_reason": None,
+                    "skipped_probe_count": 0,
+                },
             }
 
         outer = _q(self.arbe_root)
@@ -834,6 +874,25 @@ class ArbePreflight:
             ros_setup_env += f"export ROS_MASTER_URI={_q(self.ros_master_uri)}; "
 
         probes: dict[str, dict[str, Any]] = {}
+        connection_probe = getattr(self.runner, "probe_connection", None)
+        if self.server_host and callable(connection_probe):
+            result = connection_probe(timeout_sec=min(self.timeout_sec, 5.0))
+            self._commands.append(result)
+            probes["ssh_connectivity"] = {
+                "name": "ssh_connectivity",
+                "ok": result.ok,
+                "returncode": result.returncode,
+                "timed_out": result.timed_out,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "duration_sec": round(result.duration_sec, 6),
+            }
+            if result.timed_out or result.returncode == 255:
+                self._remote_probe_failure = {
+                    "probe": "ssh_connectivity",
+                    "reason": "remote_probe_timed_out" if result.timed_out else "ssh_session_failed",
+                }
+                probes["ssh_connectivity"]["remote_probe_failure"] = self._remote_probe_failure["reason"]
         probes["outer_root"] = self._probe(
             "outer_root",
             f"test -d {outer} && printf 'directory_present\\n'",
@@ -849,6 +908,11 @@ class ArbePreflight:
         probes["outer_branch_status"] = self._probe(
             "outer_git_status",
             f"git -C {outer} status --short --branch",
+        )
+        probes["outer_content_fingerprint"] = self._probe(
+            "outer_worktree_content_fingerprint",
+            f"{{ git -C {outer} diff --binary HEAD; git -C {outer} status --porcelain=v1 -uall; "
+            f"git -C {outer} ls-files --others --exclude-standard -z | xargs -0 -r sha256sum; }} | sha256sum",
         )
         probes["submodule_status"] = self._probe(
             "submodule_status",
@@ -866,9 +930,18 @@ class ArbePreflight:
             "algo_git_status",
             f"git -C {algo} status --short --branch",
         )
+        probes["algo_content_fingerprint"] = self._probe(
+            "algo_worktree_content_fingerprint",
+            f"{{ git -C {algo} diff --binary HEAD; git -C {algo} status --porcelain=v1 -uall; "
+            f"git -C {algo} ls-files --others --exclude-standard -z | xargs -0 -r sha256sum; }} | sha256sum",
+        )
         probes["config"] = self._probe(
             "launch_config",
             f"test -f {_q(config_path)} && sed -n '1,240p' {_q(config_path)}",
+        )
+        probes["config_fingerprint"] = self._probe(
+            "launch_config_fingerprint",
+            f"test -f {_q(config_path)} && sha256sum {_q(config_path)}",
         )
         probes["vis_launch"] = self._probe(
             "visualization_launch",
@@ -913,12 +986,18 @@ class ArbePreflight:
             probes["processes"] = self._probe(
                 "visualization_processes",
                 "ps -eo pid=,args= 2>/dev/null | "
-                "grep '[a]rbe_visualization_engine'",
+                "grep '[a]rbe_visualization_engine' || true",
             )
             probes["ros_nodes"] = self._probe(
                 "ros_visualization_nodes",
                 f"{ros_setup_env}rosnode list 2>/dev/null | "
                 "grep 'arbe_visualization_engine' || true",
+            )
+            probes["process_executables"] = self._probe(
+                "visualization_process_executables",
+                "for pid in $(ps -eo pid=,args= 2>/dev/null | "
+                "grep '[a]rbe_visualization_engine' | awk '{print $1}'); do "
+                "printf '%s %s\\n' \"$pid\" \"$(readlink -f /proc/$pid/exe 2>/dev/null || true)\"; done",
             )
 
         config_text = probes["config"].get("stdout", "")
@@ -1017,11 +1096,48 @@ class ArbePreflight:
             function_refs=_parse_function_refs(function_probe.get("stdout", ""), names=function_names),
             probe=assignment_probe,
         )
+        can_chain_probe = probes["can_chain"]
+        can_chain_observed = bool(can_chain_probe.get("ok"))
+        if not can_chain_observed:
+            source_output_chain = {
+                **source_output_chain,
+                "status": "not_available",
+                "observation_status": "not_available",
+                "blocked_by_probe": "can_chain",
+                "assignment_probe": {
+                    "ok": False,
+                    "returncode": can_chain_probe.get("returncode"),
+                    "timed_out": can_chain_probe.get("timed_out"),
+                    "blocked_by_probe": "can_chain",
+                },
+            }
         public_contract = _parse_publication_contract(
             probes["public_source_contract"].get("stdout", ""),
             source_path=visualization_source_path,
         )
+        public_source_probe = probes["public_source_contract"]
+        public_contract["source_probe_status"] = (
+            "observed" if _probe_was_observed(public_source_probe) else "not_available"
+        )
+        process_probe = probes.get("processes")
+        process_probe_observed = bool(process_probe and process_probe.get("ok"))
+        ros_nodes_probe = probes.get("ros_nodes")
+        ros_nodes_probe_observed = bool(ros_nodes_probe and ros_nodes_probe.get("ok"))
         processes = _parse_processes(process_text)
+        executable_by_pid: dict[int, str] = {}
+        for raw in str(probes.get("process_executables", {}).get("stdout", "")).splitlines():
+            parts = raw.strip().split(None, 1)
+            if len(parts) != 2:
+                continue
+            try:
+                executable_by_pid[int(parts[0])] = parts[1].strip()
+            except ValueError:
+                continue
+        for process in processes:
+            try:
+                process["executable_path"] = executable_by_pid.get(int(process.get("pid")), "")
+            except (TypeError, ValueError):
+                process["executable_path"] = ""
         ros_nodes = [line.strip() for line in ros_text.splitlines() if line.strip()]
         binaries = [
             line.strip()
@@ -1044,12 +1160,18 @@ class ArbePreflight:
         ):
             if not probes[name].get("ok", False):
                 blockers.append(f"{name}_unavailable")
+        if self._remote_probe_failure:
+            blockers.append("remote_probe_incomplete")
 
         hilmodel = macros.get("HILMODEL", "")
         if hilmodel and hilmodel != "2":
             warnings.append(f"hilmodel_not_2:{hilmodel}")
         if not hilmodel:
-            warnings.append("hilmodel_not_found")
+            warnings.append(
+                "hilmodel_not_found"
+                if probes["para_define"].get("ok")
+                else "build_macro_probe_unavailable"
+            )
 
         gdb_text = probes["gdb"].get("stdout", "")
         gdb_lines = [line.strip() for line in gdb_text.splitlines() if line.strip()]
@@ -1070,14 +1192,33 @@ class ArbePreflight:
             (line for line in reversed(gdb_lines) if re.fullmatch(r"[0-3]", line)),
             "",
         )
-        gdb_available = bool(gdb_version)
-        if not gdb_available:
+        gdb_available: bool | None = bool(gdb_version) if probes["gdb"].get("ok") else None
+        if gdb_available is False:
             warnings.append("gdb_not_found")
+        elif gdb_available is None:
+            warnings.append("gdb_probe_unavailable")
 
-        can_observation_status = "candidate_source_found" if source_refs else "not_found"
-        runtime_status = "ready" if processes else "not_running"
-        if not binaries:
+        can_observation_status = (
+            "candidate_source_found"
+            if source_refs
+            else "not_found"
+            if can_chain_observed
+            else "not_available"
+        )
+        runtime_status = (
+            "not_requested"
+            if process_probe is None
+            else "ready"
+            if processes
+            else "not_running"
+            if process_probe_observed
+            else "unknown"
+        )
+        binary_probe_observed = _probe_was_observed(probes["binary_candidates"])
+        if binary_probe_observed and not binaries:
             warnings.append("arbe_visualization_engine_binary_not_found")
+        elif not binary_probe_observed:
+            warnings.append("binary_probe_unavailable")
 
         status = "blocked" if blockers else ("ready" if runtime_status == "ready" else "partial")
         return {
@@ -1095,11 +1236,13 @@ class ArbePreflight:
                     "head": _stdout_line(probes["outer_head"]),
                     "status": probes["outer_branch_status"].get("stdout", ""),
                     "status_ok": probes["outer_branch_status"].get("ok", False),
+                    "content_fingerprint": _parse_first_sha256(probes["outer_content_fingerprint"].get("stdout", "")),
                 },
                 "algo_source": {
                     "head": _stdout_line(probes["algo_head"]),
                     "status": probes["algo_branch_status"].get("stdout", ""),
                     "status_ok": probes["algo_branch_status"].get("ok", False),
+                    "content_fingerprint": _parse_first_sha256(probes["algo_content_fingerprint"].get("stdout", "")),
                 },
                 "submodule_status": probes["submodule_status"].get("stdout", ""),
             },
@@ -1108,29 +1251,59 @@ class ArbePreflight:
                 "visualization_launch_path": vis_launch_path,
                 "resolved": config,
                 "raw_config_available": bool(config_text),
+                "observation_status": "observed" if probes["config"].get("ok") else "not_available",
+                "content_fingerprint": _parse_first_sha256(probes["config_fingerprint"].get("stdout", "")),
             },
             "build": {
                 "para_define_path": para_path,
                 "macros": macros,
+                "macro_observation_status": "observed" if probes["para_define"].get("ok") else "not_available",
+                "macro_presence": {
+                    name: "present" if name in macros else "absent" if probes["para_define"].get("ok", False) else "unknown"
+                    for name in ("HILMODEL", "BUILDMODEL", "PF_BUILD_FUNTEST_SGU_INJECTION")
+                },
                 "binary_candidates": binaries,
                 "binary_count": len(binaries),
+                "binary_observation_status": "observed" if binary_probe_observed else "not_available",
                 "binary_fingerprint": binary_fingerprint,
                 "binary_identity_probe": binary_identity_text,
             },
             "runtime": {
                 "status": runtime_status,
+                "observation_status": (
+                    "not_requested"
+                    if process_probe is None
+                    else "observed"
+                    if process_probe_observed
+                    else "not_available"
+                ),
                 "ros_setup": self.ros_setup,
                 "ros_master_uri": self.ros_master_uri,
-                "processes": processes,
-                "ros_nodes": ros_nodes,
+                "processes": processes if process_probe_observed else None,
+                "process_observation_status": (
+                    "not_requested"
+                    if process_probe is None
+                    else "observed"
+                    if process_probe_observed
+                    else "not_available"
+                ),
+                "ros_nodes": ros_nodes if ros_nodes_probe_observed else None,
+                "ros_node_observation_status": (
+                    "not_requested"
+                    if ros_nodes_probe is None
+                    else "observed"
+                    if ros_nodes_probe_observed
+                    else "not_available"
+                ),
                 "expected_process_pattern": (
                     "/radar<id>_visualization_engine/"
                     "arbe_visualization_engine"
                 ),
-                "bash_start_required": True,
+                "bash_start_required": True if runtime_status == "not_running" else False if runtime_status == "ready" else None,
             },
             "gdb": {
                 "available": gdb_available,
+                "observation_status": "observed" if probes["gdb"].get("ok") else "not_available",
                 "path": gdb_path,
                 "version": gdb_version,
                 "ptrace_scope": ptrace_scope or "unavailable",
@@ -1140,6 +1313,7 @@ class ArbePreflight:
             },
             "can_output": {
                 "observation_status": can_observation_status,
+                "source_scan_status": "observed" if can_chain_observed else "not_available",
                 "source_scope": mapping_root,
                 "candidate_signal_tokens": signal_tokens,
                 "write_mappings": signal_mappings,
@@ -1162,6 +1336,13 @@ class ArbePreflight:
                 },
             },
             "probes": probes,
+            "probe_execution": {
+                "mode": "ssh" if self.server_host else "local",
+                "status": "short_circuited" if self._remote_probe_failure else "completed",
+                "failed_probe": self._remote_probe_failure.get("probe") if self._remote_probe_failure else None,
+                "failure_reason": self._remote_probe_failure.get("reason") if self._remote_probe_failure else None,
+                "skipped_probe_count": sum(1 for probe in probes.values() if probe.get("skipped")),
+            },
             "blockers": blockers,
             "warnings": warnings,
             "commands": [item.to_dict() for item in self._commands],
@@ -1171,6 +1352,11 @@ class ArbePreflight:
 def _stdout_line(probe: dict[str, Any]) -> str:
     text = str(probe.get("stdout", "")).strip()
     return text.splitlines()[0] if text else ""
+
+
+def _probe_was_observed(probe: Mapping[str, Any]) -> bool:
+    """Return whether a probe completed without a timeout or SSH-session failure."""
+    return bool(probe) and not probe.get("skipped") and not probe.get("timed_out") and probe.get("returncode") != 255
 
 
 __all__ = [

@@ -232,7 +232,7 @@ class Orchestrator:
         self._case_dbc = None  # DBC loader from the current case (Step-5 signal audit)
         self._init_signal_maps()
 
-    def _resolve_signal_mapping_source(self) -> str:
+    def _resolve_signal_mapping_source(self) -> str | None:
         """定位信号映射源文件（RteComMapping.c）的相对路径。
 
         六代不同项目（GWM_B26 / BYD_SC6H 的 ``ASW_ComMapping``）的
@@ -240,13 +240,18 @@ class Orchestrator:
         （CLI 按 variant 注入的正确值）中挑选含 ``RteComMapping`` 的文件，
         避免回退到只对 GWM_B26 有效的默认路径导致映射重建为空。
         """
-        ksf = (self.config.get("paths") or {}).get("key_source_files") or []
-        for rel in ksf:
-            leaf = str(rel).replace("\\", "/")
-            if "/RteComMapping" in leaf or leaf.startswith("RteComMapping"):
-                return str(rel)
-        # Fallback to the engine default (works for GWM-style layouts).
-        return r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
+        try:
+            from config import resolve_variant_rte_mapping_file
+
+            source_root = (self.config.get("paths") or {}).get("source_code")
+            rte_file, status = resolve_variant_rte_mapping_file(
+                self.config, source_root
+            )
+            if status == "variant_unavailable":
+                return None  # legacy-only profiles may use unique-file discovery
+            return rte_file  # empty is an explicit unavailable/ambiguous variant binding
+        except Exception:  # noqa: BLE001 - unresolved mapping remains unavailable
+            return ""
 
     def _init_signal_maps(self) -> None:
         """Phase 15 (2.1.3): Load signal_mapping + variable_chains + output_mapping once.
@@ -267,7 +272,9 @@ class Orchestrator:
             self.signal_mapping = extract_signal_mapping(
                 source_root, docs_dir, rte_file=rte_file,
             )
-            self.variable_chains = trace_variable_chains(source_root, docs_dir)
+            self.variable_chains = trace_variable_chains(
+                source_root, docs_dir, rte_file=rte_file,
+            )
             self.output_signal_mapping = extract_output_signal_mapping(
                 source_root, docs_dir, rte_file=rte_file,
             )
@@ -1203,13 +1210,14 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         source_root = Path(self.config["paths"]["source_code"])
         docs_dir = self.source_docs_dir
         knowledge_dir = self.memory.memory_dir / "code_knowledge"
+        rte_file = self._resolve_signal_mapping_source()
 
         # Phase 15 (2.1.3): reuse pre-loaded maps; fall back to per-call load
         # if pre-load failed or returned empty.
         sig_mapping = self.signal_mapping
         if not sig_mapping:
             try:
-                sig_mapping = extract_signal_mapping(source_root, docs_dir)
+                sig_mapping = extract_signal_mapping(source_root, docs_dir, rte_file=rte_file)
             except Exception as exc:
                 status("tpe", f"Signal mapping failed: {exc}")
                 sig_mapping = {}
@@ -1219,7 +1227,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             try:
                 chains = load_variable_chains(docs_dir)
                 if not chains.get("struct_aliases"):
-                    chains = trace_variable_chains(source_root, docs_dir)
+                    chains = trace_variable_chains(source_root, docs_dir, rte_file=rte_file)
             except Exception:
                 chains = {}
 
@@ -1228,7 +1236,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
         out_mapping = self.output_signal_mapping
         if not out_mapping:
             try:
-                out_mapping = extract_output_signal_mapping(source_root, docs_dir)
+                out_mapping = extract_output_signal_mapping(source_root, docs_dir, rte_file=rte_file)
             except Exception as exc:
                 status("tpe", f"Output mapping failed: {exc}")
                 out_mapping = {}
@@ -1523,6 +1531,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             sig_mapping = extract_signal_mapping(
                 Path(self.config["paths"]["source_code"]),
                 self.source_docs_dir,
+                rte_file=self._resolve_signal_mapping_source(),
             )
         chains = self.variable_chains
         if not chains.get("struct_aliases"):
@@ -1531,6 +1540,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
                 chains = trace_variable_chains(
                     Path(self.config["paths"]["source_code"]),
                     self.source_docs_dir,
+                    rte_file=self._resolve_signal_mapping_source(),
                 )
         alias_count = len(chains.get("struct_aliases", {}))
         status("suppression", f"Signal mapping loaded: {sig_mapping.get('mapping_count', 0)} entries, {alias_count} struct aliases")
@@ -2111,6 +2121,7 @@ Accumulate/Hysteresis/Debounce/EdgeTrigger 等) 与实际 BAG/BLF 信号的
             from engines.signal_mapper import extract_signal_mapping
             result = extract_signal_mapping(
                 Path(self.config["paths"]["source_code"]), docs_dir,
+                rte_file=self._resolve_signal_mapping_source(),
             )
             status("source_docs", f"Signal mapping: {result.get('mapping_count', 0)} entries")
 

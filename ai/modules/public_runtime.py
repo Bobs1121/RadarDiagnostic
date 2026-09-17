@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -10,9 +11,10 @@ from engines.arbe.public_runtime import (
     OBJECT_ASSOCIATION_MODES,
     OBJECT_VALIDITY_POLICIES,
     PublicRuntimeError,
-    load_capture,
     normalize_public_runtime,
+    runtime_capture_from_topic_inventory,
 )
+from engines.arbe.ros_inventory import SCHEMA_VERSION as ROS_TOPIC_INVENTORY_SCHEMA
 
 from .base import BaseModule, ModuleResult
 
@@ -53,12 +55,19 @@ class PublicRuntimeNormalizeModule(BaseModule):
     """Normalize public samples with strict or source-proven publication order."""
 
     name = "public-runtime-normalize"
-    description = "归一化 arbe 公共运行时报警、自车和目标属性快照"
+    description = "归一化 arbe 公共运行时报警、自车和目标属性；支持 ros-topic-inventory 单消息样本"
     tags = ["arbe", "ros", "runtime", "objectlist", "frame", "atomic"]
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
-            "capture_path": {"type": "string"},
+            "capture_path": {
+                "type": "string",
+                "description": "Existing runtime capture or ros-topic-inventory.v1 artifact with bounded message samples.",
+            },
+            "topic_plan_path": {
+                "type": "string",
+                "description": "Optional public-topic-plan.v1 artifact; channel roles are used only when its preflight host/workspace identity matches the current preflight artifact.",
+            },
             "warning_rows": {"type": "array", "items": {"type": "object"}},
             "radar_info_rows": {"type": "array", "items": {"type": "object"}},
             "object_rows": {"type": "array", "items": {"type": "object"}},
@@ -88,6 +97,7 @@ class PublicRuntimeNormalizeModule(BaseModule):
         self,
         *,
         capture_path: str = "",
+        topic_plan_path: str = "",
         warning_rows: Sequence[Mapping[str, Any]] | None = None,
         radar_info_rows: Sequence[Mapping[str, Any]] | None = None,
         object_rows: Sequence[Mapping[str, Any]] | None = None,
@@ -102,14 +112,48 @@ class PublicRuntimeNormalizeModule(BaseModule):
         **_: Any,
     ) -> ModuleResult:
         try:
-            capture = load_capture(capture_path) if capture_path else {}
+            capture_path_resolved = str(Path(capture_path).expanduser().resolve()) if capture_path else ""
+            capture_bytes = Path(capture_path_resolved).read_bytes() if capture_path_resolved else b""
+            capture_value = json.loads(capture_bytes) if capture_bytes else {}
+            if not isinstance(capture_value, Mapping):
+                raise ValueError("runtime capture root must be an object")
+            capture = dict(capture_value)
+            capture_sha256 = hashlib.sha256(capture_bytes).hexdigest() if capture_bytes else ""
+            preflight_sha256 = ""
             if preflight is None and preflight_path:
-                preflight_value = json.loads(
-                    Path(preflight_path).expanduser().read_text(encoding="utf-8")
-                )
+                preflight_bytes = Path(preflight_path).expanduser().resolve().read_bytes()
+                preflight_value = json.loads(preflight_bytes)
                 if not isinstance(preflight_value, Mapping):
                     raise ValueError("preflight root must be an object")
+                if preflight_value.get("schema_version") != "arbe-preflight.v1":
+                    raise ValueError("preflight_path must point to arbe-preflight.v1")
                 preflight = dict(preflight_value)
+                preflight_sha256 = hashlib.sha256(preflight_bytes).hexdigest()
+            if capture.get("schema_version") == ROS_TOPIC_INVENTORY_SCHEMA:
+                topic_plan: Mapping[str, Any] | None = None
+                topic_plan_sha256 = ""
+                topic_plan_path_resolved = ""
+                if topic_plan_path:
+                    topic_plan_file = Path(topic_plan_path).expanduser().resolve()
+                    topic_plan_bytes = topic_plan_file.read_bytes()
+                    topic_plan_value = json.loads(topic_plan_bytes.decode("utf-8"))
+                    if not isinstance(topic_plan_value, Mapping) or topic_plan_value.get("schema_version") != "public-topic-plan.v1":
+                        raise ValueError("topic_plan_path must point to public-topic-plan.v1")
+                    topic_plan = dict(topic_plan_value)
+                    topic_plan_sha256 = hashlib.sha256(topic_plan_bytes).hexdigest()
+                    topic_plan_path_resolved = str(topic_plan_file)
+                capture = runtime_capture_from_topic_inventory(
+                    capture,
+                    inventory_path=capture_path_resolved,
+                    inventory_sha256=capture_sha256,
+                    topic_plan=topic_plan,
+                    topic_plan_path=topic_plan_path_resolved,
+                    topic_plan_sha256=topic_plan_sha256,
+                    preflight=preflight,
+                    preflight_sha256=preflight_sha256,
+                )
+            elif topic_plan_path:
+                raise ValueError("topic_plan_path requires a ros-topic-inventory.v1 capture")
             resolved_warning_names = list(warning_names or [])
             if not resolved_warning_names:
                 resolved_warning_names = [
@@ -130,6 +174,8 @@ class PublicRuntimeNormalizeModule(BaseModule):
                 object_association_mode=object_association_mode,
                 object_validity_policy=object_validity_policy,
                 preflight=preflight if preflight is not None else capture.get("preflight", {}),
+                capture_metadata=capture.get("capture_metadata"),
+                capture_diagnostics=capture.get("diagnostics", []),
             )
         except (PublicRuntimeError, OSError, TypeError, ValueError) as exc:
             return ModuleResult.fail(
@@ -140,6 +186,17 @@ class PublicRuntimeNormalizeModule(BaseModule):
         artifacts: list[str] = []
         if output:
             path = Path(output).expanduser().resolve()
+            protected_inputs = [capture_path, topic_plan_path, preflight_path, runtime_schema_path]
+            if any(
+                str(Path(value).expanduser().resolve()) == str(path)
+                for value in protected_inputs
+                if value
+            ):
+                return ModuleResult.fail(
+                    "public-runtime-normalize:output_must_not_overwrite_input_artifact",
+                    module=self.name,
+                    data=payload,
+                )
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             payload["artifact_path"] = str(path)
@@ -156,6 +213,11 @@ class PublicRuntimeNormalizeModule(BaseModule):
     def register_cli(cls, subparsers: Any) -> Any:
         parser = super().register_cli(subparsers)
         parser.add_argument("--capture-path", default="")
+        parser.add_argument(
+            "--topic-plan-path",
+            default="",
+            help="Optional source-bound public-topic-plan.v1; needs the matching current preflight artifact.",
+        )
         parser.add_argument("--warning-rows", type=_json_array, default=None)
         parser.add_argument("--radar-info-rows", type=_json_array, default=None)
         parser.add_argument("--object-rows", type=_json_array, default=None)

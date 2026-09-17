@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-capability-manifest.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "strategy", "identity", "supported_stages", "unsupported", "freshness", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "perception-capability-manifest.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "strategy": {"type": "string"},
+    "identity": {
+      "type": "object",
+      "required": ["data_fingerprint", "source_context_id", "binary_fingerprint", "config_fingerprint", "session_id"],
+      "properties": {
+        "data_fingerprint": {"type": "string"},
+        "source_context_id": {"type": "string"},
+        "binary_fingerprint": {"type": "string"},
+        "config_fingerprint": {"type": "string"},
+        "session_id": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "identity_binding": {
+      "type": "object",
+      "required": ["status", "plan_hash", "run_plan_hash", "run_id", "attempt_id", "workspace_root", "server_host", "execution_binding_status", "execution_binding_hash", "binding_plan_hash", "binding_run_id", "missing_fields", "conflicts"],
+      "properties": {
+        "status": {"enum": ["aligned", "partial", "conflict"]},
+        "plan_hash": {"type": "string"},
+        "run_plan_hash": {"type": "string"},
+        "run_id": {"type": "string"},
+        "attempt_id": {"type": "string"},
+        "workspace_root": {"type": "string"},
+        "server_host": {"type": "string"},
+        "execution_binding_status": {"type": "string"},
+        "execution_binding_hash": {"type": "string"},
+        "binding_plan_hash": {"type": "string"},
+        "binding_run_id": {"type": "string"},
+        "missing_fields": {"type": "array", "items": {"type": "string"}},
+        "conflicts": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "supported_stages": {"type": "array", "items": {"type": "string"}},
+    "static_stage_count": {"type": "integer", "minimum": 0},
+    "runtime_stage_count": {"type": "integer", "minimum": 0},
+    "supported_paths": {"type": "object"},
+    "unsupported": {"type": "array", "items": {"type": "object"}},
+    "freshness": {
+      "type": "object",
+      "required": ["status", "basis", "data_fingerprint", "source_context_id", "binary_fingerprint", "config_fingerprint", "session_id"],
+      "properties": {
+        "status": {"enum": ["verified", "partial", "conflict"]},
+        "basis": {"type": "array", "items": {"type": "string"}},
+        "data_fingerprint": {"type": "string"},
+        "source_context_id": {"type": "string"},
+        "binary_fingerprint": {"type": "string"},
+        "config_fingerprint": {"type": "string"},
+        "session_id": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "run_status": {"type": "string"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

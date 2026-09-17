@@ -512,9 +512,16 @@ def test_fresh_variant_conditions_remain_available(tmp_path):
             "freshness": {
                 "code_changed": False, "constants_changed": False,
                 "identity_changed": False,
+                "state_path": str(tmp_path / "variant" / "freshness_state.json"),
             },
         },
     }
+    from core.knowledge_guard import publish_knowledge_categories
+    publish_knowledge_categories(
+        config,
+        ["conditions:RCTA", "codegraph"],
+        producer="test",
+    )
     store = _store_with_signals({"GearSig": [7]})
     result = EngineeringInvestigator(
         config, tmp_path, codegraph_factory=lambda _: _FakeCodeGraph(),

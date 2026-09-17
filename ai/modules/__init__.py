@@ -53,6 +53,34 @@ try:  # V4 S2B · hypothesis / experiment / manual observation ledger primitives
 except Exception:  # noqa: BLE001 - optional collaboration slice must not break import
     pass
 
+try:  # V4 S2B · read-only feedback review before knowledge publication
+    from .feedback_review import FeedbackReviewModule
+    MODULE_REGISTRY[FeedbackReviewModule.name] = FeedbackReviewModule
+    __all__.append("FeedbackReviewModule")
+except Exception:  # noqa: BLE001 - optional feedback review must not break import
+    pass
+
+try:  # V4 S2B · explicit feedback knowledge publication plan, no write
+    from .feedback_knowledge_plan import FeedbackKnowledgePlanModule
+    MODULE_REGISTRY[FeedbackKnowledgePlanModule.name] = FeedbackKnowledgePlanModule
+    __all__.append("FeedbackKnowledgePlanModule")
+except Exception:  # noqa: BLE001 - optional publication plan must not break package import
+    pass
+
+try:  # V4 S2B · read-only AnalysisRun workbench projection
+    from .analysis_workbench import AnalysisWorkbenchModule
+    MODULE_REGISTRY[AnalysisWorkbenchModule.name] = AnalysisWorkbenchModule
+    __all__.append("AnalysisWorkbenchModule")
+except Exception:  # noqa: BLE001 - optional workbench must not break package import
+    pass
+
+try:  # V4 S2B · explicitly approved variant-scoped knowledge publication leaf
+    from .feedback_knowledge_publish import FeedbackKnowledgePublishModule
+    MODULE_REGISTRY[FeedbackKnowledgePublishModule.name] = FeedbackKnowledgePublishModule
+    __all__.append("FeedbackKnowledgePublishModule")
+except Exception:  # noqa: BLE001 - optional publication leaf must not break package import
+    pass
+
 try:  # PR5 · offline deterministic agent loop wrapper
     from .agent_loop import AgentLoopModule
     MODULE_REGISTRY[AgentLoopModule.name] = AgentLoopModule
@@ -204,6 +232,25 @@ try:  # V4 CR60 · read-only arbe/source/runtime preflight
     from .arbe_preflight import ArbePreflightModule
     MODULE_REGISTRY[ArbePreflightModule.name] = ArbePreflightModule
     __all__.append("ArbePreflightModule")
+except Exception:  # noqa: BLE001
+    pass
+
+try:  # V4 CR60 · point-cloud perception replay planning and evidence projection
+    from .point_cloud_plan import PointCloudPlanModule
+    from .point_cloud import PointCloudAnalyzeModule
+    from .point_cloud_batch import PointCloudBatchModule
+    from .point_cloud_validate import PointCloudValidateModule
+    from .point_cloud_read import PointCloudReadModule
+    for _module_cls in (PointCloudPlanModule, PointCloudAnalyzeModule, PointCloudBatchModule, PointCloudValidateModule, PointCloudReadModule):
+        MODULE_REGISTRY[_module_cls.name] = _module_cls
+        __all__.append(_module_cls.__name__)
+except Exception:  # noqa: BLE001
+    pass
+
+try:  # V4 CR60 · approval-bound execution identity for replay
+    from .execution_binding import ExecutionBindingModule
+    MODULE_REGISTRY[ExecutionBindingModule.name] = ExecutionBindingModule
+    __all__.append("ExecutionBindingModule")
 except Exception:  # noqa: BLE001
     pass
 

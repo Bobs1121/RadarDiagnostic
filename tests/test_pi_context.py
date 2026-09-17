@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 from ai.capability.registry import capability_catalog
@@ -179,6 +180,163 @@ def test_context_without_case_is_blocked():
     payload = build_pi_orchestration_context(project_id="only-project")
     assert payload["status"] == "blocked"
     assert "data.case_or_intake" in payload["missing"]
+
+
+def test_source_code_scope_binds_code_context_without_case_data(tmp_path):
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    index_path = tmp_path / "code-index.json"
+    index_path.write_text(json.dumps({
+        "schema_version": "code-index.v1",
+        "source_root": str(source_root),
+        "snapshot_hash": "gen6-static-snapshot",
+    }), encoding="utf-8")
+    code_context = {
+        "schema_version": "code-context.v1",
+        "context_id": "code-context-gen6",
+        "source_context": {
+            "project_id": "BYD_SC6H",
+            "variant_id": "gen6/byd_sc6h",
+            "coem": "BYD_SC6H",
+            "source_root": str(source_root),
+            "snapshot_hash": "gen6-static-snapshot",
+            "source_role": "local_static_source_not_remote_runtime_bound",
+            "runtime_binding": "not_available",
+            "binary_fingerprint": "not_available",
+            "compile_macro_observation": "not_observed",
+            "recording_binding": "not_available",
+        },
+        "artifacts": {
+            "code_index": str(index_path),
+            "code_index_sha256": hashlib.sha256(index_path.read_bytes()).hexdigest(),
+        },
+    }
+    payload = build_pi_orchestration_context(
+        task_scope="source_code",
+        project_root="D:/radarAnalyze",
+        code_context=code_context,
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["task_scope"] == "source_code"
+    assert payload["data"]["required"] is False
+    assert payload["data"]["status"] == "not_required"
+    assert "data.case_or_intake" not in payload["missing"]
+    assert payload["project"]["project_id"] == "BYD_SC6H"
+    assert payload["project"]["variant_id"] == "gen6/byd_sc6h"
+    assert payload["source"]["source_snapshot_hash"] == "gen6-static-snapshot"
+    assert payload["source"]["code_context"]["runtime_binding"] == "not_available"
+    assert payload["source"]["code_context"]["code_index_path"] == str(index_path.resolve())
+    assert payload["source"]["code_index_hash"]
+    assert any(ref.get("kind") == "code_index" for ref in payload["artifacts"])
+    assert any(ref.get("kind") == "code_context" for ref in payload["artifacts"])
+
+
+def test_source_code_scope_blocks_when_no_bound_code_context_is_available():
+    payload = build_pi_orchestration_context(
+        task_scope="source_code",
+        project_id="BYD_SC6H",
+        variant_id="gen6/byd_sc6h",
+    )
+
+    assert payload["status"] == "blocked"
+    assert "source.code_context" in payload["missing"]
+    assert "source_code_context_missing" in payload["diagnostics"]
+    assert "data.case_or_intake" not in payload["missing"]
+
+
+def test_source_code_scope_fails_closed_without_snapshot_hash():
+    payload = build_pi_orchestration_context(
+        task_scope="source_code",
+        code_context={
+            "schema_version": "code-context.v1",
+            "context_id": "missing-snapshot",
+            "source_context": {"project_id": "BYD_SC6H"},
+        },
+    )
+
+    assert payload["status"] == "blocked"
+    assert "code_context_snapshot_hash_missing" in payload["diagnostics"]
+    assert "data.case_or_intake" not in payload["missing"]
+
+
+def test_source_code_scope_blocks_mismatched_code_index_identity(tmp_path):
+    context_root = tmp_path / "source-a"
+    index_root = tmp_path / "source-b"
+    context_root.mkdir()
+    index_root.mkdir()
+    index_path = tmp_path / "code-index.json"
+    index_path.write_text(json.dumps({
+        "schema_version": "code-index.v1",
+        "source_root": str(index_root),
+        "snapshot_hash": "snapshot-a",
+    }), encoding="utf-8")
+    payload = build_pi_orchestration_context(
+        task_scope="source_code",
+        code_context={
+            "schema_version": "code-context.v1",
+            "context_id": "context-a",
+            "source_context": {
+                "project_id": "DEMO",
+                "variant_id": "gen6/demo",
+                "source_root": str(context_root),
+                "snapshot_hash": "snapshot-a",
+            },
+            "artifacts": {"code_index": str(index_path)},
+        },
+    )
+
+    assert payload["status"] == "blocked"
+    assert "code_context_code_index_source_root_mismatch" in payload["diagnostics"]
+
+
+def test_source_code_scope_blocks_code_index_hash_mismatch(tmp_path):
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    index_path = tmp_path / "code-index.json"
+    index_path.write_text(json.dumps({
+        "schema_version": "code-index.v1",
+        "source_root": str(source_root),
+        "snapshot_hash": "snapshot-a",
+    }), encoding="utf-8")
+    payload = build_pi_orchestration_context(
+        task_scope="source_code",
+        code_context={
+            "schema_version": "code-context.v1",
+            "context_id": "context-a",
+            "source_context": {
+                "project_id": "DEMO",
+                "variant_id": "gen6/demo",
+                "source_root": str(source_root),
+                "snapshot_hash": "snapshot-a",
+            },
+            "artifacts": {"code_index": str(index_path), "code_index_sha256": "0" * 64},
+        },
+    )
+
+    assert payload["status"] == "blocked"
+    assert "code_context_code_index_file_hash_mismatch" in payload["diagnostics"]
+
+
+def test_source_code_scope_blocks_explicit_project_identity_conflict():
+    payload = build_pi_orchestration_context(
+        task_scope="source_code",
+        project_id="OTHER_PROJECT",
+        code_context={
+            "schema_version": "code-context.v1",
+            "context_id": "source-context-gen6",
+            "source_context": {
+                "project_id": "BYD_SC6H",
+                "variant_id": "gen6/byd_sc6h",
+                "source_root": "D:/source/cr60_light",
+                "snapshot_hash": "gen6-static-snapshot",
+            },
+        },
+    )
+
+    assert payload["status"] == "blocked"
+    assert "code_context_identity_conflict" in payload["diagnostics"]
+    assert payload["conflicts"][0]["reason"] == "code_context_identity_mismatch"
 
 
 def test_pi_context_is_registered_and_exposed_as_leaf_capability():

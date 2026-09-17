@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-comparison.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "alignment", "match_count", "matches", "diagnostics", "conclusion_level"],
+  "properties": {
+    "schema_version": {"const": "perception-comparison.v1"},
+    "status": {"enum": ["observed", "derived", "not_available"]},
+    "recorded_identity": {"type": "object"},
+    "replay_identity": {"type": "object"},
+    "alignment": {"type": "object"},
+    "match_basis": {"type": "string"},
+    "recorded_row_count": {"type": "integer", "minimum": 0},
+    "replay_row_count": {"type": "integer", "minimum": 0},
+    "match_count": {"type": "integer", "minimum": 0},
+    "matches": {"type": "array", "items": {"type": "object"}},
+    "first_divergence": {"type": ["object", "null"]},
+    "metrics": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "conclusion_level": {"const": "facts_only"},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

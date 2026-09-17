@@ -4,7 +4,7 @@ Unified plugin registry for radarAnalyze.
 
 Provides a single decorator-driven registry + automatic package discovery so
 that new parsers / platform adapters / codegraph backends / memory backends can
-be added WITHOUT editing dispatch code (see docs/production/31-software-architecture.md §2).
+be added WITHOUT editing dispatch code (see docs/archive/2026-09-17/production/31-software-architecture.md §2).
 
 Usage::
 

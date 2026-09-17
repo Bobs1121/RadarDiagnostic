@@ -82,7 +82,7 @@ def _safe_variant_name(variant_id: str) -> str:
 def _build_runtime_config(variant_id: str) -> tuple[dict, str, Path, Path]:
     config = load_config()
     resolved_variant_id = resolve_variant_id(config, variant_id)
-    _, codebase, _ = get_variant(config, resolved_variant_id)
+    variant, codebase, _ = get_variant(config, resolved_variant_id)
     source_code = Path(codebase.root_path)
     source_docs_dir = resolve_source_docs_dir(
         config, PROJECT_ROOT, variant_id=resolved_variant_id
@@ -92,6 +92,12 @@ def _build_runtime_config(variant_id: str) -> tuple[dict, str, Path, Path]:
     runtime_config.setdefault("paths", {})
     runtime_config["paths"]["source_code"] = str(source_code)
     runtime_config["paths"]["source_docs"] = str(source_docs_dir)
+    runtime_config["paths"]["key_source_files"] = list(variant.key_source_files or [])
+    runtime_config["paths"]["dbc_files"] = [
+        str(file)
+        for dbc_set in (variant.dbc_sets or [])
+        for file in (getattr(dbc_set, "files", []) or [])
+    ]
     runtime_config.setdefault("identity", {})
     runtime_config["identity"]["variant_id"] = resolved_variant_id
     runtime_config["default_variant"] = resolved_variant_id
@@ -117,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Write the JSON timing report to this file",
     )
+    parser.add_argument(
+        "--source-docs-dir",
+        type=Path,
+        default=None,
+        help="Use an explicit source_docs cache directory, e.g. a disposable variant-scoped directory for cold/hot measurement",
+    )
     args = parser.parse_args(argv)
 
     if args.runs < 1:
@@ -125,6 +137,12 @@ def main(argv: list[str] | None = None) -> int:
     runtime_config, resolved_variant_id, source_code, source_docs_dir = (
         _build_runtime_config(args.variant)
     )
+    if args.source_docs_dir is not None:
+        source_docs_dir = args.source_docs_dir.expanduser()
+        if not source_docs_dir.is_absolute():
+            source_docs_dir = PROJECT_ROOT / source_docs_dir
+        source_docs_dir = source_docs_dir.resolve()
+        runtime_config.setdefault("paths", {})["source_docs"] = str(source_docs_dir)
     source_docs_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = args.output
@@ -162,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         "total_elapsed_sec": round(time.perf_counter() - total_started, 6),
         "source_code_dir": str(source_code),
         "source_docs_dir": str(source_docs_dir),
+        "source_docs_mode": "isolated_override" if args.source_docs_dir is not None else "configured_variant",
         "output_path": str(output_path),
         "cache_hit_runs": sum(1 for run in runs if run["cache_hit"]),
         "runs": runs,

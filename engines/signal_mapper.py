@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -31,9 +32,89 @@ _ASSIGN_RE = re.compile(
 _WRITE_SIGNAL_RE = re.compile(
     r'^\s*(?:\(void\)\s*)?RteComMapping_WriteSignal\((\w+)\)\((.*)\)\s*;',
 )
-_SIGNAL_MAPPING_SCHEMA_VERSION = 2
+_SIGNAL_MAPPING_SCHEMA_VERSION = 3
+DEFAULT_OUTPUT_MAPPING_RTE_FILE = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
 _CASE_RE = re.compile(r"^\s*case\s+([^:]+)\s*:")
 _DEFAULT_RE = re.compile(r"^\s*default\s*:")
+
+_RTE_EXCLUDED_DIRS = frozenset({
+    ".git", ".svn", ".hg", "build", "devel", "install", "log",
+    "logs", "node_modules", "__pycache__", ".cache", ".workspaces",
+})
+
+
+def resolve_rte_mapping_file(
+    source_root: str | Path,
+    rte_file: str | Path | None = None,
+    *,
+    side: str = "read",
+) -> tuple[str | None, str]:
+    """Resolve one RTE mapping file without crossing customer variants.
+
+    Explicit files must exist below ``source_root``. With no explicit file,
+    auto-discovery succeeds only when one customer directory is unambiguous.
+    A multi-COEM codebase therefore returns ``ambiguous`` instead of silently
+    selecting the historical GWM mapping.
+    """
+    root = Path(source_root).expanduser().resolve()
+    if side not in {"read", "write"}:
+        raise ValueError("side must be 'read' or 'write'")
+    if rte_file is not None:
+        token = str(rte_file).strip().replace("\\", "/")
+        if not token:
+            return None, "not_requested"
+        candidate = Path(token).expanduser()
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        try:
+            resolved = candidate.resolve()
+            relative = resolved.relative_to(root)
+        except (OSError, RuntimeError, ValueError):
+            return None, "outside_source_root"
+        if not resolved.is_file():
+            return None, "explicit_not_found"
+        return relative.as_posix(), "explicit"
+
+    exact: list[Path] = []
+    fallback_by_parent: dict[Path, list[Path]] = {}
+    fallback_prefix = "RteComMapping_Rx" if side == "read" else "RteComMapping_Tx"
+    try:
+        for current, dirs, files in os.walk(root, topdown=True):
+            dirs[:] = sorted(
+                name for name in dirs
+                if name not in _RTE_EXCLUDED_DIRS and not name.startswith(".")
+            )
+            parent = Path(current)
+            for filename in files:
+                path = parent / filename
+                if filename == "RteComMapping.c":
+                    exact.append(path)
+                elif filename.startswith(fallback_prefix) and filename.lower().endswith(".c"):
+                    fallback_by_parent.setdefault(parent, []).append(path)
+    except OSError:
+        return None, "source_scan_failed"
+
+    if len(exact) == 1:
+        return exact[0].relative_to(root).as_posix(), "auto_unique"
+    if len(exact) > 1:
+        return None, "ambiguous"
+    if len(fallback_by_parent) == 1:
+        parent, candidates = next(iter(fallback_by_parent.items()))
+        if candidates:
+            selected = sorted(candidates)[0]
+            return selected.relative_to(root).as_posix(), "auto_unique_companion"
+    if len(fallback_by_parent) > 1:
+        return None, "ambiguous"
+    return None, "not_found"
+
+
+def _coem_id_from_rte_path(rte_file: str | None) -> str:
+    if not rte_file:
+        return ""
+    parts = str(rte_file).replace("\\", "/").strip("/").split("/")
+    if len(parts) >= 2 and parts[0].casefold() == "coem":
+        return parts[1]
+    return ""
 
 
 def _parse_c_number(value: str) -> float | int | None:
@@ -235,7 +316,7 @@ def _build_indices(mappings: list[dict]) -> dict:
 
 def _discover_read_mapping_files(source_root: Path, rte_file: str) -> list[Path]:
     """Return the configured mapping file plus same-directory Rx companions."""
-    primary = source_root / rte_file
+    primary = source_root / Path(str(rte_file).replace("\\", "/"))
     if not primary.exists():
         return []
     files = [primary]
@@ -262,7 +343,7 @@ def _combined_source_hash(source_root: Path, source_files: list[Path]) -> str:
 def extract_signal_mapping(
     source_root: Path,
     output_dir: Path,
-    rte_file: str = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c",
+    rte_file: str | Path | None = None,
 ) -> dict:
     """
     Extract signal mapping from RteComMapping.c and cache to signal_mapping.json.
@@ -275,9 +356,37 @@ def extract_signal_mapping(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     cache_path = output_dir / "signal_mapping.json"
-    source_files = _discover_read_mapping_files(source_root, rte_file)
+    source_root = Path(source_root).expanduser().resolve()
+    resolved_rte_file, selection_status = resolve_rte_mapping_file(
+        source_root, rte_file, side="read"
+    )
+    if not resolved_rte_file:
+        result = {
+            "schema_version": _SIGNAL_MAPPING_SCHEMA_VERSION,
+            "source_hash": "",
+            "source_file": "",
+            "source_files": [],
+            "selection_status": selection_status,
+            "mapping_count": 0,
+            "mappings": [],
+            **_build_indices([]),
+        }
+        cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return result
+    source_files = _discover_read_mapping_files(source_root, resolved_rte_file)
     if not source_files:
-        return {"mappings": [], "internal_to_can": {}, "can_to_internal": {}}
+        result = {
+            "schema_version": _SIGNAL_MAPPING_SCHEMA_VERSION,
+            "source_hash": "",
+            "source_file": resolved_rte_file,
+            "source_files": [],
+            "selection_status": "selected_file_unavailable",
+            "mapping_count": 0,
+            "mappings": [],
+            **_build_indices([]),
+        }
+        cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return result
     source_hash = _combined_source_hash(source_root, source_files)
 
     if cache_path.exists():
@@ -286,6 +395,8 @@ def extract_signal_mapping(
             if (
                 cached.get("source_hash") == source_hash
                 and cached.get("schema_version") == _SIGNAL_MAPPING_SCHEMA_VERSION
+                and cached.get("source_file") == resolved_rte_file
+                and cached.get("selection_status") == selection_status
             ):
                 chain_path = output_dir / "signal_chain.md"
                 if not chain_path.exists():
@@ -320,8 +431,9 @@ def extract_signal_mapping(
     result = {
         "schema_version": _SIGNAL_MAPPING_SCHEMA_VERSION,
         "source_hash": source_hash,
-        "source_file": rte_file,
+        "source_file": resolved_rte_file,
         "source_files": source_labels,
+        "selection_status": selection_status,
         "mapping_count": len(mappings),
         "mappings": mappings,
         **indices,
@@ -394,17 +506,13 @@ def _parse_rte_write_mapping(source_text: str, *, source_file: str = "") -> list
     return mappings
 
 
-def _discover_write_mapping_files(source_root: Path, rte_file: str) -> list[Path]:
-    """Return the configured mapping file plus same-directory Tx companions."""
-    primary = source_root / rte_file
-    if not primary.exists():
-        # Fall back to any RteComMapping_Tx*.c in the same tree: the caller's
-        # rte_file may point at a legacy GWM path while the active variant
-        # (e.g. BYD_UKE) keeps its mapping in ASW_ComMapping/RteComMapping_Tx.c.
-        candidates = sorted(source_root.rglob("RteComMapping_Tx*.c"))
-        if not candidates:
-            return []
-        primary = candidates[0]
+def _discover_write_mapping_files(source_root: Path, rte_file: str | None) -> list[Path]:
+    """Return the selected mapping file and only its same-directory Tx companions."""
+    if not rte_file:
+        return []
+    primary = source_root / Path(str(rte_file).replace("\\", "/"))
+    if not primary.is_file():
+        return []
     files = [primary]
     for candidate in sorted(primary.parent.glob("RteComMapping_Tx*.c")):
         if candidate.is_file() and candidate.resolve() != primary.resolve():
@@ -412,24 +520,59 @@ def _discover_write_mapping_files(source_root: Path, rte_file: str) -> list[Path
     return files
 
 
+def discover_output_signal_mapping_files(
+    source_root: str | Path,
+    rte_file: str | Path | None = None,
+) -> list[Path]:
+    """Return the exact source files consumed by output-signal extraction.
+
+    Code-context snapshots use this list to include all mapping companions in
+    their source fingerprint, so a changed Tx file cannot be hidden by a
+    still-valid C/C++ index cache.
+    """
+    root = Path(source_root).expanduser().resolve()
+    resolved_rte_file, _selection_status = resolve_rte_mapping_file(
+        root, rte_file, side="write"
+    )
+    return _discover_write_mapping_files(root, resolved_rte_file)
+
+
 def extract_output_signal_mapping(
     source_root: Path,
     output_dir: Path,
-    rte_file: str = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c",
+    rte_file: str | Path | None = None,
 ) -> dict:
     """Extract output (WriteSignal) mapping and cache to output_mapping.json."""
     output_dir.mkdir(parents=True, exist_ok=True)
     cache_path = output_dir / "output_mapping.json"
-    source_files = _discover_write_mapping_files(source_root, rte_file)
+    source_root = Path(source_root).expanduser().resolve()
+    resolved_rte_file, selection_status = resolve_rte_mapping_file(
+        source_root, rte_file, side="write"
+    )
+    source_files = _discover_write_mapping_files(source_root, resolved_rte_file)
     if not source_files:
-        return {"mappings": [], "signal_to_expr": {}}
+        result = {
+            "mappings": [],
+            "signal_to_expr": {},
+            "source_file": resolved_rte_file or "",
+            "source_files": [],
+            "source_hash": "",
+            "mapping_count": 0,
+            "selection_status": selection_status,
+        }
+        cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return result
 
     source_hash = _combined_source_hash(source_root, source_files)
 
     if cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cached.get("source_hash") == source_hash:
+            if (
+                cached.get("source_hash") == source_hash
+                and cached.get("source_file") == resolved_rte_file
+                and cached.get("selection_status") == selection_status
+            ):
                 return cached
         except (json.JSONDecodeError, KeyError):
             pass
@@ -450,6 +593,9 @@ def extract_output_signal_mapping(
 
     result = {
         "source_hash": source_hash,
+        "source_file": resolved_rte_file,
+        "source_files": [str(path.relative_to(source_root)).replace("\\", "/") for path in source_files],
+        "selection_status": selection_status,
         "mapping_count": len(mappings),
         "mappings": mappings,
         "signal_to_expr": sig_to_expr,
@@ -785,20 +931,42 @@ _CHAIN_FILE_PATTERNS = ["globalVariDef.c", "globalVariDef_*.c"]
 def _discover_chain_files(
     source_root: Path,
     extra_files: list[str] | None = None,
+    *,
+    coem: str | None = None,
 ) -> list[str]:
     """Auto-discover files likely to contain global variable struct copies.
 
     Combines hardcoded _CHAIN_FILES, caller-supplied extra_files, and
-    auto-discovered files matching _CHAIN_FILE_PATTERNS via rglob.
+    auto-discovered files matching _CHAIN_FILE_PATTERNS. When a COEM is
+    selected, customer-specific copies from other ``coem/<name>`` trees are
+    excluded while shared ``adas``/``asw`` files remain eligible.
     """
-    known = set(_CHAIN_FILES)
+    known = {str(item).replace("\\", "/") for item in _CHAIN_FILES}
+    selected_coem = str(coem or "").replace("\\", "/").strip("/")
+    if selected_coem.startswith("coem/"):
+        selected_coem = selected_coem.split("/", 1)[1]
+
+    def _in_selected_scope(rel_text: str) -> bool:
+        normalized = str(rel_text).replace("\\", "/").lstrip("./")
+        parts = normalized.split("/")
+        if parts and parts[0].lower() == "coem":
+            return bool(selected_coem and len(parts) > 1 and parts[1].casefold() == selected_coem.casefold())
+        return True
+
+    known = {item for item in known if _in_selected_scope(item)}
     if extra_files:
-        known.update(extra_files)
+        known.update(
+            str(item).replace("\\", "/")
+            for item in extra_files
+            if _in_selected_scope(str(item).replace("\\", "/"))
+        )
     try:
         for pat in _CHAIN_FILE_PATTERNS:
             for fp in source_root.rglob(pat):
                 try:
-                    known.add(str(fp.relative_to(source_root)))
+                    rel = str(fp.relative_to(source_root)).replace("\\", "/")
+                    if _in_selected_scope(rel):
+                        known.add(rel)
                 except ValueError:
                     pass
     except OSError:
@@ -878,9 +1046,10 @@ def _match_aliases(
 def trace_variable_chains(
     source_root: Path,
     output_dir: Path,
-    rte_file: str = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c",
+    rte_file: str | Path | None = None,
     extra_files: list[str] | None = None,
     force: bool = False,
+    coem: str | None = None,
 ) -> dict:
     """Trace struct copy chains to build global variable → RTE prefix aliases.
 
@@ -896,13 +1065,23 @@ def trace_variable_chains(
     Phase 15 (2.1.2): Incremental SHA256 cache — pass ``force=True`` to bypass.
     struct_aliases remains {str: str} for backward compatibility.
     """
+    source_root = Path(source_root).expanduser().resolve()
+    output_dir = Path(output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     cache_path = output_dir / "variable_chains.json"
     cache_meta_path = output_dir / "variable_chains.meta.json"
 
-    rte_path = source_root / rte_file
+    resolved_rte_file, rte_selection_status = resolve_rte_mapping_file(
+        source_root, rte_file, side="write"
+    )
+    selected_coem = str(coem or _coem_id_from_rte_path(resolved_rte_file) or "")
+    rte_sources = _discover_write_mapping_files(source_root, resolved_rte_file)
+    rte_source_files = [path.relative_to(source_root).as_posix() for path in rte_sources]
+    rte_hash = _combined_source_hash(source_root, rte_sources) if rte_sources else ""
 
-    scan_files = _discover_chain_files(source_root, extra_files)
+    scan_files = _discover_chain_files(
+        source_root, extra_files, coem=selected_coem or None
+    )
 
     # ── Incremental cache check (Phase 15 / 2.1.2) ────────────────────
     # If every scanned file's SHA256 matches the recorded hash AND the
@@ -934,12 +1113,20 @@ def trace_variable_chains(
                               if (source_root / rel).exists()}
             if all_match and existing_files != set(cached_hashes.keys()):
                 all_match = False
-            # RTE file itself unchanged
-            rte_now = (
-                hashlib.sha256(rte_path.read_bytes()).hexdigest()[:16]
-                if rte_path.exists() else ""
-            )
-            if cached_meta.get("rte_hash") != rte_now:
+            # The active variant mapping path and all same-directory Tx
+            # companions are identity inputs; a legacy/GWM path must not
+            # satisfy another variant's cache signature.
+            if cached_meta.get("version") != 4:
+                all_match = False
+            if str(cached_meta.get("coem") or "") != selected_coem:
+                all_match = False
+            if cached_meta.get("rte_file", "") != (resolved_rte_file or ""):
+                all_match = False
+            if cached_meta.get("rte_mapping_status") != rte_selection_status:
+                all_match = False
+            if cached_meta.get("rte_source_files", []) != rte_source_files:
+                all_match = False
+            if cached_meta.get("rte_hash", "") != rte_hash:
                 all_match = False
             if all_match:
                 return json.loads(cache_path.read_text(encoding="utf-8"))
@@ -947,7 +1134,9 @@ def trace_variable_chains(
             # Corrupted cache → fall through to full scan
             pass
 
-    rte_prefixes = _extract_rte_write_prefixes(rte_path) if rte_path.exists() else set()
+    rte_prefixes: set[str] = set()
+    for mapping_path in rte_sources:
+        rte_prefixes.update(_extract_rte_write_prefixes(mapping_path))
 
     raw_copies: list[dict] = []
     for rel in scan_files:
@@ -963,6 +1152,11 @@ def trace_variable_chains(
     aliases, alias_details, ambiguous = _match_aliases(raw_copies, rte_prefixes)
 
     result = {
+        "status": "ready" if rte_sources else "partial",
+        "rte_mapping_status": rte_selection_status,
+        "rte_file": resolved_rte_file or "",
+        "rte_source_files": rte_source_files,
+        "coem": selected_coem,
         "struct_aliases": aliases,
         "alias_details": alias_details,
         "ambiguous": ambiguous,
@@ -988,13 +1182,13 @@ def trace_variable_chains(
         meta = {
             "file_hashes": file_hashes,
             "updated_at": datetime.datetime.now().isoformat(),
-            "rte_file": rte_file,
-            "rte_hash": (
-                hashlib.sha256(rte_path.read_bytes()).hexdigest()[:16]
-                if rte_path.exists() else ""
-            ),
+            "rte_file": resolved_rte_file or "",
+            "rte_source_files": rte_source_files,
+            "rte_mapping_status": rte_selection_status,
+            "rte_hash": rte_hash,
+            "coem": selected_coem,
             "alias_count": len(result.get("struct_aliases", {})),
-            "version": 1,
+            "version": 4,
         }
         cache_meta_path.write_text(
             json.dumps(meta, ensure_ascii=False, indent=2),

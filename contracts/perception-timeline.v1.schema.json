@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-timeline.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "rows", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "perception-timeline.v1"},
+    "status": {"enum": ["observed", "not_available"]},
+    "selected_frame": {"type": ["string", "null"]},
+    "rows": {"type": "array", "items": {"type": "object"}},
+    "uid_recurrence_status": {"enum": ["derived", "observed", "not_available"]},
+    "uid_recurrence_scope": {"type": "string"},
+    "public_uid_recurrences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["previous_frame_key", "current_frame_key", "algorithm_track_id", "status", "match_grade", "identity_basis", "callback_binding_method", "limitation"],
+        "properties": {
+          "previous_frame_key": {"type": "string"},
+          "current_frame_key": {"type": "string"},
+          "radar_id": {"type": ["integer", "string"]},
+          "algorithm_track_id": {"type": "integer", "minimum": 0},
+          "status": {"const": "derived"},
+          "match_grade": {"const": "same_public_uid_adjacent_callback"},
+          "identity_basis": {"type": "string"},
+          "callback_binding_method": {"const": "source_proven_adjacent_publication_order"},
+          "previous_object_message_seq": {"type": ["integer", "null"]},
+          "current_object_message_seq": {"type": ["integer", "null"]},
+          "limitation": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

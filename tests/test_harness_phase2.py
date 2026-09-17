@@ -137,6 +137,19 @@ class TestHarnessRunnerIntegration:
         assert result.passed is False
         assert result.overall_score < 0.90 * L0_WEIGHT + 0.2
 
+    def test_missing_evaluation_layer_cannot_pass_weighted_gate(self):
+        from harness.harness_runner import HarnessResult
+        from harness.structural_evaluator import StructuralEvaluationResult
+        from harness.evidence_evaluator import EvidenceEvaluationResult
+
+        result = HarnessResult("missing-l2")
+        result.l0_result = StructuralEvaluationResult(score=1.0, checks=[], summary="")
+        result.l1_result = EvidenceEvaluationResult(score=1.0)
+        result.compute_overall()
+        assert result.passed is False
+        assert result.overall_score == 0.0
+        assert any("L2" in error for error in result.errors)
+
     def test_passed_threshold(self):
         from harness.harness_runner import HarnessRunner
         runner = HarnessRunner()

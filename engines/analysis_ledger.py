@@ -51,7 +51,15 @@ EXPERIMENT_METHODS = {
 EXPERIMENT_STATUSES = {
     "planned", "approval_required", "running", "completed", "partial", "blocked", "failed",
 }
-USER_OBSERVATION_KINDS = {"manual_vscode", "gdb_transcript", "screenshot", "note"}
+USER_OBSERVATION_KINDS = {
+    "manual_vscode",
+    "gdb_transcript",
+    "screenshot",
+    "note",
+    "feedback_confirmed",
+    "feedback_rejected",
+    "feedback_irrelevant",
+}
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -150,7 +158,18 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
                 os.fsync(handle.fileno())
             except OSError:
                 pass
-        os.replace(temporary, path)
+        # Windows scanners/indexers can briefly hold the destination between
+        # close() and replace().  Retry only this transient operation; the
+        # caller still receives the original failure after a bounded window.
+        deadline = time.monotonic() + 1.0
+        while True:
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.02)
     finally:
         try:
             temporary.unlink(missing_ok=True)
@@ -197,6 +216,13 @@ class _RunLock(AbstractContextManager["_RunLock"]):
                     pass
                 if time.monotonic() >= deadline:
                     raise LedgerConflict(f"ledger lock timeout: {self.path}")
+                time.sleep(0.05)
+            except PermissionError as exc:
+                # On Windows, an antivirus/indexer may report an existing
+                # lock as access denied rather than FileExistsError. Treat it
+                # as contention while the bounded lock timeout remains.
+                if time.monotonic() >= deadline:
+                    raise LedgerConflict(f"ledger lock access denied: {self.path}") from exc
                 time.sleep(0.05)
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:

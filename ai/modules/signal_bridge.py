@@ -40,7 +40,7 @@ from .base import BaseModule, ModuleResult
 
 log = logging.getLogger(__name__)
 
-DEFAULT_RTE_FILE = r"coem\GWM_B26\components\AswIf\ASW_IN\RteComMapping.c"
+DEFAULT_RTE_FILE = None  # Resolve from the active variant/source root; never assume GWM.
 BRIDGE_MODES: tuple[str, ...] = (
     "mapping-summary",
     "internal-to-can",
@@ -100,7 +100,7 @@ class SignalBridgeModule(BaseModule):
         source_root: str | Path | None = None,
         output_dir: str | Path | None = None,
         knowledge_dir: str | Path | None = None,
-        rte_file: str = DEFAULT_RTE_FILE,
+        rte_file: str | Path | None = DEFAULT_RTE_FILE,
     ) -> None:
         self._mapping = mapping
         self._chains = chains
@@ -111,6 +111,37 @@ class SignalBridgeModule(BaseModule):
         self._knowledge_dir = Path(knowledge_dir) if knowledge_dir else None
         self._rte_file = rte_file
 
+    def _resolved_rte_file(self) -> str | Path | None:
+        if self._rte_file:
+            return self._rte_file
+        if self._source_root is None:
+            return None
+        try:
+            from config import (
+                get_variant,
+                load_config,
+                resolve_variant_id,
+                resolve_variant_rte_mapping_file,
+            )
+
+            config = load_config()
+            identity = config.get("identity", {})
+            requested_variant = (
+                identity.get("variant_id") if isinstance(identity, Mapping) else None
+            )
+            variant_id = resolve_variant_id(config, requested_variant)
+            _variant, codebase, _ = get_variant(config, variant_id)
+            if Path(codebase.root_path).expanduser().resolve() != self._source_root.expanduser().resolve():
+                return None
+            rte_file, status = resolve_variant_rte_mapping_file(
+                config, self._source_root, variant_id=variant_id
+            )
+            if status == "variant_unavailable":
+                return None
+            return rte_file
+        except Exception:  # noqa: BLE001 - missing project identity remains unavailable
+            return None
+
     def _get_mapping(self) -> tuple[dict[str, Any], str]:
         if self._mapping is not None:
             return self._mapping, "injected"
@@ -119,7 +150,7 @@ class SignalBridgeModule(BaseModule):
                 self._mapping = extract_signal_mapping(
                     self._source_root,
                     self._output_dir,
-                    rte_file=self._rte_file,
+                    rte_file=self._resolved_rte_file(),
                 )
                 return self._mapping, "source"
             except Exception:
@@ -139,7 +170,7 @@ class SignalBridgeModule(BaseModule):
                 self._chains = trace_variable_chains(
                     self._source_root,
                     self._output_dir,
-                    rte_file=self._rte_file,
+                    rte_file=self._resolved_rte_file(),
                 )
                 return self._chains, "source"
             except Exception:
@@ -162,7 +193,7 @@ class SignalBridgeModule(BaseModule):
                 output_mapping = extract_output_signal_mapping(
                     self._source_root,
                     self._output_dir,
-                    rte_file=self._rte_file,
+                    rte_file=self._resolved_rte_file(),
                 )
                 self._output_mapping = output_mapping
                 source = "source"
@@ -396,8 +427,8 @@ class SignalBridgeModule(BaseModule):
         )
         parser.add_argument(
             "--rte-file",
-            default=DEFAULT_RTE_FILE,
-            help="Relative path to RteComMapping.c within --source-root.",
+            default="",
+            help="Optional explicit RteComMapping.c within --source-root; otherwise resolve the active variant safely.",
         )
         return parser
 
@@ -407,5 +438,5 @@ class SignalBridgeModule(BaseModule):
             source_root=getattr(args, "source_root", None),
             output_dir=getattr(args, "output_dir", None),
             knowledge_dir=getattr(args, "knowledge_dir", None),
-            rte_file=getattr(args, "rte_file", DEFAULT_RTE_FILE),
+            rte_file=getattr(args, "rte_file", None) or None,
         )

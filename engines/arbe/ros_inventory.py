@@ -2,15 +2,24 @@
 """Read-only ROS topic inventory for a configured arbe runtime."""
 from __future__ import annotations
 
+import hashlib
 import re
 import shlex
-from typing import Any, Protocol
+from datetime import datetime, timezone
+from typing import Any, Mapping, Protocol
 
 from .preflight import CommandResult, LocalShellRunner, SshCommandRunner
 
 
 SCHEMA_VERSION = "ros-topic-inventory.v1"
 _TOPIC_RE = re.compile(r"^/[A-Za-z0-9_./~-]+$")
+_ROS_TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*/[A-Za-z][A-Za-z0-9_]*$")
+_ROS_FIELD_RE = re.compile(
+    r"^([A-Za-z][A-Za-z0-9_/]*(?:\[[^\]]*\])?)\s+([A-Za-z][A-Za-z0-9_]*)\s*(?:=.*)?$"
+)
+_MAX_MESSAGE_DEFINITION_CHARS = 250_000
+_MAX_MESSAGE_FIELD_CATALOG_ITEMS = 512
+_MAX_TOPIC_SAMPLE_CHARS = 20_000
 _START = "__CR60_TOPIC_START__"
 _END = "__CR60_TOPIC_END__"
 
@@ -22,6 +31,10 @@ class InventoryRunner(Protocol):
 
 def _q(value: str) -> str:
     return shlex.quote(str(value))
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def validate_topics(topics: list[str]) -> list[str]:
@@ -80,6 +93,51 @@ def build_sample_command(
         f"timeout {seconds:g}s rostopic echo -n 1 {_q(topic)}"
     )
     return " && ".join(prefix)
+
+
+def build_message_definition_command(
+    *,
+    message_type: str,
+    ros_setup: str = "",
+    workspace_setup: str = "",
+) -> str:
+    """Build a read-only rosmsg query for one validated ROS message type."""
+    value = str(message_type).strip()
+    if not _ROS_TYPE_RE.fullmatch(value):
+        raise ValueError(f"message_type_invalid:{message_type}")
+    prefix: list[str] = []
+    if ros_setup:
+        prefix.append(f"source {_q(ros_setup)}")
+    if workspace_setup:
+        prefix.append(f"source {_q(workspace_setup)}")
+    prefix.append(f"rosmsg show {_q(value)}")
+    return " && ".join(prefix)
+
+
+def parse_message_definition(text: str, *, root_type: str) -> list[dict[str, str]]:
+    """Parse field paths from the active ``rosmsg show`` output."""
+    fields: list[dict[str, str]] = []
+    current_type = str(root_type).strip()
+    for raw_line in str(text).splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("MSG:"):
+            nested_type = line.split(":", 1)[1].strip()
+            if _ROS_TYPE_RE.fullmatch(nested_type):
+                current_type = nested_type
+            continue
+        match = _ROS_FIELD_RE.fullmatch(line)
+        if not match:
+            continue
+        field_type, name = match.groups()
+        fields.append({
+            "message_type": current_type,
+            "name": name,
+            "type": field_type,
+            "path": f"{current_type}.{name}",
+        })
+    return fields
 
 
 def parse_inventory_output(text: str) -> list[dict[str, Any]]:
@@ -178,6 +236,8 @@ class RosTopicInventory:
         execute: bool = False,
         sample_once: bool = False,
         sample_timeout_sec: float = 5.0,
+        inspect_message_schemas: bool = False,
+        runtime_binding: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             command = build_inventory_command(
@@ -206,12 +266,24 @@ class RosTopicInventory:
             "topics": [],
             "sample_once": bool(sample_once),
             "sample_timeout_sec": max(0.5, min(float(sample_timeout_sec), 60.0)),
+            "inspect_message_schemas": bool(inspect_message_schemas),
+            "runtime_binding": dict(runtime_binding) if isinstance(runtime_binding, Mapping) else {
+                "status": "not_bound",
+                "preflight_sha256": "",
+            },
             "diagnostics": [],
         }
         if not execute:
             return payload
         result = self.runner.run(command, timeout_sec=self.timeout_sec)
         rows = parse_inventory_output(result.stdout)
+        if inspect_message_schemas:
+            for row in rows:
+                row["message_schema"] = self._inspect_message_schema(
+                    message_type=str(row.get("type") or "").strip(),
+                    ros_setup=ros_setup,
+                    workspace_setup=workspace_setup,
+                )
         if sample_once:
             for row in rows:
                 sample = self._sample_topic(
@@ -228,12 +300,70 @@ class RosTopicInventory:
         payload.update(
             {
                 "status": "ready" if result.ok else "failed",
+                "observed_at_utc": _utc_now(),
                 "topics": rows,
                 "command_result": result.to_dict(),
                 "diagnostics": ([result.stderr.strip()] if result.stderr.strip() else []),
             }
         )
         return payload
+
+    def _inspect_message_schema(
+        self,
+        *,
+        message_type: str,
+        ros_setup: str,
+        workspace_setup: str,
+    ) -> dict[str, Any]:
+        try:
+            command = build_message_definition_command(
+                message_type=message_type,
+                ros_setup=ros_setup,
+                workspace_setup=workspace_setup,
+            )
+        except ValueError as exc:
+            return {
+                "status": "blocked",
+                "message_type": message_type,
+                "diagnostics": [str(exc)],
+            }
+        result = self.runner.run(command, timeout_sec=self.timeout_sec)
+        full_text = str(result.stdout or "")
+        bounded_text = full_text[:_MAX_MESSAGE_DEFINITION_CHARS]
+        fields = parse_message_definition(bounded_text, root_type=message_type)
+        definition_truncated = len(full_text) > _MAX_MESSAGE_DEFINITION_CHARS
+        catalog_truncated = (
+            len(fields) > _MAX_MESSAGE_FIELD_CATALOG_ITEMS or definition_truncated
+        )
+        status = (
+            "failed" if not result.ok
+            else "empty" if not fields
+            else "partial" if catalog_truncated
+            else "ready"
+        )
+        return {
+            "status": status,
+            "message_type": message_type,
+            "message_definition_sha256": hashlib.sha256(full_text.encode("utf-8")).hexdigest(),
+            "definition_char_count": len(full_text),
+            "field_catalog": fields[:_MAX_MESSAGE_FIELD_CATALOG_ITEMS],
+            "field_count": len(fields),
+            "field_catalog_truncated": catalog_truncated,
+            "definition_truncated": definition_truncated,
+            "command_result": {
+                "command": command,
+                "returncode": result.returncode,
+                "timed_out": result.timed_out,
+                "duration_sec": round(float(result.duration_sec), 6),
+                "stderr": str(result.stderr or "")[:4000],
+            },
+            "diagnostics": (
+                [] if status == "ready" else
+                ["message_definition_unavailable"] if status == "failed" else
+                ["message_definition_has_no_fields"] if status == "empty" else
+                ["message_definition_field_catalog_truncated"]
+            ),
+        }
 
     def _sample_topic(
         self,
@@ -257,14 +387,20 @@ class RosTopicInventory:
                 "diagnostics": [str(exc)],
             }
         result = self.runner.run(command, timeout_sec=max(self.timeout_sec, float(timeout_sec) + 2.0))
-        observed = bool(result.stdout.strip()) and result.returncode == 0
+        full_stdout = str(result.stdout or "")
+        observed = bool(full_stdout.strip()) and result.returncode == 0
         status = "observed" if observed else "no_message" if result.returncode == 124 else "failed"
         return {
             "status": status,
             "message_observed": observed,
+            "observed_at_utc": _utc_now(),
+            "observation_clock": "client_utc",
             "returncode": result.returncode,
             "timed_out": result.timed_out,
-            "stdout": result.stdout[:20000],
+            "stdout": full_stdout[:_MAX_TOPIC_SAMPLE_CHARS],
+            "stdout_sha256": hashlib.sha256(full_stdout.encode("utf-8")).hexdigest(),
+            "stdout_char_count": len(full_stdout),
+            "stdout_truncated": len(full_stdout) > _MAX_TOPIC_SAMPLE_CHARS,
             "stderr": result.stderr[:4000],
             "duration_sec": round(result.duration_sec, 6),
             "command": command,
@@ -275,6 +411,8 @@ __all__ = [
     "SCHEMA_VERSION",
     "RosTopicInventory",
     "build_inventory_command",
+    "build_message_definition_command",
     "parse_inventory_output",
+    "parse_message_definition",
     "validate_topics",
 ]

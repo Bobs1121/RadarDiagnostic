@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "point-cloud-replay-plan.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "mode", "target", "strategy", "gates", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "point-cloud-replay-plan.v1"},
+    "status": {"enum": ["ready", "blocked", "partial", "approval_required"]},
+    "mode": {"const": "point_cloud"},
+    "run_id": {"type": "string"},
+    "target": {"type": "object"},
+    "execution_plan": {"type": "object"},
+    "runtime_binding": {"type": "object"},
+    "strategy": {"type": "object"},
+    "identity": {"type": "object"},
+    "stage_map": {"type": "object"},
+    "injection_audit": {"type": "object"},
+    "gates": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "plan_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

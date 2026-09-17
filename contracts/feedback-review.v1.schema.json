@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/feedback-review.v1.schema.json",
+  "title": "User feedback review v1",
+  "type": "object",
+  "required": ["schema_version", "status", "run_id", "binding", "feedback", "counts", "conflicts", "knowledge_publish_gate", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "feedback-review.v1"},
+    "status": {"enum": ["ready", "blocked"]},
+    "run_id": {"type": "string"},
+    "binding": {"type": "object"},
+    "feedback": {"type": "array", "items": {"type": "object"}},
+    "counts": {"type": "object"},
+    "conflicts": {"type": "array", "items": {"type": "object"}},
+    "knowledge_publish_gate": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

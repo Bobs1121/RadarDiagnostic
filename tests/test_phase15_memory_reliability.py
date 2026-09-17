@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -42,8 +43,8 @@ def test_atomic_write_text_no_tmp_left_on_success(tmp_path: Path) -> None:
     target = tmp_path / "hello.txt"
     atomic_write_text(target, "hello world")
     assert target.read_text(encoding="utf-8") == "hello world"
-    # No stale .tmp file should remain after success.
-    assert not (target.with_name(target.name + ".tmp")).exists()
+    # No unique sibling staging file should remain after success.
+    assert not list(tmp_path.glob(".hello.txt.*.tmp"))
 
 
 def test_atomic_write_json_round_trip(tmp_path: Path) -> None:
@@ -74,8 +75,45 @@ def test_atomic_write_text_does_not_truncate_on_failure(
 
     # Original must still be there, untouched.
     assert target.read_text(encoding="utf-8") == "ORIGINAL"
-    # Stale tmp should have been cleaned up.
-    assert not (target.with_name(target.name + ".tmp")).exists()
+    # Our unique staging file should have been cleaned up.
+    assert not list(tmp_path.glob(".guard.txt.*.tmp"))
+
+
+def test_atomic_write_text_retries_transient_permission_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from memory import memory_system
+
+    target = tmp_path / "retry.json"
+    original_replace = memory_system.os.replace
+    calls = 0
+
+    def replace_after_transient_lock(source, destination):
+        nonlocal calls
+        calls += 1
+        if calls <= 2:
+            raise PermissionError(5, "transient destination lock")
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(memory_system.os, "replace", replace_after_transient_lock)
+    memory_system.atomic_write_text(target, '{"status":"complete"}')
+    assert calls == 3
+    assert json.loads(target.read_text(encoding="utf-8")) == {"status": "complete"}
+    assert not list(tmp_path.glob(".retry.json.*.tmp"))
+
+
+def test_atomic_write_text_uses_independent_temp_files_for_concurrent_writers(tmp_path: Path) -> None:
+    from memory.memory_system import atomic_write_text
+
+    target = tmp_path / "shared.txt"
+    values = [f"writer-{index}:" + (str(index) * 131072) for index in range(8)]
+
+    def write(value: str) -> str:
+        atomic_write_text(target, value)
+        return value
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        completed = list(pool.map(write, values))
+    assert target.read_text(encoding="utf-8") in completed
+    assert not list(tmp_path.glob(".shared.txt.*.tmp"))
 
 
 def test_memory_system_writes_are_atomic(tmp_path: Path) -> None:

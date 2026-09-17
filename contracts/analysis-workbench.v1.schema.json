@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/analysis-workbench.v1.schema.json",
+  "title": "Analysis Workbench read model v1",
+  "type": "object",
+  "required": ["schema_version", "status", "run", "counts", "analysis_trail", "hypothesis_board", "experiments", "user_observations", "feedback", "next_actions", "provenance", "policy"],
+  "properties": {
+    "schema_version": {"const": "analysis-workbench.v1"},
+    "status": {"enum": ["ready", "partial"]},
+    "run": {"type": "object"},
+    "counts": {"type": "object"},
+    "analysis_trail": {"type": "array", "items": {"type": "object"}},
+    "hypothesis_board": {"type": "array", "items": {"type": "object"}},
+    "experiments": {"type": "array", "items": {"type": "object"}},
+    "user_observations": {"type": "array", "items": {"type": "object"}},
+    "feedback": {"type": "array", "items": {"type": "object"}},
+    "feedback_review": {"type": "object"},
+    "next_actions": {"type": "array", "items": {"type": "object"}},
+    "provenance": {"type": "object"},
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

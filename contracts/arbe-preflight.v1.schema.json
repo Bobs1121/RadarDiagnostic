@@ -2,19 +2,69 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://radar-analyze.local/contracts/arbe-preflight.v1.schema.json",
   "title": "CR60 arbe preflight v1",
-  "description": "Read-only arbe/source/config/runtime preflight. Source mappings and public contracts are candidates, not runtime facts.",
+  "description": "Read-only arbe/source/config/runtime preflight. Source mappings and public contracts are candidates, not runtime facts. Incomplete remote probes are short-circuited and remain explicitly unavailable.",
   "type": "object",
   "required": ["schema_version", "status", "workspace", "runtime", "can_output"],
   "properties": {
     "schema_version": {"const": "arbe-preflight.v1"},
     "status": {"enum": ["ready", "partial", "blocked"]},
     "workspace": {"type": "object", "additionalProperties": true},
-    "configuration": {"type": "object", "additionalProperties": true},
-    "build": {"type": "object", "additionalProperties": true},
-    "runtime": {"type": "object", "additionalProperties": true},
-    "gdb": {"type": "object", "additionalProperties": true},
-    "can_output": {"type": "object", "additionalProperties": true},
+    "configuration": {
+      "type": "object",
+      "properties": {"observation_status": {"enum": ["observed", "not_available"]}},
+      "additionalProperties": true
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "macro_observation_status": {"enum": ["observed", "not_available"]},
+        "binary_observation_status": {"enum": ["observed", "not_available"]}
+      },
+      "additionalProperties": true
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["ready", "not_running", "unknown", "not_requested"]},
+        "observation_status": {"enum": ["observed", "not_available", "not_requested"]},
+        "process_observation_status": {"enum": ["observed", "not_available", "not_requested"]},
+        "ros_node_observation_status": {"enum": ["observed", "not_available", "not_requested"]},
+        "processes": {"type": ["array", "null"]},
+        "ros_nodes": {"type": ["array", "null"]},
+        "bash_start_required": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "gdb": {
+      "type": "object",
+      "properties": {
+        "available": {"type": ["boolean", "null"]},
+        "observation_status": {"enum": ["observed", "not_available"]}
+      },
+      "additionalProperties": true
+    },
+    "can_output": {
+      "type": "object",
+      "properties": {
+        "observation_status": {"enum": ["candidate_source_found", "not_found", "not_available"]},
+        "source_scan_status": {"enum": ["observed", "not_available"]}
+      },
+      "additionalProperties": true
+    },
     "public_evidence": {"type": "object", "additionalProperties": true},
+    "probes": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": true}},
+    "probe_execution": {
+      "type": "object",
+      "properties": {
+        "mode": {"enum": ["local", "ssh"]},
+        "status": {"enum": ["completed", "short_circuited", "not_started"]},
+        "failed_probe": {"type": ["string", "null"]},
+        "failure_reason": {"type": ["string", "null"]},
+        "skipped_probe_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "commands": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
     "blockers": {"type": "array"},
     "warnings": {"type": "array"}
   },

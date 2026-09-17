@@ -32,7 +32,6 @@ class CodeGdbPlanModule(BaseModule):
             "auto_continue": {"type": "boolean"},
             "backtrace_depth": {"type": "integer"},
             "source_root": {"type": "string"},
-            "output": {"type": "string"},
         },
         "additionalProperties": False,
     }

@@ -174,7 +174,7 @@ def test_arbe_preflight_reports_not_running_as_partial():
         def run(self, command: str, *, timeout_sec: float) -> CommandResult:
             result = super().run(command, timeout_sec=timeout_sec)
             if "ps -eo" in command:
-                return CommandResult(command, 1, stderr="no process")
+                return CommandResult(command, 0, stdout="")
             return result
 
     payload = ArbePreflight(
@@ -185,6 +185,80 @@ def test_arbe_preflight_reports_not_running_as_partial():
     assert payload["status"] == "partial"
     assert payload["runtime"]["status"] == "not_running"
     assert payload["runtime"]["bash_start_required"] is True
+
+
+def test_arbe_preflight_timeout_short_circuits_and_marks_unobserved_layers_unknown():
+    class _TimeoutRunner:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+
+        def run(self, command: str, *, timeout_sec: float) -> CommandResult:
+            del timeout_sec
+            self.commands.append(command)
+            return CommandResult(command, 124, timed_out=True)
+
+    runner = _TimeoutRunner()
+    payload = ArbePreflight(
+        runner=runner,
+        server_host="10.0.0.1",
+        server_user="tester",
+        arbe_root="/home/test/arbe",
+    ).run()
+
+    assert len(runner.commands) == 1
+    assert payload["status"] == "blocked"
+    assert payload["probe_execution"]["status"] == "short_circuited"
+    assert payload["probe_execution"]["failed_probe"] == "outer_root"
+    assert payload["probe_execution"]["failure_reason"] == "remote_probe_timed_out"
+    assert payload["probe_execution"]["skipped_probe_count"] > 0
+    assert payload["probes"]["outer_head"]["skipped"] is True
+    assert payload["probes"]["outer_head"]["blocked_by_probe"] == "outer_root"
+    assert payload["runtime"]["status"] == "unknown"
+    assert payload["runtime"]["observation_status"] == "not_available"
+    assert payload["runtime"]["processes"] is None
+    assert payload["runtime"]["bash_start_required"] is None
+    assert payload["gdb"]["available"] is None
+    assert payload["gdb"]["observation_status"] == "not_available"
+    assert payload["build"]["binary_observation_status"] == "not_available"
+    assert payload["build"]["macro_presence"]["HILMODEL"] == "unknown"
+    assert payload["can_output"]["observation_status"] == "not_available"
+    assert payload["can_output"]["source_output_chain"]["status"] == "not_available"
+    assert payload["public_evidence"]["objectlist_frame_contract"]["source_probe_status"] == "not_available"
+    assert "gdb_not_found" not in payload["warnings"]
+    assert "arbe_visualization_engine_binary_not_found" not in payload["warnings"]
+    assert "hilmodel_not_found" not in payload["warnings"]
+    Draft202012Validator(
+        json.loads(Path("contracts/arbe-preflight.v1.schema.json").read_text(encoding="utf-8"))
+    ).validate(payload)
+
+
+def test_arbe_preflight_ssh_connectivity_failure_skips_probe_fanout():
+    class _Failed:
+        returncode = 255
+        stdout = ""
+        stderr = "ssh: connect timed out"
+
+    runner = SshCommandRunner(host="10.0.0.1", username="tester")
+    with patch("engines.arbe.preflight.subprocess.run", return_value=_Failed()) as run:
+        payload = ArbePreflight(
+            runner=runner,
+            server_host="10.0.0.1",
+            server_user="tester",
+            arbe_root="/home/test/arbe",
+        ).run()
+
+    assert run.call_count == 1
+    assert run.call_args.kwargs["timeout"] == 5.0
+    args = run.call_args.args[0]
+    assert "ConnectTimeout=5" in args
+    assert payload["probes"]["ssh_connectivity"]["returncode"] == 255
+    assert payload["probe_execution"]["failed_probe"] == "ssh_connectivity"
+    assert payload["probe_execution"]["failure_reason"] == "ssh_session_failed"
+    assert payload["probes"]["outer_root"]["skipped"] is True
+    assert len(payload["commands"]) == 1
+    Draft202012Validator(
+        json.loads(Path("contracts/arbe-preflight.v1.schema.json").read_text(encoding="utf-8"))
+    ).validate(payload)
 
 
 def test_arbe_preflight_module_writes_local_artifact(tmp_path: Path):

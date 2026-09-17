@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/feedback-knowledge-plan.v1.schema.json",
+  "title": "Feedback knowledge publication plan v1",
+  "type": "object",
+  "required": ["schema_version", "status", "run_id", "variant_id", "candidate_pattern", "approval", "diagnostics", "writes_knowledge", "next_action"],
+  "properties": {
+    "schema_version": {"const": "feedback-knowledge-plan.v1"},
+    "status": {"enum": ["ready", "approval_required", "blocked"]},
+    "run_id": {"type": "string"},
+    "variant_id": {"type": "string"},
+    "feedback_review_ref": {},
+    "candidate_pattern": {"type": "object"},
+    "approval": {"type": "object"},
+    "freshness": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "writes_knowledge": {"const": false},
+    "next_action": {"type": "string"}
+  },
+  "additionalProperties": true
+}

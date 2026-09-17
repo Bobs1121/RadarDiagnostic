@@ -8,7 +8,7 @@ deterministically. The loop is wrapped *outside* the fixed 8-step diagnosis
 pipeline: each action still calls a deterministic tool (DataProbe / TPE /
 CodeGraph / requirement trace), so evidence stays reproducible.
 
-See docs/production/31-software-architecture.md §2.6.5 and ADR-7.
+See docs/archive/2026-09-17/production/31-software-architecture.md §2.6.5 and ADR-7.
 """
 from __future__ import annotations
 

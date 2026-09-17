@@ -27,6 +27,23 @@
     "fetch_result": {"type": "object", "additionalProperties": true},
     "local_capture_json": {"type": "string"},
     "runtime_snapshot": {"type": "object", "additionalProperties": true},
+    "lifecycle": {"type": "object", "additionalProperties": true},
+    "completion": {"type": "object", "additionalProperties": true},
+    "perception_capture": {"type": "object", "additionalProperties": true},
+    "analysis_handoff": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["ready", "not_available"]},
+        "recommended_tool": {"const": "point-cloud-analyze"},
+        "capture_path": {"type": "string"},
+        "replay_plan_hash": {"type": "string"},
+        "execution_binding_run_id": {"type": "string"},
+        "provenance": {"type": "object", "additionalProperties": true},
+        "limitations": {"type": "array", "items": {"type": "string"}},
+        "diagnostics": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
     "diagnostics": {"type": "array", "items": {"type": "string"}},
     "artifacts": {"type": "array", "items": {"type": "string"}},
     "artifact_path": {"type": "string"}

@@ -402,7 +402,7 @@ class CodeLearner:
         project_root: Path,
         platform_adapter: Optional["BaseCodeLearnerAdapter"] = None,
     ):
-        from config import resolve_source_docs_dir
+        from config import resolve_memory_dir, resolve_source_docs_dir, resolve_variant_id
         self.router = router
         self.config = config
         self.project_root = project_root
@@ -453,7 +453,17 @@ class CodeLearner:
             )
         # Per-project knowledge dir (falls back to legacy global for backward compat)
         proj = config.get("project", {})
-        memory_dir = proj.get("memory_dir", project_root / "memory")
+        memory_dir = proj.get("memory_dir")
+        if not memory_dir:
+            try:
+                identity = config.get("identity", {})
+                requested_variant = identity.get("variant_id") if isinstance(identity, dict) else None
+                variant_id = resolve_variant_id(config, requested_variant)
+                memory_dir = resolve_memory_dir(
+                    config, Path(project_root), variant_id=variant_id
+                )
+            except (ValueError, KeyError, TypeError):
+                memory_dir = project_root / "memory"
         self.knowledge_dir = Path(memory_dir) / "code_knowledge"
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.knowledge_dir / "learning_state.json"
@@ -465,10 +475,8 @@ class CodeLearner:
         try:
             from ai.platform_adapters.factory import get_code_learner_adapter
             identity = self.config.get("identity") or {}
-            variant_id = identity.get("variant_id")
-            if not variant_id:
-                return None
             from config import get_variant, resolve_variant_id
+            variant_id = identity.get("variant_id") or None
             resolved = resolve_variant_id(self.config, variant_id)
             _variant, _codebase, platform = get_variant(self.config, resolved)
             platform_id = getattr(platform, "platform_id", None) or getattr(

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-batch-index.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "cases", "case_count", "completed_count", "failed_count", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "perception-batch-index.v1"},
+    "status": {"enum": ["completed", "partial", "blocked"]},
+    "output_dir": {"type": "string"},
+    "manifest_hash": {"type": "string"},
+    "cases": {"type": "array", "items": {"type": "object"}},
+    "case_count": {"type": "integer", "minimum": 0},
+    "completed_count": {"type": "integer", "minimum": 0},
+    "failed_count": {"type": "integer", "minimum": 0},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "artifact_paths": {"type": "array", "items": {"type": "string"}},
+    "metrics_csv": {"type": "string"}
+  },
+  "additionalProperties": true
+}

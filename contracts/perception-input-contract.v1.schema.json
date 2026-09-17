@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-input-contract.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "strategy", "input_boundary", "point_count", "points"],
+  "properties": {
+    "schema_version": {"const": "perception-input-contract.v1"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
+    "strategy": {"type": "string"},
+    "input_boundary": {"type": "string"},
+    "raw_sensor_frontend": {"type": "string"},
+    "point_count": {"type": "integer", "minimum": 0},
+    "field_counts": {"type": "object"},
+    "missing_required_fields": {"type": "array", "items": {"type": "string"}},
+    "points": {"type": "array", "items": {"type": "object"}},
+    "radar_summary": {"type": "array", "items": {"type": "object"}},
+    "message_schema": {"type": "object"},
+    "layout_status": {"enum": ["not_required", "self_describing", "verified", "unverified", "recording_version_unbound", "conflict"]},
+    "layout_binding": {
+      "type": "object",
+      "required": ["status", "required", "source_layout_status", "source_snapshot_hash", "active_source_snapshot_hash", "data_binding_status", "recording_fingerprint", "source_data_fingerprint", "recording_compatibility_status", "recording_version", "compatibility_evidence_ref", "compatibility_evidence_sha256", "source_data_binding_evidence_sha256", "diagnostics"],
+      "properties": {
+        "status": {"enum": ["not_required", "self_describing", "verified", "unverified", "recording_version_unbound", "conflict"]},
+        "required": {"type": "boolean"},
+        "source_layout_status": {"enum": ["not_required", "verified", "unverified", "conflict"]},
+        "source_snapshot_hash": {"type": "string"},
+        "active_source_snapshot_hash": {"type": "string"},
+        "data_binding_status": {"enum": ["not_required", "aligned", "derived_bound", "not_available", "conflict"]},
+        "recording_fingerprint": {"type": "string"},
+        "source_data_fingerprint": {"type": "string"},
+        "recording_compatibility_status": {"type": "string"},
+        "recording_version": {"type": "string"},
+        "compatibility_evidence_ref": {"type": "string"},
+        "compatibility_evidence_sha256": {"type": "string"},
+        "source_data_binding_evidence_sha256": {"type": "string"},
+        "diagnostics": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "source_context_binding": {
+      "type": "object",
+      "required": ["status", "conflicts", "conflict_sources"],
+      "properties": {
+        "status": {"enum": ["matched", "conflict", "not_available"]},
+        "conflicts": {"type": "array", "items": {"type": "string"}},
+        "conflict_sources": {"type": "array", "items": {"type": "object"}}
+      },
+      "additionalProperties": true
+    },
+    "target_usage": {"type": "object"},
+    "conversion": {"type": "object"},
+    "losses": {"type": "object"},
+    "supported_paths": {"type": "object"},
+    "payload_audit": {"type": "object"},
+    "artifact_audit": {"type": "object"},
+    "points_truncated": {"type": "boolean"},
+    "inline_point_count": {"type": "integer", "minimum": 0},
+    "points_artifact": {"type": "object"}
+  },
+  "additionalProperties": true
+}

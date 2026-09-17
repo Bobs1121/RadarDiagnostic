@@ -26,6 +26,16 @@ class DiagnosticReportModule(BaseModule):
             "viewer_model_path": {"type": "string"},
             "runtime_evidence": {"type": "object"},
             "runtime_evidence_path": {"type": "string"},
+            "runtime_snapshot": {"type": "object"},
+            "runtime_snapshot_path": {
+                "type": "string",
+                "description": "Optional runtime-snapshot-with-frame.v1; report keeps unbound ObjectList rows as a separate partial layer.",
+            },
+            "feedback_review": {"type": "object"},
+            "feedback_review_path": {
+                "type": "string",
+                "description": "Optional feedback-review.v1 artifact; report keeps feedback gate separate from diagnosis facts.",
+            },
             "runtime_debug_plan": {"type": "object"},
             "runtime_debug_plan_path": {"type": "string"},
             "preflight": {"type": "object"},
@@ -41,6 +51,8 @@ class DiagnosticReportModule(BaseModule):
             "analysis": {"type": "object"},
             "analysis_run": {"type": "object"},
             "analysis_run_path": {"type": "string"},
+            "perception_analysis": {"type": "object"},
+            "perception_analysis_path": {"type": "string"},
             "event_id": {"type": "string"},
             "event_index": {"type": "integer"},
             "function": {"type": "string"},
@@ -81,6 +93,10 @@ class DiagnosticReportModule(BaseModule):
         viewer_model_path: str = "",
         runtime_evidence: Mapping[str, Any] | None = None,
         runtime_evidence_path: str = "",
+        runtime_snapshot: Mapping[str, Any] | None = None,
+        runtime_snapshot_path: str = "",
+        feedback_review: Mapping[str, Any] | None = None,
+        feedback_review_path: str = "",
         runtime_debug_plan: Mapping[str, Any] | None = None,
         runtime_debug_plan_path: str = "",
         preflight: Mapping[str, Any] | None = None,
@@ -96,6 +112,8 @@ class DiagnosticReportModule(BaseModule):
         analysis: Mapping[str, Any] | None = None,
         analysis_run: Mapping[str, Any] | None = None,
         analysis_run_path: str = "",
+        perception_analysis: Mapping[str, Any] | None = None,
+        perception_analysis_path: str = "",
         event_id: str = "",
         event_index: int | None = None,
         function: str = "",
@@ -119,6 +137,10 @@ class DiagnosticReportModule(BaseModule):
                 viewer_model_path=viewer_model_path,
                 runtime_evidence=runtime_evidence,
                 runtime_evidence_path=runtime_evidence_path,
+                runtime_snapshot=runtime_snapshot,
+                runtime_snapshot_path=runtime_snapshot_path,
+                feedback_review=feedback_review,
+                feedback_review_path=feedback_review_path,
                 runtime_debug_plan=runtime_debug_plan,
                 runtime_debug_plan_path=runtime_debug_plan_path,
                 preflight=preflight,
@@ -134,6 +156,8 @@ class DiagnosticReportModule(BaseModule):
                 analysis=analysis,
                 analysis_run=analysis_run,
                 analysis_run_path=analysis_run_path,
+                perception_analysis=perception_analysis,
+                perception_analysis_path=perception_analysis_path,
                 event_id=event_id,
                 event_index=event_index,
                 function=function,
@@ -285,6 +309,8 @@ class DiagnosticReportModule(BaseModule):
             "geometry_projection": pick(report.get("geometry_projection"), ("status", "source", "collision_status", "instantaneous_relation", "collision_evidence", "predicted_intersection", "algorithm_branch")),
             "gdb_confirmation": pick(gdb, ("status", "actual_hit", "session_status", "evidence_status", "frame_id", "radar_id", "object_id", "function", "source_location", "captured_fields", "observed_field_count", "missing_probe_count", "algorithm_rising_frame", "frame_relation_to_algorithm_rise", "statement")),
             "execution_context": deepcopy(report.get("execution_context", {})),
+            "runtime_snapshot_rows": deepcopy(report.get("runtime_snapshot_rows", [])[:24]) if isinstance(report.get("runtime_snapshot_rows"), list) else [],
+            "runtime_snapshot_provenance": deepcopy(report.get("runtime_snapshot_provenance", {})),
             "output_policy": deepcopy(report.get("output_policy", {})),
             "artifact_paths": deepcopy(report.get("artifact_paths", [])),
             "artifact_path": report.get("artifact_path", ""),
@@ -299,6 +325,8 @@ class DiagnosticReportModule(BaseModule):
         parser.add_argument("--bundle", dest="bundle_path", default="")
         parser.add_argument("--viewer-model", dest="viewer_model_path", default="")
         parser.add_argument("--runtime-evidence", dest="runtime_evidence_path", default="")
+        parser.add_argument("--runtime-snapshot", dest="runtime_snapshot_path", default="")
+        parser.add_argument("--feedback-review", dest="feedback_review_path", default="")
         parser.add_argument("--runtime-debug-plan", dest="runtime_debug_plan_path", default="")
         parser.add_argument("--preflight", dest="preflight_path", default="")
         parser.add_argument("--code-context", dest="code_context_path", default="")
@@ -307,6 +335,7 @@ class DiagnosticReportModule(BaseModule):
         parser.add_argument("--gdb-session", dest="gdb_session_path", default="")
         parser.add_argument("--analysis", default="", help="AI diagnosis-panel result JSON")
         parser.add_argument("--analysis-run", dest="analysis_run_path", default="")
+        parser.add_argument("--perception-analysis", dest="perception_analysis_path", default="")
         parser.add_argument("--event-id", default="")
         parser.add_argument("--event-index", type=int, default=None)
         parser.add_argument("--function", default="")

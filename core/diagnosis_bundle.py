@@ -225,6 +225,10 @@ class DiagnosisBundle:
                 violations.append(
                     "CONFIRMED root_cause requires code_localization"
                 )
+            if not self._confirmation_gate_satisfied():
+                violations.append(
+                    "CONFIRMED root_cause requires explicit runtime/replay/user confirmation"
+                )
         for cp in self.change_proposals:
             if cp.diff_text and not self.code_localization:
                 violations.append(
@@ -243,12 +247,46 @@ class DiagnosisBundle:
                 self.conclusion_level = ConclusionLevel.CANDIDATE
                 log.info("Upgraded to CANDIDATE based on evidence count")
 
-    def upgrade_to_confirmed(self):
-        """Upgrade to confirmed_root_cause if all gates pass."""
+    def _confirmation_gate_satisfied(self) -> bool:
+        gate = self.metadata.get("confirmation_gate")
+        if not isinstance(gate, dict):
+            return False
+        if gate.get("status") != "confirmed":
+            return False
+        if gate.get("identity_verified") is not True:
+            return False
+        if gate.get("identity_conflict"):
+            return False
+        if not isinstance(gate.get("evidence_refs"), list) or not gate["evidence_refs"]:
+            return False
+        return any(
+            gate.get(key) is True
+            for key in ("runtime_verified", "replay_verified", "user_confirmed")
+        )
+
+    def upgrade_to_confirmed(self, confirmation: dict[str, Any] | None = None) -> bool:
+        """Upgrade only after an explicit confirmation publication gate.
+
+        Static evidence and a source path are sufficient for a candidate, but
+        they do not prove that the proposed root cause survived execution or
+        review.  Callers must provide a structured gate record; the old
+        no-argument call is intentionally a safe no-op for compatibility.
+        """
         if self.conclusion_level in (ConclusionLevel.EVIDENCE_ONLY, ConclusionLevel.CANDIDATE):
-            if self.evidence_chain and self.code_localization:
+            if (
+                self.evidence_chain
+                and self.code_localization
+                and isinstance(confirmation, dict)
+            ):
+                gate = dict(confirmation)
+                gate.setdefault("status", "confirmed")
+                self.metadata["confirmation_gate"] = gate
+            if self.evidence_chain and self.code_localization and self._confirmation_gate_satisfied():
                 self.conclusion_level = ConclusionLevel.CONFIRMED
-                log.info("Upgraded to CONFIRMED — evidence + localization present")
+                log.info("Upgraded to CONFIRMED — explicit confirmation gate passed")
+                return True
+        log.info("Kept conclusion below CONFIRMED — explicit confirmation gate missing")
+        return False
 
     def to_dict(self) -> dict[str, Any]:
         self._ensure_id()

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-hypothesis-set.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "hypotheses", "experiments", "diagnostics", "conclusion_level"],
+  "properties": {
+    "schema_version": {"const": "perception-hypothesis-set.v1"},
+    "status": {"enum": ["provided", "not_available"]},
+    "hypotheses": {"type": "array", "maxItems": 3, "items": {"type": "object"}},
+    "experiments": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "conclusion_level": {"const": "candidate_only"},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

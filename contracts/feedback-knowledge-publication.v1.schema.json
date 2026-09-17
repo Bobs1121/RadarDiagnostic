@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar-analyze.local/contracts/feedback-knowledge-publication.v1.schema.json",
+  "title": "Feedback knowledge publication v1",
+  "type": "object",
+  "required": ["schema_version", "status", "pattern", "knowledge_dir", "run_id", "variant_id", "actor", "approved", "writes_knowledge"],
+  "properties": {
+    "schema_version": {"const": "feedback-knowledge-publication.v1"},
+    "status": {"const": "published"},
+    "pattern": {"type": "object"},
+    "knowledge_dir": {"type": "string"},
+    "run_id": {"type": "string"},
+    "variant_id": {"type": "string"},
+    "actor": {"const": "user"},
+    "approved": {"const": true},
+    "writes_knowledge": {"const": true}
+  },
+  "additionalProperties": true
+}

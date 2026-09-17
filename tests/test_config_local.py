@@ -335,6 +335,63 @@ runtime:
     }
 
 
+def test_load_config_legacy_paths_follow_effective_default_variant(tmp_path: Path) -> None:
+    """A legacy default_project must not override an explicit default_variant."""
+    source_root = tmp_path / "byd_source"
+    config_path = tmp_path / "config.yaml"
+    _write_yaml(
+        config_path,
+        {
+            "default_project": "gwm_b26",
+            "default_variant": "gen6/byd_sc6h",
+            "projects": {
+                "gwm_b26": {
+                    "source_code": "D:/legacy/gwm_b26",
+                    "key_source_files": ["coem/GWM_B26/adasFunc.c"],
+                    "dbc_files": ["D:/legacy/gwm_b26/gwm.dbc"],
+                },
+            },
+            "source_domains": {
+                "signal_chain": ["coem/GWM_B26/components/AswIf/ASW_IN/RteComMapping.c"],
+            },
+            "codebases": {
+                "byd_sc6h": {"root_path": str(source_root), "platform_id": "gen6_c_radar"},
+            },
+            "variants": {
+                "gen6/byd_sc6h": {
+                    "codebase_id": "byd_sc6h",
+                    "display_name": "BYD_SC6H",
+                    "key_source_files": ["coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c"],
+                    "source_domains": {
+                        "signal_chain": ["coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c"],
+                    },
+                    "dbc_sets": {"default": {"files": ["D:/byd_sc6h/byd.dbc"]}},
+                    "source_context": {
+                        "source_root": str(source_root),
+                        "source_docs_dir": ".workspaces/gen6_byd_sc6h/source_docs",
+                    },
+                },
+            },
+        },
+    )
+
+    config = load_config(config_path)
+
+    assert config["default_project"] == "gwm_b26"
+    assert config["default_variant"] == "gen6/byd_sc6h"
+    assert config["paths"]["source_code"] == str(source_root.resolve())
+    assert config["paths"]["key_source_files"] == [
+        "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+    ]
+    assert config["paths"]["dbc_files"] == ["D:/byd_sc6h/byd.dbc"]
+    assert config["paths"]["source_docs"] == str(
+        (tmp_path / ".workspaces" / "gen6_byd_sc6h" / "source_docs").resolve()
+    )
+    assert config["source_domains"]["signal_chain"] == [
+        "coem/BYD_SC6H/components/AswIf/ASW_ComMapping/RteComMapping.c",
+    ]
+
+
 def test_load_config_project_intake_preserves_explicit_entries_and_stable_collision_id(
     tmp_path: Path,
 ) -> None:

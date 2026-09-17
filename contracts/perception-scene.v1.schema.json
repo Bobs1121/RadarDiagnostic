@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-scene.v1",
+  "type": "object",
+  "required": ["schema_version", "status", "selected_frame", "layers", "counts", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "perception-scene.v1"},
+    "status": {"enum": ["observed", "not_available"]},
+    "selected_frame": {"type": ["string", "null"]},
+    "frame_domain": {"type": "string"},
+    "epoch": {},
+    "coordinate_frame": {"type": "string"},
+    "angle_unit": {"type": "string"},
+    "range_unit": {"type": "string"},
+    "layers": {"type": "object"},
+    "counts": {"type": "object"},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

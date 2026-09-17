@@ -149,6 +149,8 @@ def load_config(
     cfg["paths"]["key_source_files"] = proj.get("key_source_files", [])
     cfg["paths"]["dbc_files"] = proj.get("dbc_files", [])
     cfg["project"] = proj
+    cfg["source_domains"] = proj.get("source_domains", {})
+    cfg["source_domains"] = proj.get("source_domains", {})
 
     # Store identity chain if available
     if "_variant_id" in proj:
@@ -1554,7 +1556,19 @@ def _run_prewarm(config: dict | None = None, force: bool = False,
     )
     docs_dir.mkdir(parents=True, exist_ok=True)
     try:
-        chains = trace_variable_chains(source_root, docs_dir, force=force)
+        from config import resolve_variant_rte_mapping_file
+
+        rte_file, rte_resolution = resolve_variant_rte_mapping_file(
+            config, source_root
+        )
+        if rte_resolution == "variant_unavailable":
+            # Legacy-only test/config profiles can safely use unique-file
+            # auto-discovery. A configured variant with no file keeps the
+            # explicit unavailable sentinel and never scans other COEMs.
+            rte_file = None
+        chains = trace_variable_chains(
+            source_root, docs_dir, rte_file=rte_file, force=force
+        )
         alias_count = len(chains.get("struct_aliases", {}))
         meta_path = docs_dir / "variable_chains.meta.json"
         meta_info = (
@@ -1564,6 +1578,9 @@ def _run_prewarm(config: dict | None = None, force: bool = False,
         console.print(f"  [green]{alias_count} struct aliases{meta_info}[/green]")
         summary["operations"]["variable_chains"] = {
             "alias_count": alias_count,
+            "rte_file": chains.get("rte_file", ""),
+            "rte_mapping_status": chains.get("rte_mapping_status", "not_reported"),
+            "rte_variant_resolution": rte_resolution,
             "meta_path": str(meta_path),
             "meta_exists": meta_path.exists(),
         }

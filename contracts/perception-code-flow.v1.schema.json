@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "perception-code-flow.v1",
+  "type": "object",
+  "required": ["schema_version", "stage_bindings", "limitations"],
+  "properties": {
+    "schema_version": {"const": "perception-code-flow.v1"},
+    "source_context": {"type": "object"},
+    "code_context_binding": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["same_file_snapshot", "identity_conflict", "source_root_conflict", "file_manifest_unavailable", "file_set_mismatch", "source_content_mismatch", "not_available"]},
+        "basis": {"type": "string"},
+        "stage_map_source_root": {"type": "string"},
+        "stage_map_snapshot_hash": {"type": "string"},
+        "code_context_source_root": {"type": "string"},
+        "code_context_snapshot_hash": {"type": "string"},
+        "report_source_root": {"type": "string"},
+        "identity_conflicts": {"type": "array", "items": {"type": "string"}},
+        "matched_file_count": {"type": "integer", "minimum": 0},
+        "source_files_missing_from_code_context": {"type": "array", "items": {"type": "string"}},
+        "code_context_files_missing_from_stage_map": {"type": "array", "items": {"type": "string"}},
+        "mismatched_file_paths": {"type": "array", "items": {"type": "string"}},
+        "limitation": {"type": "string"}
+      },
+      "required": ["status", "stage_map_snapshot_hash", "code_context_snapshot_hash"],
+      "additionalProperties": true
+    },
+    "stage_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": {"type": "string"},
+          "source_candidates": {"type": "array", "items": {"type": "object"}},
+          "function_definition_status": {"enum": ["available", "not_available"]},
+          "function_definition_candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "function": {"type": "string"},
+                "signature": {"type": "string"},
+                "source_ref": {
+                  "type": "object",
+                  "properties": {
+                    "path": {"type": "string"},
+                    "line": {"type": ["integer", "null"]},
+                    "end_line": {"type": ["integer", "null"]},
+                    "source_hash": {"type": "string"}
+                  },
+                  "required": ["path", "line", "end_line", "source_hash"],
+                  "additionalProperties": true
+                },
+                "basis": {"const": "code-index-function-definition"},
+                "status": {"const": "source_candidate"},
+                "runtime_proof": {"const": "not_available"},
+                "code_context_snapshot_hash": {"type": "string"}
+              },
+              "required": ["function", "source_ref", "basis", "status", "runtime_proof"],
+              "additionalProperties": true
+            }
+          },
+          "runtime_proof": {"type": "string"},
+          "status": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "code_context": {"type": "object"},
+    "event_code_path": {"type": "object"},
+    "condition_trace": {"type": "object"},
+    "condition_bindings": {"type": "array", "items": {"type": "object"}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
